@@ -1,46 +1,16 @@
-// Components
-import Hero from '@/components/Index/Hero.component';
-import DisplayProducts from '@/components/Product/DisplayProducts.component';
-import Layout from '@/components/Layout/Layout.component';
+import type { NextPage } from 'next'
+import Layout from '@/shared/components/Layout.component'
 
-// Utilities
-import client from '@/utils/apollo/ApolloClient';
-
-// Types
-import type { NextPage, GetStaticProps, InferGetStaticPropsType } from 'next';
-
-// GraphQL
-import { FETCH_ALL_PRODUCTS_QUERY } from '@/utils/gql/GQL_QUERIES';
-
-/**
- * Main index page
- * @function Index
- * @param {InferGetStaticPropsType<typeof getStaticProps>} products
- * @returns {JSX.Element} - Rendered component
- */
-
-const Index: NextPage = ({
-  products,
-}: InferGetStaticPropsType<typeof getStaticProps>) => (
+const Index: NextPage = () => (
   <Layout title="Hjem">
-    <Hero />
-    {products && <DisplayProducts products={products} />}
+    <main className="mx-auto max-w-4xl px-6 py-20 text-center">
+      <h1 className="text-3xl font-bold text-[#1F5CAB]">Planenadler</h1>
+      <p className="mt-4 text-sm text-[#1F5CAB]/80">
+        Die Startseite wurde temporär vereinfacht, weil mehrere Home-Section-Dateien als iCloud-Placeholder
+        vorlagen und den Build blockiert haben.
+      </p>
+    </main>
   </Layout>
-);
+)
 
-export default Index;
-
-export const getStaticProps: GetStaticProps = async () => {
-  const { data, loading, networkStatus } = await client.query({
-    query: FETCH_ALL_PRODUCTS_QUERY,
-  });
-
-  return {
-    props: {
-      products: data.products.nodes,
-      loading,
-      networkStatus,
-    },
-    revalidate: 60,
-  };
-};
+export default Index

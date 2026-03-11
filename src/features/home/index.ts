@@ -1,0 +1,6 @@
+export * from './sections/CategoriesStrip'
+export * from './sections/ProductsShowcase'
+export * from './sections/BenefitsStrip'
+export * from './sections/BlogShowcase'
+export { HeroSlider } from './sections/Hero/HeroSlider.component'
+export { InfoWithImageRight } from './sections/InfoWithImageRight/InfoWithImageRight'
