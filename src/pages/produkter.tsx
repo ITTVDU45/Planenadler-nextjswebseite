@@ -1,8 +1,8 @@
 import Head from 'next/head';
-import Layout from '@/components/Layout/Layout.component';
-import ProductList from '@/components/Product/ProductList.component';
-import client from '@/utils/apollo/ApolloClient';
-import { FETCH_ALL_PRODUCTS_QUERY } from '@/utils/gql/GQL_QUERIES';
+import Layout from '@/shared/components/Layout.component';
+import ProductList from '@/features/product/components/ProductList.component';
+import client from '@/config/apollo/ApolloClient';
+import { FETCH_ALL_PRODUCTS_QUERY } from '@/features/product/api/queries';
 import type { NextPage, GetStaticProps, InferGetStaticPropsType } from 'next';
 
 const Produkter: NextPage = ({

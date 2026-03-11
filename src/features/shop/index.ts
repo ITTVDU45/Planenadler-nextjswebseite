@@ -1,0 +1,7 @@
+export { ShopHeroSection } from './sections/ShopHeroSection'
+export { ShopCategoryGridSection } from './sections/ShopCategoryGridSection'
+export { CategoryCard } from './components/CategoryCard'
+export { buildFaqSchema } from './faqSchema'
+export { SHOP_CATEGORIES } from './data/shopCategories'
+export { SHOP_FAQ_ITEMS } from './data/faq'
+export type { ShopCategory, ShopHeroContent, FaqItem } from './types'

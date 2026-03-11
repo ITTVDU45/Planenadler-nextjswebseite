@@ -1,6 +1,6 @@
 // Components
-import Layout from '@/components/Layout/Layout.component';
-import CartContents from '@/components/Cart/CartContents.component';
+import Layout from '@/shared/components/Layout.component';
+import CartContents from '@/features/cart/components/CartContents.component';
 
 // Types
 import type { NextPage } from 'next';

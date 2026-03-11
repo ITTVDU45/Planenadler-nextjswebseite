@@ -1,0 +1,1 @@
+export { ShopCategoryGridSection } from './ShopCategoryGridSection'

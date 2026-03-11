@@ -1,11 +1,11 @@
 import { NextPage, InferGetStaticPropsType, GetStaticProps } from 'next';
 
-import Categories from '@/components/Category/Categories.component';
-import Layout from '@/components/Layout/Layout.component';
+import Categories from '@/shared/components/Category/Categories.component';
+import Layout from '@/shared/components/Layout.component';
 
-import client from '@/utils/apollo/ApolloClient';
+import client from '@/config/apollo/ApolloClient';
 
-import { FETCH_ALL_CATEGORIES_QUERY } from '@/utils/gql/GQL_QUERIES';
+import { FETCH_ALL_CATEGORIES_QUERY } from '@/features/product/api/queries';
 
 /**
  * Category page displays all of the categories

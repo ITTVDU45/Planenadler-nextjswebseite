@@ -1,5 +1,5 @@
-import Layout from '@/components/Layout/Layout.component';
-import UserLogin from '@/components/User/UserLogin.component';
+import Layout from '@/shared/components/Layout.component';
+import UserLogin from '@/features/auth/components/UserLogin.component';
 
 import type { NextPage } from 'next';
 

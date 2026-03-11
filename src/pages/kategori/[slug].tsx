@@ -1,12 +1,12 @@
 import { withRouter } from 'next/router';
 
 // Components
-import Layout from '@/components/Layout/Layout.component';
-import DisplayProducts from '@/components/Product/DisplayProducts.component';
+import Layout from '@/shared/components/Layout.component';
+import DisplayProducts from '@/features/product/components/DisplayProducts.component';
 
-import client from '@/utils/apollo/ApolloClient';
+import client from '@/config/apollo/ApolloClient';
 
-import { GET_PRODUCTS_FROM_CATEGORY } from '@/utils/gql/GQL_QUERIES';
+import { GET_PRODUCTS_FROM_CATEGORY } from '@/features/product/api/queries';
 import { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 
 /**

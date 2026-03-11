@@ -1,92 +1,231 @@
 import { ApolloClient, InMemoryCache } from '@apollo/client';
-import { LOGIN_USER } from './gql/GQL_MUTATIONS';
+import { RESET_USER_PASSWORD } from '@/shared/lib/GQL_MUTATIONS';
 
-// Cookie-based authentication - no token storage needed
-export function hasCredentials() {
-  if (typeof window === 'undefined') {
-    return false; // Server-side, no credentials available
+interface RegistrationInput {
+  email: string;
+  username?: string;
+  password?: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+interface ResetPasswordInput {
+  key: string;
+  login: string;
+  password: string;
+}
+
+function createAuthClient() {
+  if (!process.env.NEXT_PUBLIC_GRAPHQL_URL) {
+    throw new Error('GraphQL-URL fehlt. Bitte NEXT_PUBLIC_GRAPHQL_URL in .env.local setzen.');
   }
-  
-  // With cookie-based auth, we'll check if user is logged in through a query
-  // For now, we'll return false and let components handle the check
-  return false;
+
+  return new ApolloClient({
+    uri: process.env.NEXT_PUBLIC_GRAPHQL_URL,
+    cache: new InMemoryCache(),
+    credentials: 'include',
+  });
 }
 
-export async function getAuthToken() {
-  // Cookie-based auth doesn't need JWT tokens
-  return null;
+async function callWordPressAuthApi<TResponse>(
+  endpoint: string,
+  payload: Record<string, unknown>,
+  fallbackMessage: string
+): Promise<TResponse> {
+  let response: Response;
+  let data: any = {};
+
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error('Netzwerkfehler. Bitte Internetverbindung pruefen und erneut versuchen.');
+  }
+
+  try {
+    data = await response.json();
+  } catch {
+    data = {};
+  }
+
+  if (!response.ok) {
+    const errorMessage =
+      typeof data?.error === 'string' && data.error.trim().length
+        ? data.error
+        : fallbackMessage;
+    throw new Error(errorMessage);
+  }
+
+  return data as TResponse;
 }
 
-function getErrorMessage(error: any): string {
-  // Check for GraphQL errors
-  if (error.graphQLErrors && error.graphQLErrors.length > 0) {
-    const graphQLError = error.graphQLErrors[0];
-    const message = graphQLError.message;
-    
-    // Map GraphQL error messages to user-friendly messages
-    switch (message) {
-      case 'invalid_username':
-        return 'Ugyldig brukernavn eller e-postadresse. Vennligst sjekk og prøv igjen.';
-      case 'incorrect_password':
-        return 'Feil passord. Vennligst sjekk passordet ditt og prøv igjen.';
-      case 'invalid_email':
-        return 'Ugyldig e-postadresse. Vennligst skriv inn en gyldig e-postadresse.';
-      case 'empty_username':
-        return 'Vennligst skriv inn brukernavn eller e-postadresse.';
-      case 'empty_password':
-        return 'Vennligst skriv inn passord.';
-      case 'too_many_retries':
-        return 'For mange mislykkede forsøk. Vennligst vent litt før du prøver igjen.';
-      default:
-        return 'Innlogging mislyktes. Vennligst sjekk dine opplysninger og prøv igjen.';
+function getErrorMessage(error: any, fallback = 'Anfrage fehlgeschlagen. Bitte erneut versuchen.'): string {
+  if (error?.graphQLErrors?.length) {
+    const message = String(error.graphQLErrors[0]?.message ?? '');
+    const mapped: Record<string, string> = {
+      invalid_username: 'Ungueltiger Benutzername oder E-Mail-Adresse.',
+      incorrect_password: 'Falsches Passwort.',
+      invalid_email: 'Ungueltige E-Mail-Adresse.',
+      empty_username: 'Bitte Benutzername oder E-Mail eingeben.',
+      empty_password: 'Bitte Passwort eingeben.',
+      too_many_retries: 'Zu viele fehlgeschlagene Versuche. Bitte spaeter erneut probieren.',
+      existing_user_login: 'Dieser Benutzername ist bereits vergeben.',
+      existing_user_email: 'Diese E-Mail-Adresse ist bereits registriert.',
+      invalid_password_reset_key: 'Der Passwort-Reset-Link ist ungueltig oder abgelaufen.',
+    };
+
+    if (mapped[message]) return mapped[message];
+    if (message.includes('Cannot query field "loginWithCookies"')) {
+      return 'Die GraphQL-Login-Mutation fehlt im WordPress-Backend (loginWithCookies nicht verfuegbar).';
     }
+    if (message.trim()) return message;
   }
-  
-  // Check for network errors
-  if (error.networkError) {
-    return 'Nettverksfeil. Vennligst sjekk internetttilkoblingen din og prøv igjen.';
+
+  if (error?.networkError) {
+    return 'Netzwerkfehler. Bitte Internetverbindung pruefen und erneut versuchen.';
   }
-  
-  // Fallback for other errors
-  if (error.message) {
-    return 'Det oppstod en feil under innlogging. Vennligst prøv igjen.';
-  }
-  
-  return 'En ukjent feil oppstod. Vennligst prøv igjen senere.';
+
+  return fallback;
 }
 
 export async function login(username: string, password: string) {
   try {
-    const client = new ApolloClient({
-      uri: process.env.NEXT_PUBLIC_GRAPHQL_URL,
-      cache: new InMemoryCache(),
-      credentials: 'include', // Include cookies in requests
-    });
+    const result = await callWordPressAuthApi<{ success: boolean; status: 'SUCCESS' }>(
+      '/api/auth/wordpress/login',
+      { username, password, remember: true },
+      'Anmeldung fehlgeschlagen. Bitte erneut versuchen.'
+    );
 
-    const { data } = await client.mutate({
-      mutation: LOGIN_USER,
-      variables: { username, password },
-    });
-
-    const loginResult = data.loginWithCookies;
-
-    if (loginResult.status !== 'SUCCESS') {
-      throw new Error('Innlogging mislyktes. Vennligst sjekk dine opplysninger og prøv igjen.');
+    if (!result?.success || result?.status !== 'SUCCESS') {
+      throw new Error('Anmeldung fehlgeschlagen.');
     }
 
-    // On successful login, cookies are automatically set by the server
-    return { success: true, status: loginResult.status };
+    return { success: true, status: result.status };
   } catch (error: unknown) {
-    const userFriendlyMessage = getErrorMessage(error);
+    const userFriendlyMessage = getErrorMessage(error, 'Anmeldung fehlgeschlagen. Bitte erneut versuchen.');
     throw new Error(userFriendlyMessage);
   }
 }
 
-export async function logout() {
-  // For cookie-based auth, we might need a logout mutation
-  // For now, we can clear any client-side state
-  if (typeof window !== 'undefined') {
-    // Redirect to login or home page after logout
-    window.location.href = '/';
+export async function registerAccount(input: RegistrationInput) {
+  try {
+    const email = input.email?.trim();
+    if (!email) {
+      throw new Error('Bitte E-Mail-Adresse eingeben.');
+    }
+
+    const result = await callWordPressAuthApi<{
+      success: boolean;
+      status: 'SUCCESS';
+      loggedIn?: boolean;
+      message?: string;
+    }>(
+      '/api/auth/wordpress/register',
+      { email },
+      'Registrierung fehlgeschlagen. Bitte erneut versuchen.'
+    );
+
+    if (!result?.success || result?.status !== 'SUCCESS') {
+      throw new Error('Registrierung fehlgeschlagen.');
+    }
+
+    return {
+      success: true,
+      loggedIn: Boolean(result.loggedIn),
+      message: result.message || 'Registrierung erfolgreich.',
+    };
+  } catch (error: unknown) {
+    const userFriendlyMessage = getErrorMessage(error, 'Registrierung fehlgeschlagen. Bitte erneut versuchen.');
+    throw new Error(userFriendlyMessage);
   }
+}
+
+export async function sendPasswordResetEmail(username: string) {
+  try {
+    await callWordPressAuthApi<{ success: boolean; status: 'SUCCESS' }>(
+      '/api/auth/wordpress/lost-password',
+      { username },
+      'Passwort-Reset konnte nicht gestartet werden. Bitte erneut versuchen.'
+    );
+
+    return { success: true };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message.toLowerCase() : ''
+    if (
+      message.includes('benutzername oder e-mail sind ungueltig') ||
+      message.includes('benutzername oder e-mail sind ungültig') ||
+      message.includes('invalid username')
+    ) {
+      // Kein User-Enumeration-Leak im UI.
+      return { success: true };
+    }
+
+    const userFriendlyMessage = getErrorMessage(
+      error,
+      'Passwort-Reset konnte nicht gestartet werden. Bitte erneut versuchen.'
+    );
+    throw new Error(userFriendlyMessage);
+  }
+}
+
+export async function resetPasswordWithKey(input: ResetPasswordInput) {
+  try {
+    const client = createAuthClient();
+    const { data } = await client.mutate({
+      mutation: RESET_USER_PASSWORD,
+      variables: {
+        key: input.key,
+        login: input.login,
+        password: input.password,
+      },
+    });
+
+    if (!data?.resetUserPassword) {
+      throw new Error('Passwort konnte nicht zurueckgesetzt werden.');
+    }
+
+    return { success: true };
+  } catch (error: unknown) {
+    const userFriendlyMessage = getErrorMessage(
+      error,
+      'Passwort konnte nicht zurueckgesetzt werden. Bitte erneut versuchen.'
+    );
+    throw new Error(userFriendlyMessage);
+  }
+}
+
+/**
+ * Meldet den Kunden ab (lokale Proxy-Cookies + WordPress-Session serverseitig).
+ */
+export async function logout(redirectTo: '/' | '/anmelden' = '/anmelden') {
+  if (typeof window === 'undefined') return;
+
+  try {
+    await fetch('/api/auth/wordpress/logout', {
+      method: 'POST',
+      credentials: 'include',
+      keepalive: true,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+  } catch {
+    // Fallback: Redirect trotzdem ausführen.
+  }
+
+  if (redirectTo === '/anmelden') {
+    const target = new URL(redirectTo, window.location.origin);
+    target.searchParams.set('logout', 'success');
+    window.location.href = `${target.pathname}${target.search}`;
+    return;
+  }
+
+  window.location.href = redirectTo;
 }

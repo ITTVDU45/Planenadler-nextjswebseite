@@ -1,0 +1,1 @@
+export { BenefitsStrip } from './BenefitsStrip'
