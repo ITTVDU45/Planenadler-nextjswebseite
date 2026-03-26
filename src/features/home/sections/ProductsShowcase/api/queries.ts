@@ -13,7 +13,7 @@ export const GET_PRODUCTS_BY_CATEGORY = /* GraphQL */ `
           attributes {
             nodes {
               name
-              value
+              options
             }
           }
           galleryImages {
@@ -29,7 +29,7 @@ export const GET_PRODUCTS_BY_CATEGORY = /* GraphQL */ `
           attributes {
             nodes {
               name
-              value
+              options
             }
           }
           galleryImages {
@@ -63,7 +63,7 @@ export const GET_PRODUCTS_ALL = /* GraphQL */ `
           attributes {
             nodes {
               name
-              value
+              options
             }
           }
           galleryImages {
@@ -79,7 +79,7 @@ export const GET_PRODUCTS_ALL = /* GraphQL */ `
           attributes {
             nodes {
               name
-              value
+              options
             }
           }
           galleryImages {

@@ -25,7 +25,7 @@ interface ProductNode {
   attributes?: {
     nodes?: Array<{
       name?: string | null
-      value?: string | null
+      options?: string[] | null
     }> | null
   } | null
 }

@@ -21,7 +21,7 @@ export interface ProductNode {
   attributes?: {
     nodes?: Array<{
       name?: string | null
-      value?: string | null
+      options?: string[] | null
     }> | null
   } | null
 }
@@ -54,10 +54,12 @@ export function mapNodeToCard(node: ProductNode): ProductCardItem {
       src: String(entry.sourceUrl ?? ''),
       alt: String(entry.altText ?? ''),
     })),
-    attributes: attributes.map((entry) => ({
-      name: String(entry.name ?? ''),
-      value: String(entry.value ?? ''),
-    })),
+    attributes: attributes
+      .map((entry) => ({
+        name: String(entry.name ?? ''),
+        value: Array.isArray(entry.options) ? entry.options.filter(Boolean).join(', ') : '',
+      }))
+      .filter((entry) => entry.name.length > 0 && entry.value.length > 0),
   }
 }
 
