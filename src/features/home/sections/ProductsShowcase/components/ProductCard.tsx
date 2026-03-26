@@ -11,12 +11,36 @@ interface ProductCardProps {
   product: ProductCardItem
 }
 
-function sanitizeProductHtml(input?: string) {
+type ProductTabKey = 'beschreibung' | 'technische-daten' | 'versand'
+
+const DEFAULT_TECHNICAL_SPECS = [
+  { name: 'Material', value: 'PVC-beschichtetes Polyestergewebe' },
+  { name: 'Materialstaerke', value: '650 g/m2' },
+  { name: 'UV-Bestaendigkeit', value: 'Ja - UV-stabilisiert' },
+  { name: 'Temperaturbereich', value: '-30 C bis +70 C' },
+  { name: 'Verarbeitung', value: 'Passgenau konfektioniert und verschweisst' },
+]
+
+const SHIPPING_BULLETS = [
+  'Standardversand innerhalb Deutschlands: 3-5 Werktage',
+  'Expressversand auf Anfrage moeglich',
+  'Sichere Verpackung fuer den Transport',
+  'Lieferung nach individueller Fertigung',
+]
+
+function stripHtmlToText(input?: string) {
   if (!input) return ''
-  return input
-    .replace(/\[[^\]]+\]/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim()
+
+  if (typeof window === 'undefined') {
+    return input.replace(/<[^>]+>/g, ' ').replace(/\[[^\]]+\]/g, '').replace(/\s+/g, ' ').trim()
+  }
+
+  const doc = new DOMParser().parseFromString(input, 'text/html')
+  doc
+    .querySelectorAll('script,style,form,input,select,option,button,textarea,label,fieldset,legend')
+    .forEach((node) => node.remove())
+
+  return doc.body.textContent?.replace(/\[[^\]]+\]/g, '').replace(/\s+/g, ' ').trim() ?? ''
 }
 
 function StarIcon({ filled }: { filled: boolean }) {
@@ -35,30 +59,40 @@ function StarIcon({ filled }: { filled: boolean }) {
   )
 }
 
-
 export function ProductCard({ product }: ProductCardProps) {
   const displayRating = '4,5+'
   const priceValue = decodePriceDisplay(product.price)
-  const priceLabel = priceValue ? `ab ${priceValue}` : 'ab —'
-  const shortDescriptionHtml = sanitizeProductHtml(product.shortDescription)
-  const descriptionHtml = sanitizeProductHtml(product.description)
+  const priceLabel = priceValue ? `ab ${priceValue}` : 'Preis auf Anfrage'
+  const descriptionText =
+    stripHtmlToText(product.shortDescription) ||
+    `${product.name} wird individuell gefertigt und kann direkt im Konfigurator angepasst werden.`
   const productHref = product.slug ? `/product/${product.slug}` : '/product/lkw-plane-individuell'
+
   const galleryImages = useMemo(() => {
     const allImages = [product.image, ...product.gallery]
     const deduped = new Map<string, { src: string; alt: string }>()
+
     allImages.forEach((image) => {
       if (!image?.src) return
       if (!deduped.has(image.src)) {
         deduped.set(image.src, { src: image.src, alt: image.alt || product.name })
       }
     })
+
     return Array.from(deduped.values())
   }, [product.gallery, product.image, product.name])
+
+  const technicalSpecs = product.attributes.length ? product.attributes : DEFAULT_TECHNICAL_SPECS
   const [activeImageSrc, setActiveImageSrc] = useState(galleryImages[0]?.src ?? product.image.src)
+  const [activeTab, setActiveTab] = useState<ProductTabKey>('beschreibung')
 
   useEffect(() => {
     setActiveImageSrc(galleryImages[0]?.src ?? product.image.src)
   }, [galleryImages, product.image.src])
+
+  useEffect(() => {
+    setActiveTab('beschreibung')
+  }, [product.id])
 
   return (
     <div className="rounded-[2rem] bg-white p-4 shadow-[0_10px_30px_rgba(31,92,171,0.08)] transition hover:-translate-y-1 sm:p-5">
@@ -96,17 +130,7 @@ export function ProductCard({ product }: ProductCardProps) {
           >
             <div className="rounded-2xl bg-[#F8FBFF] p-4">
               <h3 className="pr-10 text-xl font-bold text-[#1F5CAB]">{product.name}</h3>
-              <div className="mt-1 text-base font-semibold text-[#3982DC]">
-                {priceLabel}
-              </div>
-              <div className="mt-3">
-                <Link
-                  href={productHref}
-                  className="inline-flex items-center rounded-full bg-[#1F5CAB] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#0F2B52]"
-                >
-                  Jetzt konfigurieren
-                </Link>
-              </div>
+              <div className="mt-1 text-base font-semibold text-[#3982DC]">{priceLabel}</div>
             </div>
 
             <div className="space-y-3 rounded-2xl bg-white">
@@ -151,58 +175,81 @@ export function ProductCard({ product }: ProductCardProps) {
             </div>
 
             <div className="space-y-4 rounded-2xl border border-[#E7EEF8] bg-[#FCFDFF] p-4">
-              {shortDescriptionHtml ? (
-                <div className="rounded-xl bg-white p-3">
-                  <h4 className="text-sm font-bold uppercase tracking-wide text-[#1F5CAB]">
-                    Kurzbeschreibung
-                  </h4>
-                  <div
-                    className="prose prose-sm mt-2 max-w-none text-sm leading-relaxed text-[#1F5CAB]/85 prose-p:my-1 prose-a:text-[#1F5CAB]"
-                    dangerouslySetInnerHTML={{ __html: shortDescriptionHtml }}
-                  />
-                </div>
-              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: 'beschreibung' as const, label: 'Beschreibung' },
+                  { key: 'technische-daten' as const, label: 'Technische Details' },
+                  { key: 'versand' as const, label: 'Versand' },
+                ].map((tab) => {
+                  const isActive = activeTab === tab.key
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setActiveTab(tab.key)}
+                      className={[
+                        'rounded-full px-4 py-2 text-xs font-semibold transition',
+                        isActive
+                          ? 'bg-[#1F5CAB] text-white'
+                          : 'border border-[#DBE9F9] bg-white text-[#1F5CAB] hover:bg-[#EEF5FF]',
+                      ].join(' ')}
+                    >
+                      {tab.label}
+                    </button>
+                  )
+                })}
+              </div>
 
-              {descriptionHtml ? (
-                <div className="rounded-xl bg-white p-3">
-                  <h4 className="text-sm font-bold uppercase tracking-wide text-[#1F5CAB]">
-                    Beschreibung
-                  </h4>
-                  <div
-                    className="prose prose-sm mt-2 max-w-none text-sm leading-relaxed text-[#1F5CAB]/85 prose-p:my-1 prose-a:text-[#1F5CAB]"
-                    dangerouslySetInnerHTML={{ __html: descriptionHtml }}
-                  />
-                </div>
-              ) : null}
+              <div className="rounded-xl bg-white p-4">
+                {activeTab === 'beschreibung' ? (
+                  <p className="text-sm leading-relaxed text-[#1F5CAB]/85">{descriptionText}</p>
+                ) : null}
 
-              {product.attributes.length ? (
-                <div>
-                  <h4 className="text-sm font-bold uppercase tracking-wide text-[#1F5CAB]">
-                    Eigenschaften
-                  </h4>
-                  <div className="mt-2 overflow-hidden rounded-xl border border-[#DBE9F9]">
-                    {product.attributes.map((attribute, index) => (
+                {activeTab === 'technische-daten' ? (
+                  <div className="overflow-hidden rounded-xl border border-[#DBE9F9]">
+                    {technicalSpecs.map((attribute, index) => (
                       <div
                         key={`${product.id}-attribute-${attribute.name}-${index}`}
                         className="grid grid-cols-2 gap-3 border-b border-[#DBE9F9] px-3 py-2 last:border-b-0"
                       >
-                        <div className="text-xs font-semibold text-[#1F5CAB]">
-                          {attribute.name}
-                        </div>
-                        <div className="text-xs text-[#1F5CAB]/80">
-                          {attribute.value}
-                        </div>
+                        <div className="text-xs font-semibold text-[#1F5CAB]">{attribute.name}</div>
+                        <div className="text-xs text-[#1F5CAB]/80">{attribute.value}</div>
                       </div>
                     ))}
                   </div>
-                </div>
-              ) : null}
+                ) : null}
 
-              {!shortDescriptionHtml && !descriptionHtml && !product.attributes.length ? (
-                <p className="text-sm text-[#1F5CAB]/80">
-                  Derzeit sind keine weiteren Produktinformationen verfuegbar.
-                </p>
-              ) : null}
+                {activeTab === 'versand' ? (
+                  <div className="space-y-3">
+                    <ul className="space-y-2 text-sm leading-relaxed text-[#1F5CAB]/85">
+                      {SHIPPING_BULLETS.map((item) => (
+                        <li key={item} className="flex gap-2">
+                          <span
+                            className="mt-1 h-1.5 w-1.5 rounded-full bg-[#3982DC]"
+                            aria-hidden
+                          />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <Link
+                      href="/versand"
+                      className="text-xs font-semibold text-[#1F5CAB] underline underline-offset-4"
+                    >
+                      Versandbedingungen ansehen
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
+
+              <div>
+                <Link
+                  href={productHref}
+                  className="inline-flex items-center rounded-full bg-[#1F5CAB] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#0F2B52]"
+                >
+                  Jetzt konfigurieren
+                </Link>
+              </div>
             </div>
           </SheetContent>
         </Sheet>
@@ -220,18 +267,12 @@ export function ProductCard({ product }: ProductCardProps) {
           {[1, 2, 3, 4, 5].map((value) => (
             <StarIcon key={value} filled={value <= 5} />
           ))}
-          <span className="ml-2 text-xs font-semibold text-[#3982DC]">
-            {displayRating}
-          </span>
+          <span className="ml-2 text-xs font-semibold text-[#3982DC]">{displayRating}</span>
         </div>
       </div>
 
-      <div className="mt-4 text-sm font-semibold text-[#1F5CAB] sm:text-base">
-        {product.name}
-      </div>
-      <div className="mt-1 text-sm font-bold text-[#3982DC] sm:text-base">
-        {priceLabel}
-      </div>
+      <div className="mt-4 text-sm font-semibold text-[#1F5CAB] sm:text-base">{product.name}</div>
+      <div className="mt-1 text-sm font-bold text-[#3982DC] sm:text-base">{priceLabel}</div>
       <div className="mt-4">
         <Link
           href={productHref}
