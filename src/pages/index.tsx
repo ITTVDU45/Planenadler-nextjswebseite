@@ -126,11 +126,11 @@ function Index({
       <Layout title={PAGE_TITLE} showPageTitle={false}>
         <HeroSlider autoPlayMs={6000} />
         <CategoriesStrip />
-        <BenefitsStrip />
         <InfoWithImageLeft />
         <ProductsShowcase products={products} />
         <InfoWithImageRight />
         <InfoWithCounters />
+        <BenefitsStrip />
         <GoogleReviewSlider data={googleReviews} />
         <BlogShowcase articles={blogArticles} categories={blogCategories} />
         <FAQ />
