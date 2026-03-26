@@ -339,11 +339,6 @@ export function ShippingForm({ onValidSubmit, submitLabel, initialData }: Shippi
           <p className="mt-2 text-sm text-[#1F5CAB]/80">
             Die Versandkosten werden automatisch aus Gewicht und Flaeche Ihrer Konfiguration berechnet.
           </p>
-          <ul className="mt-3 space-y-1 text-sm text-[#1F5CAB]/80">
-            <li>Unter 30 kg: 9,00 €</li>
-            <li>Ab 30 kg: 80,00 €</li>
-            <li>Bis 34 m² pro Paket: 9,00 € je Paketstufe</li>
-          </ul>
           <p className="mt-3 text-sm font-semibold text-[#1F5CAB]">
             Aktueller Versand: {cartTotals ? decodePriceDisplay(getEffectiveShippingTotal(cartTotals)) : 'wird automatisch berechnet'}
           </p>
