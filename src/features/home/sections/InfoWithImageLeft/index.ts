@@ -1,0 +1,1 @@
+export { InfoWithImageLeft } from './InfoWithImageLeft'

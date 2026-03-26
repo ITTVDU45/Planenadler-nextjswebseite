@@ -6,7 +6,20 @@ const nextConfig = {
   // Next.js 16: Turbopack ist Standard; leere Config vermeidet Konflikt mit Webpack-Plugin (Serwist).
   turbopack: { root: __dirname },
   async headers() {
+    const securityHeaders = [
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+      { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+    ]
+    if (process.env.NODE_ENV === 'production') {
+      securityHeaders.push({
+        key: 'Strict-Transport-Security',
+        value: 'max-age=63072000; includeSubDomains; preload',
+      })
+    }
     return [
+      { source: '/:path*', headers: securityHeaders },
       {
         source: '/_next/static/webpack/:path*',
         headers: [
@@ -20,7 +33,11 @@ const nextConfig = {
     return [
       { source: '/warenkorb', destination: '/cart', permanent: true },
       { source: '/handlekurv', destination: '/cart', permanent: true },
+      { source: '/logg-inn', destination: '/anmelden', permanent: true },
       { source: '/min-konto', destination: '/mein-konto', permanent: true },
+      { source: '/produkt/:slug', destination: '/product/:slug', permanent: true },
+      { source: '/produkter', destination: '/shop', permanent: true },
+      { source: '/kategorier', destination: '/shop', permanent: true },
       // Kategorieseiten nicht anzeigen – direkt auf Produktseite weiterleiten
       { source: '/shop/:slug', destination: '/product/:slug', permanent: true },
     ]
@@ -28,6 +45,8 @@ const nextConfig = {
   images: {
     // Erlaubt Bilder von localhost/127.0.0.1 (z. B. lokales WordPress :8080)
     dangerouslyAllowLocalIP: true,
+    formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 86400,
     // quality 90 wird in Hero/Placeholder genutzt
     qualities: [75, 90],
     remotePatterns: [
@@ -50,6 +69,12 @@ const nextConfig = {
         hostname: 'shop.planenadler.de',
         pathname: '/**',
       },
+      // WordPress Backend (wp.planenadler.de)
+      {
+        protocol: 'https',
+        hostname: 'wp.planenadler.de',
+        pathname: '/**',
+      },
       {
         protocol: 'https',
         hostname: 'swewoocommerce.dfweb.no',
@@ -65,6 +90,18 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'via.placeholder.com',
+        pathname: '**',
+      },
+      // Unsplash (Blog-Mock-Bilder)
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+        pathname: '**',
+      },
+      // Pravatar (Blog-Mock-Avatare)
+      {
+        protocol: 'https',
+        hostname: 'i.pravatar.cc',
         pathname: '**',
       },
     ],

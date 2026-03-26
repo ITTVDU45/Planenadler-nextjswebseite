@@ -151,6 +151,19 @@ function normalizeSetCookieForAppHost(setCookieHeader: string, isHttps: boolean)
     value += '; SameSite=Lax'
   }
 
+  const name = extractCookieName(value)
+  const isAuthCookie =
+    name.startsWith('wordpress_logged_in_') ||
+    name.startsWith('wordpress_sec_') ||
+    name.startsWith('wp_woocommerce_session_')
+
+  if (isAuthCookie && !/;\s*httponly/i.test(value)) {
+    value += '; HttpOnly'
+  }
+  if (isHttps && isAuthCookie && !/;\s*secure/i.test(value)) {
+    value += '; Secure'
+  }
+
   return value
 }
 

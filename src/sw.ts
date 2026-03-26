@@ -15,7 +15,11 @@ const serwist = new Serwist({
   navigationPreload: true,
   runtimeCaching: [
     {
-      matcher: ({ request }) => request.mode === 'navigate',
+      matcher: ({ request, url }) =>
+        request.mode === 'navigate' &&
+        !url.pathname.startsWith('/product/') &&
+        !url.pathname.startsWith('/checkout') &&
+        !url.pathname.startsWith('/cart'),
       handler: new NetworkFirst({
         cacheName: 'pages',
         networkTimeoutSeconds: 3,
@@ -43,7 +47,11 @@ const serwist = new Serwist({
       }),
     },
     {
-      matcher: ({ url }) => url.pathname.startsWith('/api/'),
+      matcher: ({ url }) =>
+        url.pathname.startsWith('/api/') &&
+        !url.pathname.startsWith('/api/price-calculate') &&
+        !url.pathname.startsWith('/api/checkout') &&
+        !url.pathname.startsWith('/api/configurator-meta-debug'),
       handler: new NetworkFirst({
         cacheName: 'api',
         networkTimeoutSeconds: 5,

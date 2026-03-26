@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
+import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import { TopBar } from '@/shared/components/TopBar/TopBar.component'
 import Stickynav from '@/shared/components/Footer/Stickynav.component'
@@ -7,8 +8,13 @@ import Footer from '@/shared/components/Footer/Footer.component'
 import { ContentShell } from '@/shared/components/ContentShell.component'
 import { checkCustomerSession } from '@/features/auth/api/fetchCustomerAccount'
 import { MeinKontoNav } from '@/features/auth/components/MeinKontoNav'
+import { NOINDEX_ROBOTS } from '@/lib/seo'
 
 const REDIRECT_LOGIN = '/anmelden'
+
+export const metadata: Metadata = {
+  robots: NOINDEX_ROBOTS,
+}
 
 export default async function MeinKontoLayout({
   children,

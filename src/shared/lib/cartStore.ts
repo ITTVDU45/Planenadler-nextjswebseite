@@ -31,8 +31,13 @@ export const useCartStore = create<CartState>()(
       },
       clearWooCommerceSession: () => {
         set({ cart: null });
-        localStorage.removeItem('woo-session');
+        try {
+          localStorage.removeItem('woo-session');
+        } catch {
+          /* ignore */
+        }
         localStorage.removeItem('woocommerce-cart');
+        void fetch('/api/woo-session', { method: 'DELETE', credentials: 'include' });
       },
     }),
     {

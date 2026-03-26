@@ -13,6 +13,7 @@ import {
   getFormattedCart,
   getUpdatedItems,
   handleQuantityChange,
+  decodePriceDisplay,
   IProductRootObject,
 } from '@/shared/lib/functions';
 
@@ -77,7 +78,7 @@ const CartContents = () => {
     refetch();
   }, [refetch]);
 
-  const cartTotal = data?.cart?.total || '0';
+  const cartTotal = decodePriceDisplay(data?.cart?.total) || '0';
 
   const getUnitPrice = (subtotal: string, quantity: number) => {
     const numericSubtotal = parseFloat(subtotal.replace(/[^0-9.-]+/g, ''));

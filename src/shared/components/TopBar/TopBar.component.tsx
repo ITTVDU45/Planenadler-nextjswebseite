@@ -11,12 +11,13 @@ import { MiniCartDropdown } from '@/features/cart/components/MiniCartDropdown'
 
 const leftMenu = [
   { label: 'Home', href: '/' },
-  { label: 'Über Uns', href: '/ueber-uns' },
+  { label: 'Ueber Uns', href: '/ueber-uns' },
   { label: 'Shop', href: '/shop' },
+  { label: 'News & Ratgeber', href: '/blog' },
 ]
 
 const rightMenu = [
-  { label: 'Blog', href: '/blog' },
+  { label: 'FAQ', href: '/faq' },
   { label: 'Kontakt', href: '/kontakt' },
   { label: 'Mein Konto', href: '/mein-konto' },
 ]
@@ -40,16 +41,18 @@ export function TopBar() {
   useEffect(() => {
     setClientPath(window.location.pathname)
   }, [])
+
   useEffect(() => {
     setMounted(true)
   }, [])
+
   const allLinks = useMemo(
     () => [...leftMenu, ...rightMenu, cartLink, configuratorLink],
-    [],
+    []
   )
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 hidden w-full bg-transparent sm:block">
+    <div className="fixed left-0 right-0 top-0 z-50 hidden w-full bg-transparent sm:block">
       <ContentShell className="py-3 sm:py-4">
         <div className="rounded-full border border-[#DBE9F9] bg-white/95 px-3 py-2.5 shadow-[0_16px_40px_rgba(15,43,82,0.12)] backdrop-blur sm:px-4 sm:py-3">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
@@ -62,7 +65,7 @@ export function TopBar() {
                     href={item.href}
                     className={cn(
                       'rounded-full px-3 py-2 text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
-                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]',
+                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
                     )}
                   >
                     {item.label}
@@ -99,7 +102,7 @@ export function TopBar() {
                       aria-label={item.label}
                       className={cn(
                         'inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#DBE9F9] text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
-                        isActive && 'bg-[#DBE9F9] text-[#1F5CAB]',
+                        isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
                       )}
                     >
                       <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
@@ -122,13 +125,14 @@ export function TopBar() {
                     </Link>
                   )
                 }
+
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     className={cn(
                       'rounded-full px-3 py-2 text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
-                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]',
+                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
                     )}
                   >
                     {item.label}
@@ -175,7 +179,7 @@ export function TopBar() {
                                 'rounded-xl px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB]/80 transition hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
                                 isActive && 'bg-[#DBE9F9] text-[#1F5CAB]',
                                 item.href === configuratorLink.href &&
-                                  'bg-[#1F5CAB] text-white hover:bg-[#0F2B52] hover:text-white',
+                                  'bg-[#1F5CAB] text-white hover:bg-[#0F2B52] hover:text-white'
                               )}
                             >
                               {item.label}

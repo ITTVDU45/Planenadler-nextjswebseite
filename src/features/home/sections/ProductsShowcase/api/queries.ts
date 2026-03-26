@@ -1,6 +1,6 @@
 export const GET_PRODUCTS_BY_CATEGORY = /* GraphQL */ `
   query ProductsByCategory($slug: [String]) {
-    products(where: { categoryIn: $slug }, first: 9) {
+    products(where: { categoryIn: $slug }, first: 50) {
       nodes {
         id
         slug
@@ -13,6 +13,7 @@ export const GET_PRODUCTS_BY_CATEGORY = /* GraphQL */ `
           attributes {
             nodes {
               name
+              value
             }
           }
           galleryImages {
@@ -28,6 +29,7 @@ export const GET_PRODUCTS_BY_CATEGORY = /* GraphQL */ `
           attributes {
             nodes {
               name
+              value
             }
           }
           galleryImages {
@@ -48,7 +50,7 @@ export const GET_PRODUCTS_BY_CATEGORY = /* GraphQL */ `
 
 export const GET_PRODUCTS_ALL = /* GraphQL */ `
   query ProductsAll {
-    products(first: 9) {
+    products(first: 50) {
       nodes {
         id
         slug
@@ -61,6 +63,7 @@ export const GET_PRODUCTS_ALL = /* GraphQL */ `
           attributes {
             nodes {
               name
+              value
             }
           }
           galleryImages {
@@ -76,6 +79,7 @@ export const GET_PRODUCTS_ALL = /* GraphQL */ `
           attributes {
             nodes {
               name
+              value
             }
           }
           galleryImages {

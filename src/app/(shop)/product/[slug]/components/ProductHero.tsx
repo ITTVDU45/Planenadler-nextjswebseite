@@ -1,13 +1,16 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import ProductGallery from './ProductGallery'
+import { GoogleReviewBadge } from '@/shared/components/GoogleReviewBadge'
 import type { TruckTarpProduct } from './types'
+import type { GoogleReviewData } from '@/lib/google-reviews'
 
 interface ProductHeroProps {
   product: TruckTarpProduct
+  googleReviews?: GoogleReviewData | null
 }
 
-export default function ProductHero({ product }: ProductHeroProps) {
+export default function ProductHero({ product, googleReviews }: ProductHeroProps) {
   return (
     <section className="py-12 md:py-16" aria-labelledby="product-title">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 md:grid-cols-2 md:items-center">
@@ -45,33 +48,9 @@ export default function ProductHero({ product }: ProductHeroProps) {
               </div>
             </div>
 
-            <div className="mt-3 rounded-lg border border-[#EAF1FB] bg-[#FCFDFF] p-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#F3F7FE] text-xs font-semibold text-[#1F5CAB]/85">
-                    G
-                  </span>
-                  <p className="text-xs font-semibold text-[#1F5CAB]/85">Google Bewertungen</p>
-                </div>
-                <span className="text-[11px] text-[#1F5CAB]/55">Trusted</span>
-              </div>
-              <div className="mt-1.5 flex items-center gap-1.5">
-                <span className="text-xs font-semibold text-[#0F2B52]">4.8</span>
-                <div className="flex items-center gap-0.5" aria-label="4.8 von 5 Sternen">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <svg key={star} width="12" height="12" viewBox="0 0 24 24" aria-hidden>
-                      <path
-                        d="M12 3.5l2.7 5.6 6.2.9-4.5 4.3 1.1 6.2L12 17.7 6.5 20.5l1.1-6.2-4.5-4.3 6.2-.9L12 3.5z"
-                        fill="#F4B545"
-                        stroke="#F4B545"
-                        strokeWidth="1"
-                      />
-                    </svg>
-                  ))}
-                </div>
-                <span className="text-[11px] text-[#1F5CAB]/65">(236 Rezensionen)</span>
-              </div>
-            </div>
+            {googleReviews && googleReviews.totalReviews > 0 && (
+              <GoogleReviewBadge reviews={googleReviews} />
+            )}
           </div>
         </div>
 

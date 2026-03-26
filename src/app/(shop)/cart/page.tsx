@@ -3,14 +3,20 @@ import { TopBar } from '@/shared/components/TopBar/TopBar.component'
 import Stickynav from '@/shared/components/Footer/Stickynav.component'
 import Footer from '@/shared/components/Footer/Footer.component'
 import { CartPageContent } from '@/features/cart/components/CartPageContent'
+import { NOINDEX_ROBOTS, absoluteUrl } from '@/lib/seo'
 
 export const metadata: Metadata = {
   title: 'Warenkorb | Planenadler',
   description:
-    'Ihr Warenkorb – Artikel prüfen und zur Kasse gehen. Maßgeschneiderte Planen und Abdeckungen.',
+    'Ihr Warenkorb - Artikel pruefen und zur Kasse gehen. Massgeschneiderte Planen und Abdeckungen.',
+  alternates: {
+    canonical: absoluteUrl('/cart'),
+  },
+  robots: NOINDEX_ROBOTS,
   openGraph: {
     title: 'Warenkorb | Planenadler',
-    description: 'Ihr Warenkorb – Artikel prüfen und zur Kasse gehen.',
+    description: 'Ihr Warenkorb - Artikel pruefen und zur Kasse gehen.',
+    url: absoluteUrl('/cart'),
   },
 }
 

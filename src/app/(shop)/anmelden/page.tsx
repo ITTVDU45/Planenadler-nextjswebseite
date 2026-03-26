@@ -2,10 +2,15 @@ import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import Image from 'next/image'
 import { LoginFormAnmelden } from '@/features/auth/components/LoginFormAnmelden'
+import { NOINDEX_ROBOTS, absoluteUrl } from '@/lib/seo'
 
 export const metadata: Metadata = {
   title: 'Anmelden | Planenadler',
   description: 'Melden Sie sich in Ihrem Kundenkonto an.',
+  alternates: {
+    canonical: absoluteUrl('/anmelden'),
+  },
+  robots: NOINDEX_ROBOTS,
 }
 
 export default function AnmeldenPage() {

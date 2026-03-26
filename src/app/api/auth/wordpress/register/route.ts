@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkCustomerSession } from '@/features/auth/api/fetchCustomerAccount'
+import { getClientIp } from '@/lib/client-ip'
+import { checkRateLimit } from '@/lib/rate-limit'
+import { isRequestHttps } from '@/lib/request-is-https'
 import {
   appendAuthCookiesToResponse,
   createCookieHeaderForWpRequest,
@@ -18,6 +21,15 @@ export async function POST(request: NextRequest) {
   const sameOriginError = validateSameOrigin(request)
   if (sameOriginError) {
     return NextResponse.json({ error: sameOriginError }, { status: 403 })
+  }
+
+  const ip = getClientIp(request)
+  const rl = checkRateLimit(`wp-register:${ip}`, { windowMs: 15 * 60_000, max: 10 })
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Zu viele Registrierungsversuche. Bitte spaeter erneut versuchen.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec ?? 60) } },
+    )
   }
 
   const body = (await request.json().catch(() => ({}))) as RegisterRequestBody
@@ -95,7 +107,6 @@ export async function POST(request: NextRequest) {
       : 'Registrierung erfolgreich. Bitte E-Mail pruefen.',
   })
 
-  const isHttps = request.nextUrl.protocol === 'https:'
-  appendAuthCookiesToResponse(response, setCookieHeaders, isHttps)
+  appendAuthCookiesToResponse(response, setCookieHeaders, isRequestHttps(request))
   return response
 }

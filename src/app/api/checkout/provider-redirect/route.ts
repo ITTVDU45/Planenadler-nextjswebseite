@@ -38,11 +38,40 @@ interface CheckoutInputShape {
 
 type JsonPayload = Record<string, unknown>
 
+function resolveWordPressOrigin(): string {
+  const candidates = [
+    process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim(),
+    process.env.CUSTOMIZER_API_URL?.trim(),
+    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
+    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
+    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
+  ].filter((value): value is string => Boolean(value))
+
+  for (const candidate of candidates) {
+    if (/\/wp-json\/wc\/store\/v1\/checkout\/?$/i.test(candidate)) {
+      return candidate.replace(/\/wp-json\/wc\/store\/v1\/checkout\/?$/i, '')
+    }
+    if (/\/graphql\/?$/i.test(candidate)) {
+      return candidate.replace(/\/graphql\/?$/i, '')
+    }
+    if (/\/wp-json\/.+$/i.test(candidate)) {
+      return candidate.replace(/\/wp-json\/.+$/i, '')
+    }
+  }
+
+  return ''
+}
+
+function resolveDefaultStoreApiCheckoutUrl(): string {
+  const origin = resolveWordPressOrigin()
+  return origin ? `${origin}/wp-json/wc/store/v1/checkout` : ''
+}
+
 function resolveUpstreamUrl(provider: Provider): string {
   const sharedProviderUrl = process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim()
   if (sharedProviderUrl) return sharedProviderUrl
-  if (provider === 'klarna') return process.env.WC_KLARNA_CHECKOUT_API_URL ?? ''
-  return process.env.WC_PAYPAL_CHECKOUT_API_URL ?? ''
+  if (provider === 'klarna') return process.env.WC_KLARNA_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
+  return process.env.WC_PAYPAL_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
 }
 
 function resolvePaymentMethodId(provider: Provider): string {
@@ -61,8 +90,8 @@ function isPlanenadlerCustomEndpoint(url: string): boolean {
 }
 
 function resolveStoreApiFallbackUrl(provider: Provider): string {
-  if (provider === 'klarna') return process.env.WC_KLARNA_CHECKOUT_API_URL ?? ''
-  return process.env.WC_PAYPAL_CHECKOUT_API_URL ?? ''
+  if (provider === 'klarna') return process.env.WC_KLARNA_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
+  return process.env.WC_PAYPAL_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
 }
 
 function getProviderPaymentAliases(provider: Provider): string[] {

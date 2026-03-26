@@ -1,0 +1,129 @@
+import { NextRequest, NextResponse } from 'next/server'
+import {
+  resolveCheckoutGateways,
+  type PaymentOptionsResponse,
+} from '@/features/checkout/lib/payment-gateways'
+
+function resolveWordPressOrigin(): string {
+  const candidates = [
+    process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim(),
+    process.env.CUSTOMIZER_API_URL?.trim(),
+    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
+    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
+    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
+  ].filter((value): value is string => Boolean(value))
+
+  for (const candidate of candidates) {
+    if (/\/wp-json\/wc\/store\/v1\/checkout\/?$/i.test(candidate)) {
+      return candidate.replace(/\/wp-json\/wc\/store\/v1\/checkout\/?$/i, '')
+    }
+    if (/\/graphql\/?$/i.test(candidate)) {
+      return candidate.replace(/\/graphql\/?$/i, '')
+    }
+    if (/\/wp-json\/.+$/i.test(candidate)) {
+      return candidate.replace(/\/wp-json\/.+$/i, '')
+    }
+  }
+
+  return ''
+}
+
+function resolveStoreApiCheckoutUrl(): string {
+  const explicit =
+    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim() ??
+    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim() ??
+    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim() ??
+    ''
+  if (explicit) return explicit
+
+  const origin = resolveWordPressOrigin()
+  return origin ? `${origin}/wp-json/wc/store/v1/checkout` : ''
+}
+
+function toStoreApiCartUrl(checkoutUrl: string): string {
+  return checkoutUrl.replace(/\/checkout\/?$/i, '/cart')
+}
+
+async function parseJsonSafe(response: Response): Promise<Record<string, unknown>> {
+  return (await response.json().catch(() => ({}))) as Record<string, unknown>
+}
+
+export async function GET(request: NextRequest) {
+  const upstreamUrl = resolveStoreApiCheckoutUrl()
+  if (!upstreamUrl) {
+    return NextResponse.json(
+      {
+        error: 'WooCommerce Store API URL konnte nicht aufgeloest werden.',
+      },
+      { status: 501 }
+    )
+  }
+
+  const cartUrl = toStoreApiCartUrl(upstreamUrl)
+  const cookie = request.headers.get('cookie') ?? ''
+  const errors: string[] = []
+
+  try {
+    const cartResponse = await fetch(cartUrl, {
+      method: 'GET',
+      headers: cookie ? { cookie } : undefined,
+      cache: 'no-store',
+    })
+    const cartData = await parseJsonSafe(cartResponse)
+
+    const checkoutResponse = await fetch(upstreamUrl, {
+      method: 'GET',
+      headers: cookie ? { cookie } : undefined,
+      cache: 'no-store',
+    })
+    const checkoutBootstrapOk = checkoutResponse.ok || checkoutResponse.status === 401
+
+    if (!cartResponse.ok) {
+      errors.push(
+        (typeof cartData.message === 'string' && cartData.message) || 'Store API Cart konnte nicht geladen werden.'
+      )
+    }
+
+    if (!checkoutBootstrapOk) {
+      errors.push('Store API Checkout-Bootstrap konnte nicht geladen werden.')
+    }
+
+    const availablePaymentMethods = Array.isArray(cartData.payment_methods)
+      ? cartData.payment_methods.filter((method): method is string => typeof method === 'string')
+      : []
+    const paymentRequirements = Array.isArray(cartData.payment_requirements)
+      ? cartData.payment_requirements.filter((entry): entry is string => typeof entry === 'string')
+      : []
+    const cartItems = Array.isArray(cartData.items) ? cartData.items : []
+    const hasStripeKey = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim())
+
+    const payload: PaymentOptionsResponse = {
+      gateways: resolveCheckoutGateways(availablePaymentMethods, hasStripeKey),
+      diagnostics: {
+        upstreamUrl,
+        cartUrl,
+        cartFetchOk: cartResponse.ok,
+        checkoutBootstrapOk,
+        cookiePresent: cookie.length > 0,
+        cartItemCount: cartItems.length,
+        availablePaymentMethods,
+        paymentRequirements,
+        errors,
+      },
+    }
+
+    return NextResponse.json(payload, {
+      status: cartResponse.ok || checkoutResponse.ok ? 200 : 502,
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    })
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : 'WooCommerce Payment Discovery fehlgeschlagen.',
+      },
+      { status: 502 }
+    )
+  }
+}

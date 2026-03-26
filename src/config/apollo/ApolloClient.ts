@@ -1,108 +1,53 @@
-/*eslint complexity: ["error", 8]*/
+import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client'
 
-import {
-  ApolloClient,
-  InMemoryCache,
-  createHttpLink,
-  ApolloLink,
-} from '@apollo/client';
+const serverUri =
+  process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim()
 
-const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+const httpLink =
+  typeof window === 'undefined'
+    ? createHttpLink({
+        uri: serverUri,
+        fetch,
+        credentials: 'omit',
+      })
+    : createHttpLink({
+        uri: '/api/graphql',
+        fetch,
+        credentials: 'include',
+      })
 
-interface SessionData {
-  token: string;
-  createdTime: number;
-}
-
-/**
- * Middleware operation
- * If we have a session token in localStorage, add it to the GraphQL request as a Session header.
- */
-const middleware = new ApolloLink((operation, forward) => {
-  /**
-   * If session data exist in local storage, set value as session header.
-   * Here we also delete the session if it is older than 7 days
-   */
-  const sessionData: SessionData | null =
-    typeof window !== 'undefined'
-      ? JSON.parse(localStorage.getItem('woo-session') || 'null')
-      : null;
-
-  const headers: Record<string, string> = {};
-
-  if (sessionData?.token && sessionData?.createdTime) {
-    const { token, createdTime } = sessionData;
-
-    // Check if the token is older than 7 days
-    if (Date.now() - createdTime > SEVEN_DAYS) {
-      // If it is, delete it
-      localStorage.removeItem('woo-session');
-      localStorage.setItem('woocommerce-cart', JSON.stringify({}));
-    } else {
-      // If it's not, use the token
-      headers['woocommerce-session'] = `Session ${token}`;
-    }
-  }
-
-  // Cookie-based authentication - no JWT tokens needed
-  // Cookies are automatically included with credentials: 'include'
-
-  operation.setContext({
-    headers,
-  });
-
-  return forward(operation);
-});
-
-/**
- * Afterware operation.
- *
- * This catches the incoming session token and stores it in localStorage, for future GraphQL requests.
- */
-const afterware = new ApolloLink((operation, forward) =>
-  forward(operation).map((response) => {
-    /**
-     * Check for session header and update session in local storage accordingly.
-     */
-    const context = operation.getContext();
-    const {
-      response: { headers },
-    } = context;
-
-    const session = headers.get('woocommerce-session');
-
-    if (session && typeof window !== 'undefined') {
-      if ('false' === session) {
-        localStorage.removeItem('woo-session');
-      } else {
-        // Immer aktualisieren, wenn der Server ein neues Token sendet (z. B. Session-Rotation).
-        localStorage.setItem(
-          'woo-session',
-          JSON.stringify({ token: session, createdTime: Date.now() }),
-        );
+if (typeof window !== 'undefined') {
+  try {
+    const raw = localStorage.getItem('woo-session')
+    if (raw) {
+      const data = JSON.parse(raw) as { token?: string }
+      const token = typeof data?.token === 'string' ? data.token.trim() : ''
+      if (token) {
+        void fetch('/api/woo-session', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        }).then(() => {
+          try {
+            localStorage.removeItem('woo-session')
+          } catch {
+            /* ignore */
+          }
+        })
       }
     }
+  } catch {
+    /* ignore */
+  }
+}
 
-    return response;
-  }),
-);
+const isServerSide = typeof window === 'undefined'
 
-const isServerSide = typeof window === 'undefined';
-
-// Apollo GraphQL client.
 const client = new ApolloClient({
   ssrMode: isServerSide,
-  link: middleware.concat(
-    afterware.concat(
-      createHttpLink({
-        uri: process.env.NEXT_PUBLIC_GRAPHQL_URL,
-        fetch,
-        // omit: Session läuft über woocommerce-session-Header (Middleware); Wildcard-CORS erlaubt kein credentials
-        credentials: 'omit',
-      }),
-    ),
-  ),
+  link: httpLink,
   cache: new InMemoryCache(),
-});
+})
 
-export default client;
+export default client

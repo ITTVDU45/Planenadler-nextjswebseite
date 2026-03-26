@@ -6,12 +6,16 @@ import ProductConfigurator from './components/ProductConfigurator'
 import ProductTabs from './components/ProductTabs'
 import ProductRecommendations from './components/ProductRecommendations'
 import { getProductPageData } from './product-data'
+import { fetchGoogleReviews } from '@/lib/google-reviews'
+import { GoogleReviewSlider } from '@/shared/components/GoogleReviewSlider'
 import { TopBar } from '@/shared/components/TopBar/TopBar.component'
 import Stickynav from '@/shared/components/Footer/Stickynav.component'
 import Footer from '@/shared/components/Footer/Footer.component'
 import { BlogShowcase, FAQ } from '@/features/home'
 import { mapBlogPostToArticle, getCategoriesFromBlogPosts } from '@/features/home/sections/BlogShowcase/mapBlogPostToArticle'
 import { getRecentBlogPosts } from '@/features/blog'
+import { SITE_NAME, absoluteUrl } from '@/lib/seo'
+import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
 
 interface ProductPageProps {
   params: { slug?: string } | Promise<{ slug?: string }>
@@ -27,27 +31,99 @@ async function resolveSlug(params: ProductPageProps['params']): Promise<string> 
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const slug = await resolveSlug(params)
   const product = await getProductPageData(slug)
+  const title = `${product.title} | ${SITE_NAME}`
+  const description = (product.subtitle || `${product.title} online konfigurieren und anfragen.`).slice(0, 160)
+  const canonical = absoluteUrl(`/product/${slug}`)
+  const imageUrl = product.image?.src
+    ? absoluteUrl(product.image.src)
+    : absoluteUrl('/Planenadlerlogo.png')
 
   return {
-    title: `${product.title} | Planenadler`,
-    description: product.subtitle,
+    title,
+    description,
+    alternates: {
+      canonical,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      type: 'website',
+      images: [
+        {
+          url: imageUrl,
+          alt: product.image?.alt ?? product.title,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [imageUrl],
+    },
   }
 }
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const slug = await resolveSlug(params)
-  const [product, recentPosts] = await Promise.all([
+  const [product, recentPosts, googleReviews] = await Promise.all([
     getProductPageData(slug),
     getRecentBlogPosts(4),
+    fetchGoogleReviews(),
   ])
   const blogArticles = recentPosts.map(mapBlogPostToArticle)
   const blogCategories = getCategoriesFromBlogPosts(recentPosts)
+  const breadcrumbSchema = getBreadcrumbJsonLd([
+    { name: 'Startseite', path: '/' },
+    { name: 'Shop', path: '/shop' },
+    { name: product.title, path: `/product/${slug}` },
+  ])
+
+  const numericPrice = Number.parseFloat(
+    product.price
+      .replace(/[^0-9,.-]/g, '')
+      .replace(/\./g, '')
+      .replace(',', '.')
+  )
+  const productSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.title,
+    description: product.subtitle,
+    image: [product.image.src, ...product.gallery.map((image) => image.src)].map((src) => absoluteUrl(src)),
+    sku: String(product.databaseId || slug),
+    brand: {
+      '@type': 'Brand',
+      name: SITE_NAME,
+    },
+    category: 'PVC-Plane',
+    url: absoluteUrl(`/product/${slug}`),
+    offers: Number.isFinite(numericPrice)
+      ? {
+          '@type': 'Offer',
+          priceCurrency: 'EUR',
+          price: numericPrice.toFixed(2),
+          availability: 'https://schema.org/InStock',
+          url: absoluteUrl(`/product/${slug}`),
+        }
+      : undefined,
+  }
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
+      />
       <main className="bg-white pb-16 sm:pt-20">
         <TopBar />
-        <ProductHero product={product} />
+        <ProductHero product={product} googleReviews={googleReviews} />
+        <GoogleReviewSlider data={googleReviews} />
         <ProductFeatures items={product.features} />
 
         <section id="konfigurator" className="py-12 md:py-16" aria-labelledby="configurator-title">

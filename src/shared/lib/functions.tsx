@@ -34,7 +34,17 @@ export const PLACEHOLDER_IMAGE_DATA_URL =
  */
 export const decodePriceDisplay = (price: string | undefined | null): string => {
   if (price == null || typeof price !== 'string') return '';
-  return price.replace(/&nbsp;/gi, '\u00A0');
+  return price
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&euro;/gi, '€')
+    .replace(/&#8364;/gi, '€')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .trim();
 };
 
 /**

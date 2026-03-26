@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { LazyMotion, domAnimation, m } from 'motion/react'
 
 import { HERO_SLIDES } from './data'
 import type { HeroSlide } from './types'
@@ -24,10 +23,7 @@ export function HeroSlider({ slides = HERO_SLIDES, autoPlayMs }: HeroSliderProps
   const count = safeSlides.length
 
   const activeSlide = safeSlides[activeIndex]
-  const nextIndex = useMemo(
-    () => (count ? (activeIndex + 1) % count : 0),
-    [activeIndex, count],
-  )
+  const nextIndex = useMemo(() => (count ? (activeIndex + 1) % count : 0), [activeIndex, count])
   const nextSlide = safeSlides[nextIndex]
 
   useEffect(() => {
@@ -45,23 +41,14 @@ export function HeroSlider({ slides = HERO_SLIDES, autoPlayMs }: HeroSliderProps
     <section className="relative w-full py-6">
       <ContentShell>
         <div className="relative w-full overflow-hidden rounded-[2.5rem]">
-          <div className="relative min-h-[520px] h-[75vh] max-h-[900px] sm:min-h-[600px] sm:h-[80vh]">
-          <HeroBackground
-            image={activeSlide.background}
-            slideId={activeSlide.id}
-          />
-          <HeroOverlays />
+          <div className="relative h-[75vh] max-h-[900px] min-h-[520px] sm:h-[80vh] sm:min-h-[600px]">
+            <HeroBackground image={activeSlide.background} slideId={activeSlide.id} />
+            <HeroOverlays />
 
-          <div className="relative z-10 flex h-full flex-col justify-between gap-8 px-8 pb-8 pt-8 sm:px-14 sm:pb-14 sm:pt-12">
-            <div className="grid flex-1 grid-cols-12 items-center gap-6">
-              <div className="col-span-12 sm:col-span-7 lg:col-span-6">
-                <LazyMotion features={domAnimation}>
-                  <m.div
-                    key={`text-${activeSlide.id}`}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.5, ease: 'easeOut', delay: 0.1 }}
-                  >
+            <div className="relative z-10 flex h-full flex-col justify-between gap-8 px-8 pb-8 pt-8 sm:px-14 sm:pb-14 sm:pt-12">
+              <div className="grid flex-1 grid-cols-12 items-center gap-6">
+                <div className="col-span-12 sm:col-span-7 lg:col-span-6">
+                  <div key={`text-${activeSlide.id}`}>
                     <HeroTextBlock
                       title={activeSlide.title}
                       subtitle={activeSlide.subtitle}
@@ -74,74 +61,58 @@ export function HeroSlider({ slides = HERO_SLIDES, autoPlayMs }: HeroSliderProps
                         bgColor={activeSlide.cta.bgColor}
                       />
                     </div>
-                  </m.div>
-                </LazyMotion>
-              </div>
+                  </div>
+                </div>
 
-              <div className="relative col-span-12 hidden h-full sm:col-span-5 lg:col-span-6 sm:block">
-                <div className="absolute -bottom-6 right-2 flex items-end gap-6 pr-6 sm:right-0 sm:pr-8 lg:pr-10">
-                  <LazyMotion features={domAnimation}>
-                    <m.div
-                      key={`card-main-${activeSlide.id}`}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0.2 }}
-                    >
+                <div className="relative col-span-12 hidden h-full sm:col-span-5 sm:block lg:col-span-6">
+                  <div className="absolute -bottom-6 right-2 flex items-end gap-6 pr-6 sm:right-0 sm:pr-8 lg:pr-10">
+                    <div key={`card-main-${activeSlide.id}`}>
                       <HeroSlideCard
                         image={activeSlide.thumbMain}
                         variant="active"
                         ariaLabel={`Slide: ${activeSlide.title}`}
                       />
-                    </m.div>
-                  </LazyMotion>
+                    </div>
 
-                  {nextSlide ? (
-                    <LazyMotion features={domAnimation}>
-                      <m.div
-                        key={`card-next-${nextSlide.id}`}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 0.2 }}
-                        className="translate-x-0 lg:translate-x-2"
-                      >
+                    {nextSlide ? (
+                      <div key={`card-next-${nextSlide.id}`} className="translate-x-0 lg:translate-x-2">
                         <HeroSlideCard
                           image={nextSlide.background}
                           variant="preview"
                           onClick={() => setActiveIndex(nextIndex)}
-                          ariaLabel={`Zum nächsten Slide: ${nextSlide.title}`}
+                          ariaLabel={`Zum naechsten Slide: ${nextSlide.title}`}
                         />
-                      </m.div>
-                    </LazyMotion>
-                  ) : null}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
 
-              <div className="col-span-12 sm:hidden">
-                <div className="mt-8 flex items-center gap-4">
-                  <HeroSlideCard
-                    image={activeSlide.thumbMain}
-                    variant="active"
-                    ariaLabel={`Slide: ${activeSlide.title}`}
-                  />
-                  {nextSlide ? (
+                <div className="col-span-12 sm:hidden">
+                  <div className="mt-8 flex items-center gap-4">
                     <HeroSlideCard
-                      image={nextSlide.background}
-                      variant="preview"
-                      onClick={() => setActiveIndex(nextIndex)}
-                      ariaLabel={`Zum nächsten Slide: ${nextSlide.title}`}
+                      image={activeSlide.thumbMain}
+                      variant="active"
+                      ariaLabel={`Slide: ${activeSlide.title}`}
                     />
-                  ) : null}
+                    {nextSlide ? (
+                      <HeroSlideCard
+                        image={nextSlide.background}
+                        variant="preview"
+                        onClick={() => setActiveIndex(nextIndex)}
+                        ariaLabel={`Zum naechsten Slide: ${nextSlide.title}`}
+                      />
+                    ) : null}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <HeroSliderDots
-              count={count}
-              activeIndex={activeIndex}
-              onSelect={setActiveIndex}
-              labels={safeSlides.map((slide) => slide.title)}
-            />
-          </div>
+              <HeroSliderDots
+                count={count}
+                activeIndex={activeIndex}
+                onSelect={setActiveIndex}
+                labels={safeSlides.map((slide) => slide.title)}
+              />
+            </div>
           </div>
         </div>
       </ContentShell>

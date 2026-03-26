@@ -1,4 +1,6 @@
 import Head from 'next/head';
+import { GOOGLE_SITE_VERIFICATION } from '@/lib/seo';
+import { getLocalBusinessJsonLd, getOrganizationJsonLd, getWebSiteJsonLd } from '@/lib/seo-schema';
 
 interface IHeaderProps {
   title: string;
@@ -11,19 +13,33 @@ interface IHeaderProps {
  * @returns {JSX.Element} - Rendered component
  */
 
-const Header = ({ title }: IHeaderProps) => (
-  <>
-    <Head>
-      <title>{`Next.js webshop with WooCommerce ${title}`}</title>
-      <meta name="description" content="WooCommerce webshop" />
-      <meta name="keywords" content="Ecommerce, WooCommerce" />
-      <meta
-        property="og:title"
-        content="Nextjs Ecommerce with Woocommerce"
-        key="pagetitle"
-      />
-    </Head>
-  </>
-);
+const Header = ({ title }: IHeaderProps) => {
+  const organizationJsonLd = getOrganizationJsonLd();
+  const websiteJsonLd = getWebSiteJsonLd();
+  const localBusinessJsonLd = getLocalBusinessJsonLd();
+
+  return (
+    <>
+      <Head>
+        <title>{title}</title>
+        {GOOGLE_SITE_VERIFICATION ? (
+          <meta name="google-site-verification" content={GOOGLE_SITE_VERIFICATION} />
+        ) : null}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }}
+        />
+      </Head>
+    </>
+  );
+};
 
 export default Header;

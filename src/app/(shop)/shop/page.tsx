@@ -12,20 +12,21 @@ import { BlogShowcase } from '@/features/home'
 import { mapBlogPostToArticle, getCategoriesFromBlogPosts } from '@/features/home/sections/BlogShowcase/mapBlogPostToArticle'
 import { FAQSection } from '@/features/about'
 import { getRecentBlogPosts } from '@/features/blog'
+import { buildCanonicalMetadata } from '@/lib/seo'
+import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
 
-export const metadata: Metadata = {
-  title: 'Shop | Planenadler',
-  description:
-    'Unsere Produkte & Planenlösungen – Terrassenplanen, Anhängerplanen, Abdeckhauben, Abdeckplanen, Poolplanen, Gitterboxen. Maßgeschneiderte Qualität für jede Anwendung.',
-  openGraph: {
-    title: 'Shop | Planenadler',
-    description:
-      'Unsere Produkte & Planenlösungen – Maßgeschneiderte Qualität für jede Anwendung.',
-  },
-}
+export const metadata: Metadata = buildCanonicalMetadata(
+  '/shop',
+  'Shop',
+  'Unsere Produkte und Planenloesungen: Terrassenplanen, Anhaengerplanen, Abdeckhauben, Abdeckplanen, Poolplanen und weitere Massanfertigungen.'
+)
 
 export default async function ShopPage() {
   const faqSchema = buildFaqSchema(SHOP_FAQ_ITEMS)
+  const breadcrumbSchema = getBreadcrumbJsonLd([
+    { name: 'Startseite', path: '/' },
+    { name: 'Shop', path: '/shop' },
+  ])
   const recentPosts = await getRecentBlogPosts(4)
   const blogArticles = recentPosts.map(mapBlogPostToArticle)
   const blogCategories = getCategoriesFromBlogPosts(recentPosts)
@@ -35,6 +36,10 @@ export default async function ShopPage() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
       />
       <main className="min-h-screen bg-white pb-16 sm:pt-20">
         <TopBar />

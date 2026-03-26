@@ -20,6 +20,8 @@ import { CheckoutOrderSummary } from './OrderSummary'
 import { ContentShell } from '@/shared/components/ContentShell.component'
 import { PAYMENT_METHOD_IDS } from '../types/checkout.types'
 import type { PaymentMethodId } from '../types/checkout.types'
+import { ExpressCheckout } from './ExpressCheckout'
+import { usePaymentOptions } from '../hooks/usePaymentOptions'
 
 const SHIPPING_PATH = '/checkout/shipping'
 const CONFIRMATION_PATH = '/checkout/confirmation'
@@ -64,10 +66,16 @@ function toCheckoutDataProps(data: CheckoutFormShipping, paymentMethod: string):
 
 export function PaymentPageContent() {
   const router = useRouter()
-  const { cart, syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
-  const { shippingData, selectedPayment, setOrderCompleted } = useCheckoutStore()
+  const { syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
+  const { shippingData, selectedPayment, setSelectedPayment, setOrderCompleted } = useCheckoutStore()
 
   const { data } = useQuery(GET_CART, { notifyOnNetworkStatusChange: true })
+  const {
+    data: paymentOptions,
+    loading: paymentOptionsLoading,
+    error: paymentOptionsError,
+    refresh: refreshPaymentOptions,
+  } = usePaymentOptions()
 
   useEffect(() => {
     if (!data) return
@@ -85,17 +93,29 @@ export function PaymentPageContent() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      const sd = useCheckoutStore.getState().shippingData
+      const state = useCheckoutStore.getState()
       const products = useCartStore.getState().cart?.products ?? []
-      if (!sd || products.length === 0) {
-        // startTransition verhindert "Router action dispatched before initialization" bei HMR.
+      if (!state.shippingData || products.length === 0) {
         startTransition(() => router.replace(SHIPPING_PATH))
       } else {
         setGuardPassed(true)
       }
     }, 350)
+
     return () => clearTimeout(timer)
   }, [router])
+
+  useEffect(() => {
+    if (!paymentOptions?.gateways?.length) return
+
+    const selectedGateway = paymentOptions.gateways.find((gateway) => gateway.id === selectedPayment)
+    if (selectedGateway?.available) return
+
+    const fallback = paymentOptions.gateways.find((gateway) => gateway.available && gateway.frontendReady)
+    if (fallback && fallback.id !== selectedPayment) {
+      setSelectedPayment(fallback.id)
+    }
+  }, [paymentOptions, selectedPayment, setSelectedPayment])
 
   const [checkoutMutation, { loading: checkoutLoading }] = useMutation<CheckoutMutationResponse>(CHECKOUT_MUTATION)
 
@@ -146,6 +166,7 @@ export function PaymentPageContent() {
     if (!shippingData) return
     setSubmitError(null)
     setProviderLoading(paymentMethod)
+    setSelectedPayment(paymentMethod)
 
     try {
       const directRedirectUrl = await tryProviderCheckoutMutation(paymentMethod, shippingData)
@@ -173,7 +194,7 @@ export function PaymentPageContent() {
       if (!redirectUrl) {
         setSubmitError(
           payload.error ??
-            'Klarna/PayPal-Weiterleitung fehlt. Bitte prüfen Sie WooCommerce-Gateway und Provider-Endpoint.'
+            'Die Provider-Weiterleitung fehlt. Bitte pruefen Sie WooCommerce-Gateway, Session und Store API.'
         )
         return
       }
@@ -186,15 +207,30 @@ export function PaymentPageContent() {
     }
   }
 
+  const handleExpressActivation = (gatewayId: PaymentMethodId) => {
+    if (gatewayId === PAYMENT_METHOD_IDS.PAYPAL) {
+      void handleProviderRedirect('paypal')
+      return
+    }
+    if (gatewayId === PAYMENT_METHOD_IDS.KLARNA) {
+      void handleProviderRedirect('klarna')
+      return
+    }
+
+    setSelectedPayment(gatewayId)
+  }
+
   if (!guardPassed) {
     return (
       <ContentShell className="py-12">
         <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
-          <p className="text-[#1F5CAB]/90">Lade…</p>
+          <p className="text-[#1F5CAB]/90">Lade...</p>
         </div>
       </ContentShell>
     )
   }
+
+  const selectedGateway = paymentOptions?.gateways.find((gateway) => gateway.id === selectedPayment)
 
   return (
     <ContentShell className="py-8 lg:py-12">
@@ -207,8 +243,25 @@ export function PaymentPageContent() {
       ) : null}
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px] lg:gap-12">
-        <div className="min-w-0">
-          <PaymentMethods hideWallet />
+        <div className="min-w-0 space-y-6">
+          <ExpressCheckout
+            title="Express Checkout"
+            subtitle="PayPal und Klarna starten direkt aus der Next.js-App. Karte und Wallet werden nur angezeigt, wenn WooCommerce sie fuer diese Session meldet."
+            gateways={paymentOptions?.gateways ?? []}
+            diagnostics={paymentOptions?.diagnostics ?? null}
+            loading={paymentOptionsLoading}
+            error={paymentOptionsError}
+            context="payment"
+            providerLoading={providerLoading}
+            onActivateGateway={handleExpressActivation}
+            onRefresh={refreshPaymentOptions}
+          />
+
+          <PaymentMethods
+            options={paymentOptions?.gateways}
+            loading={paymentOptionsLoading}
+          />
+
           {selectedPayment === PAYMENT_METHOD_IDS.CARD ? <CardPaymentForm /> : null}
           {selectedPayment === PAYMENT_METHOD_IDS.PAYPAL ? (
             <PayPalPanel
@@ -231,6 +284,12 @@ export function PaymentPageContent() {
               onPlaceOrder={handlePlaceOrder}
               isSubmitting={checkoutLoading}
             />
+          ) : null}
+          {selectedPayment === PAYMENT_METHOD_IDS.WALLET ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              {selectedGateway?.helperText ??
+                'Wallet wird vom Backend erkannt, ist in dieser Next.js-Checkout-Stufe aber noch nicht direkt ansprechbar.'}
+            </div>
           ) : null}
         </div>
         <div className="lg:sticky lg:top-24 lg:self-start">

@@ -24,7 +24,7 @@ function WhatsAppFloatButton() {
     >
       <Image
         src="/images/whatsapp_4008228.png"
-        alt=""
+        alt="WhatsApp Kontakt zu Planenadler"
         width={56}
         height={56}
         className="h-full w-full object-cover"
@@ -37,6 +37,7 @@ function WhatsAppFloatButton() {
 interface ILayoutProps {
   children?: ReactNode;
   title: string;
+  showPageTitle?: boolean;
 }
 
 /**
@@ -47,12 +48,12 @@ interface ILayoutProps {
  * @returns {JSX.Element} - Rendered component
  */
 
-const Layout = ({ children, title }: ILayoutProps) => {
+const Layout = ({ children, title, showPageTitle = true }: ILayoutProps) => {
   return (
     <div className="flex min-h-screen w-full min-w-0 flex-col overflow-x-hidden pt-0 sm:pt-20">
       <Header title={title} />
       <TopBar />
-      {title === 'Hjem' ? (
+      {!showPageTitle ? (
         <main className="flex-1">{children}</main>
       ) : (
         <ContentShell className="flex-1">

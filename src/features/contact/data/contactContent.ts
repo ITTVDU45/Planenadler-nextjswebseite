@@ -1,7 +1,7 @@
-import type { ContactInfoItem, ContactHeroContent } from '../types'
+import type { ContactHeroContent, ContactInfoItem } from '../types'
 
 export const CONTACT_HERO_CONTENT: ContactHeroContent = {
-  subline: 'Fragen, Anfrage oder Beratung – wir helfen gern.',
+  subline: 'Fragen, Anfrage oder Beratung - wir helfen gern.',
   image: { src: '/images/Planenadler1.jpg', alt: 'Planenadler Kontakt' },
 }
 
@@ -14,8 +14,8 @@ export const CONTACT_INFO_ITEMS: ContactInfoItem[] = [
   {
     id: 'phone',
     type: 'tel',
-    title: 'Telefonnummer Büro oder Mobil',
-    value: '0203 73 85 985 · 0172 7436428',
+    title: 'Telefonnummer Buero oder Mobil',
+    value: '0203 73 85 985 - 0172 7436428',
     href: TEL_HREF,
     primaryAction: { label: 'Jetzt anrufen', href: TEL_HREF },
     secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },
@@ -38,8 +38,8 @@ export const CONTACT_INFO_ITEMS: ContactInfoItem[] = [
   {
     id: 'address',
     type: 'address',
-    title: 'Adresse & Öffnungszeiten',
-    value: 'Düsseldorfer Str. 387, 47055 Duisburg · Mo–Fr 08:00–18:00, Sa 10:00–14:00',
+    title: 'Adresse & Oeffnungszeiten',
+    value: 'Duesseldorfer Str. 387, 47055 Duisburg - Mo-Fr 08:00-18:00, Sa 10:00-14:00',
     href: MAPS_HREF,
     primaryAction: { label: 'Route planen', href: MAPS_HREF },
     secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },
