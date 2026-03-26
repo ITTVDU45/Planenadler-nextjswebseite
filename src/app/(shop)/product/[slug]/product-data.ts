@@ -13,6 +13,12 @@ const GRAPHQL_URL = process.env.NEXT_PUBLIC_GRAPHQL_URL ?? ''
 const CUSTOMIZER_API_BASE = process.env.CUSTOMIZER_API_URL ?? ''
 const CUSTOMIZER_REST_API_KEY = process.env.CUSTOMIZER_REST_API_KEY?.trim() ?? ''
 
+/** Sollte mit PRODUCT_PAGE_REVALIDATE_SECONDS / product-page-cache.ts übereinstimmen */
+const DATA_REVALIDATE_SECONDS = Math.max(
+  60,
+  Number.parseInt(process.env.PRODUCT_PAGE_REVALIDATE_SECONDS ?? '300', 10) || 300,
+)
+
 const PLACEHOLDER_IMAGE: ProductImage = {
   src: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iNDAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZTVlN2ViIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjI0IiBmaWxsPSIjOWNhM2FmIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5LZWluIEJpbGQ8L3RleHQ+PC9zdmc+',
   alt: 'Kein Bild verfügbar',
@@ -30,7 +36,7 @@ async function gqlFetch<T>(query: string, variables: Record<string, unknown> = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, variables }),
-    cache: 'no-store',
+    next: { revalidate: DATA_REVALIDATE_SECONDS },
   })
 
   if (!res.ok) {
@@ -77,22 +83,6 @@ const PRODUCT_BY_SLUG_QUERY = /* GraphQL */ `
         price
         regularPrice
         salePrice
-        variations {
-          nodes {
-            id
-            databaseId
-            name
-            price
-            regularPrice
-            salePrice
-            attributes {
-              nodes {
-                name
-                value
-              }
-            }
-          }
-        }
       }
       productCategories {
         nodes {
@@ -160,15 +150,6 @@ interface WpProductNode {
   galleryImages?: { nodes?: WpImage[] | null } | null
   productCategories?: { nodes?: Array<{ name?: string; slug?: string }> | null } | null
   related?: { nodes?: WpRelatedNode[] | null } | null
-  variations?: {
-    nodes?: Array<{
-      id: string
-      databaseId: number
-      name: string
-      price?: string | null
-      attributes?: { nodes?: Array<{ name?: string; value?: string }> | null } | null
-    }> | null
-  } | null
 }
 
 interface WpRelatedNode {
@@ -335,7 +316,10 @@ async function fetchCustomizerConfig(productId: number): Promise<{
     if (CUSTOMIZER_REST_API_KEY) {
       headers['X-Planenadler-Customizer-Key'] = CUSTOMIZER_REST_API_KEY
     }
-    const res = await fetch(url, { cache: 'no-store', headers })
+    const res = await fetch(url, {
+      headers,
+      next: { revalidate: DATA_REVALIDATE_SECONDS },
+    })
     if (res.status === 404) {
       return {
         rawConfig: null,

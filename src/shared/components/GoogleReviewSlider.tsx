@@ -142,15 +142,29 @@ export function GoogleReviewSlider({ data }: GoogleReviewSliderProps) {
             </div>
           </div>
 
-          {data.placeUrl && (
-            <a
-              href={data.placeUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 text-xs font-medium text-[#3982DC] hover:underline"
-            >
-              Alle Bewertungen auf Google ansehen
-            </a>
+          {(data.placeUrl || data.writeReviewUrl) && (
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+              {data.placeUrl ? (
+                <a
+                  href={data.placeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center rounded-full border border-[#CFE0F5] bg-white px-4 py-2 text-xs font-semibold text-[#1F5CAB] transition hover:border-[#B8D1F0] hover:bg-[#F4F9FF]"
+                >
+                  Alle Bewertungen ansehen
+                </a>
+              ) : null}
+              {data.writeReviewUrl ? (
+                <a
+                  href={data.writeReviewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center rounded-full bg-[#1F5CAB] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#0F2B52]"
+                >
+                  Jetzt bewerten
+                </a>
+              ) : null}
+            </div>
           )}
         </div>
 

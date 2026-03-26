@@ -1,41 +1,26 @@
 import type { Metadata } from 'next'
-import { unstable_cache } from 'next/cache'
-import { cache } from 'react'
-import ProductHero from './components/ProductHero'
 import ProductFeatures from './components/ProductFeatures'
 import ProductGallery from './components/ProductGallery'
 import ProductConfigurator from './components/ProductConfigurator'
 import ProductTabs from './components/ProductTabs'
 import ProductRecommendations from './components/ProductRecommendations'
-import { getProductPageData } from './product-data'
-import { fetchGoogleReviews } from '@/lib/google-reviews'
-import { GoogleReviewSlider } from '@/shared/components/GoogleReviewSlider'
+import { getCachedProductPageData } from './product-page-cache'
+import { ProductBlogFaqBoundary, ProductHeroReviewsBoundary } from './ProductPageStreaming'
 import { TopBar } from '@/shared/components/TopBar/TopBar.component'
 import Stickynav from '@/shared/components/Footer/Stickynav.component'
 import Footer from '@/shared/components/Footer/Footer.component'
-import { BlogShowcase, FAQ } from '@/features/home'
-import { mapBlogPostToArticle, getCategoriesFromBlogPosts } from '@/features/home/sections/BlogShowcase/mapBlogPostToArticle'
-import { getRecentBlogPosts } from '@/features/blog'
 import { SITE_NAME, absoluteUrl } from '@/lib/seo'
 import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
+
+/** ISR: Seite wird bis zu dieser Zeit im Hintergrund neu erzeugt (schnelle Auslieferung aus dem Cache). */
+export const revalidate = Math.max(
+  60,
+  Number.parseInt(process.env.PRODUCT_PAGE_REVALIDATE_SECONDS ?? '300', 10) || 300,
+)
 
 interface ProductPageProps {
   params: { slug?: string } | Promise<{ slug?: string }>
 }
-
-const getCachedRecentBlogPosts = unstable_cache(
-  async () => getRecentBlogPosts(4),
-  ['product-page-recent-posts'],
-  { revalidate: 3600 }
-)
-
-const getCachedGoogleReviews = unstable_cache(
-  async () => fetchGoogleReviews(),
-  ['product-page-google-reviews'],
-  { revalidate: 3600 }
-)
-
-const getCachedProductPageData = cache(async (slug: string) => getProductPageData(slug))
 
 async function resolveSlug(params: ProductPageProps['params']): Promise<string> {
   const resolved = await params
@@ -83,13 +68,8 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const slug = await resolveSlug(params)
-  const [product, recentPosts, googleReviews] = await Promise.all([
-    getCachedProductPageData(slug),
-    getCachedRecentBlogPosts(),
-    getCachedGoogleReviews(),
-  ])
-  const blogArticles = recentPosts.map(mapBlogPostToArticle)
-  const blogCategories = getCategoriesFromBlogPosts(recentPosts)
+  const product = await getCachedProductPageData(slug)
+
   const breadcrumbSchema = getBreadcrumbJsonLd([
     { name: 'Startseite', path: '/' },
     { name: 'Shop', path: '/shop' },
@@ -100,7 +80,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     product.price
       .replace(/[^0-9,.-]/g, '')
       .replace(/\./g, '')
-      .replace(',', '.')
+      .replace(',', '.'),
   )
   const productSchema = {
     '@context': 'https://schema.org',
@@ -138,8 +118,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       />
       <main className="bg-white pb-16 sm:pt-20">
         <TopBar />
-        <ProductHero product={product} googleReviews={googleReviews} />
-        <GoogleReviewSlider data={googleReviews} />
+        <ProductHeroReviewsBoundary product={product} />
         <ProductFeatures items={product.features} />
 
         <section id="konfigurator" className="py-12 md:py-16" aria-labelledby="configurator-title">
@@ -163,8 +142,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
         <ProductTabs tabs={product.tabs} />
         <ProductRecommendations items={product.recommendations} />
-        <BlogShowcase articles={blogArticles} categories={blogCategories} />
-        <FAQ />
+        <ProductBlogFaqBoundary />
         <Footer />
         <span className="sr-only">Produkt-Slug: {slug}</span>
       </main>

@@ -19,6 +19,7 @@ export interface GoogleReviewData {
   rating: number
   totalReviews: number
   placeUrl: string
+  writeReviewUrl: string
   reviews: GoogleReviewItem[]
 }
 
@@ -26,6 +27,7 @@ const FALLBACK: GoogleReviewData = {
   rating: 0,
   totalReviews: 0,
   placeUrl: '',
+  writeReviewUrl: '',
   reviews: [],
 }
 
@@ -113,6 +115,7 @@ export async function fetchGoogleReviews(): Promise<GoogleReviewData> {
       rating: data.rating ?? 0,
       totalReviews: data.userRatingCount ?? 0,
       placeUrl: data.googleMapsUri ?? '',
+      writeReviewUrl: `https://search.google.com/local/writereview?placeid=${encodeURIComponent(placeId)}`,
       reviews,
     }
   } catch (err) {
