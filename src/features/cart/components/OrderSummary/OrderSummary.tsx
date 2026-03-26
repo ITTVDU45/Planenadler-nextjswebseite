@@ -1,24 +1,21 @@
 'use client'
 
 import Link from 'next/link'
-import { formatPrice } from '../../services/cartCalculations'
+import { decodePriceDisplay, parseCartPriceString } from '@/shared/lib/functions'
+import type { CartTotals } from '@/shared/types/cart'
 
 interface OrderSummaryProps {
-  subtotal: number
-  tax: number
-  shipping: number
-  total: number
+  totals: CartTotals
 }
 
 const CHECKOUT_PATH = '/checkout/shipping'
 const SHOP_PATH = '/shop'
 
 export function OrderSummary({
-  subtotal,
-  tax,
-  shipping,
-  total,
+  totals,
 }: OrderSummaryProps) {
+  const shippingValue = parseCartPriceString(totals.shippingTotal)
+
   return (
     <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6 shadow-[0_8px_24px_rgba(31,92,171,0.06)] lg:sticky lg:top-24">
       <h2 className="mb-4 text-lg font-bold text-[#1F5CAB]">
@@ -27,25 +24,25 @@ export function OrderSummary({
       <dl className="space-y-2 text-sm">
         <div className="flex justify-between">
           <dt className="text-[#1F5CAB]/80">Zwischensumme</dt>
-          <dd className="font-medium text-[#1F5CAB]">{formatPrice(subtotal)}</dd>
+          <dd className="font-medium text-[#1F5CAB]">{decodePriceDisplay(totals.subtotal)}</dd>
         </div>
         <div className="flex justify-between">
           <dt className="text-[#1F5CAB]/80">Versand</dt>
           <dd className="font-medium text-[#1F5CAB]">
-            {shipping === 0
+            {shippingValue === 0
               ? 'wird im Checkout berechnet'
-              : formatPrice(shipping)}
+              : decodePriceDisplay(totals.shippingTotal)}
           </dd>
         </div>
         <div className="flex justify-between">
           <dt className="text-[#1F5CAB]/80">MwSt.</dt>
-          <dd className="font-medium text-[#1F5CAB]">{formatPrice(tax)}</dd>
+          <dd className="font-medium text-[#1F5CAB]">{decodePriceDisplay(totals.totalTax)}</dd>
         </div>
       </dl>
       <div className="my-4 border-t border-[#DBE9F9] pt-4">
         <div className="flex justify-between text-base font-bold text-[#1F5CAB]">
           <dt>Gesamtbetrag</dt>
-          <dd>{formatPrice(total)}</dd>
+          <dd>{decodePriceDisplay(totals.total)}</dd>
         </div>
       </div>
       <div className="flex flex-col gap-3">

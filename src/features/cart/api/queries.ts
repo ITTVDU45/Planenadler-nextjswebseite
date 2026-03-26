@@ -72,6 +72,10 @@ export const GET_CART = gql`
           total
           subtotal
           subtotalTax
+          extraData {
+            key
+            value
+          }
         }
       }
 

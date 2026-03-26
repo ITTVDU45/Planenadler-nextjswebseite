@@ -246,9 +246,8 @@ export function PaymentPageContent() {
         <div className="min-w-0 space-y-6">
           <ExpressCheckout
             title="Express Checkout"
-            subtitle="PayPal und Klarna starten direkt aus der Next.js-App. Karte und Wallet werden nur angezeigt, wenn WooCommerce sie fuer diese Session meldet."
+            subtitle="Starten Sie direkt mit Ihrer bevorzugten Zahlungsart."
             gateways={paymentOptions?.gateways ?? []}
-            diagnostics={paymentOptions?.diagnostics ?? null}
             loading={paymentOptionsLoading}
             error={paymentOptionsError}
             context="payment"

@@ -73,6 +73,16 @@ export interface PriceCalculationResult {
   price: string
 }
 
+export interface ConfigurationSummaryEntry {
+  label: string
+  value: string
+}
+
+export interface ConfiguredCartPayload {
+  extraData: Record<string, string>
+  summary: ConfigurationSummaryEntry[]
+}
+
 function resolveLabels(ids: string[], choices: ResolvedChoice[]): string[] {
   const choiceMap = new Map(choices.map((choice) => [choice.id, choice.label]))
   return ids
@@ -238,6 +248,120 @@ export function buildWordPressPriceFormData(body: PriceCalculationRequestBody): 
   }
 
   return params
+}
+
+function addSummaryEntry(
+  entries: ConfigurationSummaryEntry[],
+  label: string,
+  value: string | string[] | undefined,
+) {
+  if (Array.isArray(value)) {
+    const normalized = value.map((entry) => entry.trim()).filter((entry) => entry.length > 0)
+    if (normalized.length === 0) return
+    entries.push({ label, value: normalized.join(', ') })
+    return
+  }
+
+  if (!value) return
+  const normalized = value.trim()
+  if (!normalized) return
+  entries.push({ label, value: normalized })
+}
+
+export function buildConfigurationSummary(
+  body: PriceCalculationRequestBody,
+  sketchFileName?: string,
+): ConfigurationSummaryEntry[] {
+  const entries: ConfigurationSummaryEntry[] = []
+
+  addSummaryEntry(entries, 'Material', body.material)
+  addSummaryEntry(entries, 'Farbe', body.color)
+
+  switch (body.productType) {
+    case 'lounge':
+      addSummaryEntry(entries, 'Seite A', body.dimensions.sideACm ? `${body.dimensions.sideACm} cm` : undefined)
+      addSummaryEntry(entries, 'Seite B', body.dimensions.sideBCm ? `${body.dimensions.sideBCm} cm` : undefined)
+      addSummaryEntry(entries, 'Seite C', body.dimensions.sideCCm ? `${body.dimensions.sideCCm} cm` : undefined)
+      addSummaryEntry(entries, 'Seite F', body.dimensions.sideFCm ? `${body.dimensions.sideFCm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe H', body.dimensions.sideHCm ? `${body.dimensions.sideHCm} cm` : undefined)
+      break
+    case 'trailer':
+      addSummaryEntry(entries, 'Anhaengerbreite A', body.dimensions.trailerWidthCm ? `${body.dimensions.trailerWidthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Anhaengerlaenge B', body.dimensions.trailerLengthCm ? `${body.dimensions.trailerLengthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Planenhoehe C', body.dimensions.trailerHeightCm ? `${body.dimensions.trailerHeightCm} cm` : undefined)
+      break
+    case 'rectangular':
+      addSummaryEntry(entries, 'Laenge A', body.dimensions.rectangularLengthCm ? `${body.dimensions.rectangularLengthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Breite B', body.dimensions.rectangularWidthCm ? `${body.dimensions.rectangularWidthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe C', body.dimensions.rectangularHeightCm ? `${body.dimensions.rectangularHeightCm} cm` : undefined)
+      break
+    case 'tarpaulins':
+    default:
+      addSummaryEntry(entries, 'Laenge A', body.dimensions.lengthACm ? `${body.dimensions.lengthACm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe rechts B', body.dimensions.heightRightBCm ? `${body.dimensions.heightRightBCm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe links C', body.dimensions.heightLeftCCm ? `${body.dimensions.heightLeftCCm} cm` : undefined)
+      break
+  }
+
+  addSummaryEntry(entries, 'Obere Seite', body.selections.topSide)
+  addSummaryEntry(entries, 'Linke Seite', body.selections.leftSide)
+  addSummaryEntry(entries, 'Rechte Seite', body.selections.rightSide)
+  addSummaryEntry(entries, 'Untere Seite', body.selections.bottomSide)
+  addSummaryEntry(entries, 'Oesen', body.selections.eyeletEdge)
+  addSummaryEntry(entries, 'Verschlussart', body.selections.closureType)
+  addSummaryEntry(entries, 'Frontverschluss', body.selections.frontClosure)
+  addSummaryEntry(entries, 'Rueckenverschluss', body.selections.backClosure)
+
+  if (body.toggles.hasWindow) {
+    addSummaryEntry(entries, 'Fenster', 'Ja')
+    addSummaryEntry(entries, 'Fensterbreite', body.window.widthCm ? `${body.window.widthCm} cm` : undefined)
+    addSummaryEntry(entries, 'Fensterhoehe', body.window.heightCm ? `${body.window.heightCm} cm` : undefined)
+  }
+
+  if (body.toggles.hasDoor) {
+    addSummaryEntry(entries, 'Tuer', 'Ja')
+    addSummaryEntry(entries, 'Tuerbreite', body.door.widthCm ? `${body.door.widthCm} cm` : undefined)
+    addSummaryEntry(entries, 'Tuerhoehe', body.door.heightCm ? `${body.door.heightCm} cm` : undefined)
+    addSummaryEntry(entries, 'Tuerabstand links', body.door.distanceLeftCm ? `${body.door.distanceLeftCm} cm` : undefined)
+    addSummaryEntry(entries, 'Tuer-Extras', body.selections.doorExtras)
+  }
+
+  if (body.toggles.hasExtras) {
+    addSummaryEntry(entries, 'Extras', body.selections.extrasSelected)
+  }
+
+  addSummaryEntry(entries, 'Frontverschluss-Zubehoer', body.selections.frontClosureExtras)
+  addSummaryEntry(entries, 'Rueckenverschluss-Zubehoer', body.selections.backClosureExtras)
+  addSummaryEntry(entries, 'Hinweise', body.notes.extras)
+  addSummaryEntry(entries, 'Skizze', sketchFileName)
+
+  return entries
+}
+
+export function buildConfiguredCartPayload(
+  body: PriceCalculationRequestBody,
+  uniqueKey: string,
+  sketchFileName?: string,
+): ConfiguredCartPayload {
+  const extraData = Object.fromEntries(buildWordPressPriceFormData(body).entries())
+  delete extraData.action
+  delete extraData.product_id
+
+  extraData.custom_option = 'configured'
+  extraData.unique_key = uniqueKey
+  extraData.planenadler_configuration_id = uniqueKey
+
+  const summary = buildConfigurationSummary(body, sketchFileName)
+  extraData.planenadler_configuration_summary = JSON.stringify(summary)
+
+  if (sketchFileName?.trim()) {
+    extraData.planenadler_sketch_file_name = sketchFileName.trim()
+  }
+
+  return {
+    extraData,
+    summary,
+  }
 }
 
 export function parsePriceCalculationResponse(rawPrice: unknown): PriceCalculationResult {

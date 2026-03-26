@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 // Components
 import Button from '@/shared/ui/Button.component';
+import { AddToCartSuccessModal } from '@/shared/components/AddToCartSuccessModal';
 
 // State
 import { useCartStore } from '@/shared/lib/cartStore';
@@ -43,6 +44,7 @@ const AddToCart = ({
 }: ISingleProductProps) => {
   const { syncWithWooCommerce, isLoading: isCartLoading } = useCartStore();
   const [requestError, setRequestError] = useState<boolean>(false);
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
 
   const productId = product?.databaseId ? product?.databaseId : variationId;
 
@@ -68,10 +70,8 @@ const AddToCart = ({
     },
     refetchQueries: [{ query: GET_CART }],
     onCompleted: () => {
-      // Delayed refetch to ensure WooCommerce backend has settled
-      setTimeout(() => {
-        refetch();
-      }, 2000);
+      void refetch();
+      setSuccessModalOpen(true);
     },
 
     onError: () => {
@@ -85,6 +85,11 @@ const AddToCart = ({
 
   return (
     <>
+      <AddToCartSuccessModal
+        open={successModalOpen}
+        productName={product?.name ?? 'Produkt'}
+        onClose={() => setSuccessModalOpen(false)}
+      />
       <Button
         handleButtonClick={() => handleAddToCart()}
         buttonDisabled={addToCartLoading || requestError || isCartLoading}

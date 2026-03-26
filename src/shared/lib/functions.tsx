@@ -3,13 +3,47 @@
 import { v4 as uuidv4 } from 'uuid';
 import { ChangeEvent } from 'react';
 
-import type { CartProduct, Cart } from '@/shared/types/cart';
+import type { CartProduct, Cart, CartConfigurationEntry, CartTotals } from '@/shared/types/cart';
 import type { ICheckoutDataProps } from '@/shared/types/checkout';
 import type {
   ICartItemNode,
   IUpdateCartMutationArgs,
   IFormattedCartProps,
 } from '@/shared/types/graphql';
+
+const CONFIGURATION_SUMMARY_KEY = 'planenadler_configuration_summary'
+const CONFIGURATION_ID_KEY = 'planenadler_configuration_id'
+const CONFIGURATION_LABELS: Record<string, string> = {
+  fabric: 'Material',
+  colors: 'Farbe',
+  width: 'Laenge A',
+  height_right: 'Hoehe rechts B',
+  height_left: 'Hoehe links C',
+  trailer_width: 'Anhaengerbreite A',
+  trailer_length: 'Anhaengerlaenge B',
+  trailer_height: 'Planenhoehe C',
+  rectangular_length: 'Laenge A',
+  rectangular_width: 'Breite B',
+  rectangular_height: 'Hoehe C',
+  side_a: 'Seite A',
+  side_b: 'Seite B',
+  side_c: 'Seite C',
+  side_f: 'Seite F',
+  side_h: 'Hoehe H',
+  has_top_edge: 'Obere Seite',
+  has_edge_left_0: 'Linke Seite',
+  has_edge_right_0: 'Rechte Seite',
+  has_edge_bottom_0: 'Untere Seite',
+  eyelet_edge: 'Oesen',
+  closureType: 'Verschlussart',
+  front_clouser: 'Frontverschluss',
+  back_clouser: 'Rueckenverschluss',
+  window_width: 'Fensterbreite',
+  window_height: 'Fensterhoehe',
+  door_width: 'Tuerbreite',
+  door_height: 'Tuerhoehe',
+  door_offset_left: 'Tuerabstand links',
+}
 
 // Re-export types that other files import from here
 export type { ICartItemNode } from '@/shared/types/graphql';
@@ -118,7 +152,7 @@ export const getAbsoluteImageUrl = (url: string | undefined | null): string => {
  * Parst WooCommerce-Preisstring (z. B. "19,99 €" oder "0,00 €") zu einer Zahl.
  * Unterstützt deutsches Format (Komma als Dezimaltrenner) und Punkt.
  */
-function parseCartPriceString(priceStr: string | undefined | null): number {
+export function parseCartPriceString(priceStr: string | undefined | null): number {
   if (priceStr == null || typeof priceStr !== 'string') return 0
   const trimmed = priceStr.trim().replace(/\s+/g, '')
   // Nur Ziffern, Komma, Punkt, Minus behalten
@@ -133,6 +167,80 @@ function parseCartPriceString(priceStr: string | undefined | null): number {
   return Number.isFinite(value) ? value : 0
 }
 
+function formatCartPriceValue(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 'Preis auf Anfrage'
+  }
+
+  return new Intl.NumberFormat('de-DE', {
+    style: 'currency',
+    currency: 'EUR',
+  }).format(value)
+}
+
+function decodeConfigurationSummary(
+  item: ICartItemNode,
+): { summary: CartConfigurationEntry[]; configurationId?: string; hasConfiguration: boolean } {
+  const extraEntries = Array.isArray(item.extraData) ? item.extraData : []
+  const configurationId = extraEntries.find((entry) => entry.key === CONFIGURATION_ID_KEY)?.value
+  const summaryEntry = extraEntries.find((entry) => entry.key === CONFIGURATION_SUMMARY_KEY)?.value
+
+  if (summaryEntry) {
+    try {
+      const parsed = JSON.parse(summaryEntry) as Array<{ label?: unknown; value?: unknown }>
+      if (Array.isArray(parsed)) {
+        const summary = parsed
+          .map((entry) => ({
+            label: typeof entry?.label === 'string' ? entry.label.trim() : '',
+            value: typeof entry?.value === 'string' ? entry.value.trim() : '',
+          }))
+          .filter((entry) => entry.label.length > 0 && entry.value.length > 0)
+
+        return {
+          summary,
+          configurationId,
+          hasConfiguration: summary.length > 0,
+        }
+      }
+    } catch {
+      /* ignore malformed summary */
+    }
+  }
+
+  const fallbackSummary = extraEntries
+    .filter((entry) => {
+      if (!entry?.key || !entry?.value) return false
+      if (entry.key in CONFIGURATION_LABELS) return true
+      return (
+        entry.key.startsWith('Extra_') ||
+        entry.key.startsWith('Door_Extra_') ||
+        entry.key.startsWith('Zubeh') ||
+        entry.key === 'planenadler_sketch_file_name'
+      )
+    })
+    .map((entry) => {
+      if (entry.key === 'planenadler_sketch_file_name') {
+        return { label: 'Skizze', value: entry.value }
+      }
+      if (entry.key.startsWith('Extra_')) {
+        return { label: 'Extras', value: entry.value }
+      }
+      if (entry.key.startsWith('Door_Extra_')) {
+        return { label: 'Tuer-Extras', value: entry.value }
+      }
+      if (entry.key.startsWith('Zubeh')) {
+        return { label: 'Zubehoer', value: entry.value }
+      }
+      return { label: CONFIGURATION_LABELS[entry.key] ?? entry.key, value: entry.value }
+    })
+
+  return {
+    summary: fallbackSummary,
+    configurationId,
+    hasConfiguration: fallbackSummary.length > 0,
+  }
+}
+
 /**
  * Returns cart data in the required format.
  * @param {IFormattedCartProps} data Cart data from GraphQL
@@ -145,10 +253,24 @@ export const getFormattedCart = (data: IFormattedCartProps) => {
 
   const givenProducts = data.cart.contents.nodes;
 
+  const totals: CartTotals = {
+    subtotal: data.cart.subtotal,
+    subtotalTax: data.cart.subtotalTax,
+    shippingTax: data.cart.shippingTax,
+    shippingTotal: data.cart.shippingTotal,
+    total: data.cart.total,
+    totalTax: data.cart.totalTax,
+    feeTax: data.cart.feeTax,
+    feeTotal: data.cart.feeTotal,
+    discountTax: data.cart.discountTax,
+    discountTotal: data.cart.discountTotal,
+  }
+
   const formattedCart: Cart = {
     products: [],
     totalProductsCount: 0,
-    totalProductsPrice: 0,
+    totalProductsPrice: data.cart.total,
+    totals,
   };
 
   let totalProductsCount = 0;
@@ -163,6 +285,11 @@ export const getFormattedCart = (data: IFormattedCartProps) => {
       totalValue = parseCartPriceString(givenProduct.price) * item.quantity
     }
     const unitPrice = item.quantity > 0 ? totalValue / item.quantity : 0
+    const {
+      summary: configurationSummary,
+      configurationId,
+      hasConfiguration,
+    } = decodeConfigurationSummary(item)
 
     const product: CartProduct = {
       productId: givenProduct.productId ?? givenProduct.databaseId,
@@ -170,7 +297,10 @@ export const getFormattedCart = (data: IFormattedCartProps) => {
       name: givenProduct.name,
       qty: item.quantity,
       price: unitPrice,
+      unitPriceDisplay: formatCartPriceValue(unitPrice),
       totalPrice: item.total,
+      subtotalDisplay: item.subtotal,
+      totalDisplay: item.total,
       image: givenProduct.image?.sourceUrl
         ? {
             sourceUrl: givenProduct.image.sourceUrl,
@@ -186,6 +316,10 @@ export const getFormattedCart = (data: IFormattedCartProps) => {
               PLACEHOLDER_IMAGE_DATA_URL,
             title: givenProduct.name,
           },
+      slug: givenProduct.slug,
+      configurationId,
+      configurationSummary,
+      hasConfiguration,
     };
 
     totalProductsCount += item.quantity;
@@ -193,7 +327,6 @@ export const getFormattedCart = (data: IFormattedCartProps) => {
   });
 
   formattedCart.totalProductsCount = totalProductsCount;
-  formattedCart.totalProductsPrice = data.cart.total;
 
   return formattedCart;
 };

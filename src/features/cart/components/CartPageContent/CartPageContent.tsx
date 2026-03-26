@@ -16,7 +16,6 @@ import {
 } from '@/shared/lib/functions'
 import { GET_CART } from '../../api/queries'
 import { UPDATE_CART } from '@/shared/lib/GQL_MUTATIONS'
-import { calcShipping, calcSubtotal, calcTax, calcTotal } from '../../services/cartCalculations'
 import { OrderSummary } from '../OrderSummary/OrderSummary'
 import { useCheckoutStore } from '@/features/checkout/store/checkout.store'
 import { PAYMENT_METHOD_IDS, type PaymentMethodId } from '@/features/checkout/types/checkout.types'
@@ -82,10 +81,18 @@ export function CartPageContent() {
 
   const products = cart?.products ?? []
   const hasItems = products.length > 0
-  const subtotal = calcSubtotal(products)
-  const shipping = calcShipping(products)
-  const tax = calcTax(subtotal)
-  const total = calcTotal(subtotal, tax, shipping)
+  const cartTotals = cart?.totals ?? {
+    subtotal: '0,00 €',
+    subtotalTax: '0,00 €',
+    shippingTax: '0,00 €',
+    shippingTotal: '0,00 €',
+    total: '0,00 €',
+    totalTax: '0,00 €',
+    feeTax: '0,00 €',
+    feeTotal: '0,00 €',
+    discountTax: '0,00 €',
+    discountTotal: '0,00 €',
+  }
 
   if (!hasItems && !loading) {
     return (
@@ -128,6 +135,7 @@ export function CartPageContent() {
             <div className="mt-6 space-y-4">
               {((data?.cart?.contents?.nodes ?? []) as IProductRootObject[]).map((item) => {
                 const product = item.product.node
+                const cartProduct = products.find((entry) => entry.cartKey === item.key)
                 const imageUrl = product.image?.sourceUrl
                   ? getAbsoluteImageUrl(product.image.sourceUrl)
                   : '/placeholder.png'
@@ -149,8 +157,18 @@ export function CartPageContent() {
                     <div className="min-w-0">
                       <h2 className="text-lg font-semibold text-[#1F5CAB]">{product.name}</h2>
                       <p className="mt-1 text-sm text-[#1F5CAB]/70">
-                        Artikelpreis: {decodePriceDisplay(product.price ?? item.subtotal)}
+                        Artikelpreis: {decodePriceDisplay(cartProduct?.unitPriceDisplay ?? product.price ?? item.subtotal)}
                       </p>
+                      {cartProduct?.configurationSummary?.length ? (
+                        <dl className="mt-3 grid gap-1 rounded-xl bg-[#F7FAFF] p-3 text-xs text-[#1F5CAB]/85">
+                          {cartProduct.configurationSummary.map((entry) => (
+                              <div key={`${item.key}-${entry.label}`} className="flex justify-between gap-3">
+                                <dt className="font-semibold text-[#1F5CAB]">{entry.label}</dt>
+                                <dd className="text-right">{entry.value}</dd>
+                              </div>
+                            ))}
+                        </dl>
+                      ) : null}
                       <div className="mt-4 flex flex-wrap items-center gap-3">
                         <label className="text-sm text-[#1F5CAB]">
                           Menge
@@ -179,7 +197,9 @@ export function CartPageContent() {
                     </div>
                     <div className="flex items-start justify-between gap-3 md:flex-col md:items-end">
                       <p className="text-lg font-bold text-[#1F5CAB]">{decodePriceDisplay(item.subtotal)}</p>
-                      <p className="text-sm text-[#1F5CAB]/65">inkl. Konfiguration</p>
+                      {cartProduct?.hasConfiguration ? (
+                        <p className="text-sm text-[#1F5CAB]/65">inkl. Konfiguration</p>
+                      ) : null}
                     </div>
                   </article>
                 )
@@ -189,9 +209,8 @@ export function CartPageContent() {
 
           <ExpressCheckout
             title="Express Buttons"
-            subtitle="Die Buttons kommen aus den aktuell fuer Ihre WooCommerce-Session verfuegbaren Zahlungsarten. Bei fehlender Adresse geht es zuerst in den Versandschritt."
+            subtitle="Starten Sie direkt mit PayPal, Klarna oder Ihrer bevorzugten Zahlungsart."
             gateways={paymentOptions?.gateways ?? []}
-            diagnostics={paymentOptions?.diagnostics ?? null}
             loading={paymentOptionsLoading}
             error={paymentOptionsError}
             context="cart"
@@ -201,15 +220,9 @@ export function CartPageContent() {
         </div>
 
         <div className="lg:sticky lg:top-24 lg:self-start">
-          <OrderSummary
-            subtotal={subtotal}
-            tax={tax}
-            shipping={shipping}
-            total={total}
-          />
+          <OrderSummary totals={cartTotals} />
         </div>
       </div>
     </ContentShell>
   )
 }
-

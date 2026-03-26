@@ -72,6 +72,11 @@ export interface IVariationWrapper {
   node: IVariationNode;
 }
 
+export interface ICartItemExtraDataEntry {
+  key: string;
+  value: string;
+}
+
 /**
  * A single cart item node from GET_CART query response.
  * Represents one line item in the WooCommerce cart.
@@ -85,6 +90,7 @@ export interface ICartItemNode {
   total: string;
   subtotal: string;
   subtotalTax: string;
+  extraData?: ICartItemExtraDataEntry[];
 }
 
 /** Cart update item for mutation input */
@@ -111,5 +117,17 @@ export interface IUpdateCartMutationArgs {
 
 /** Props shape for getFormattedCart utility function */
 export interface IFormattedCartProps {
-  cart: { contents: { nodes: ICartItemNode[] }; total: number };
+  cart: {
+    contents: { nodes: ICartItemNode[] };
+    subtotal: string;
+    subtotalTax: string;
+    shippingTax: string;
+    shippingTotal: string;
+    total: string;
+    totalTax: string;
+    feeTax: string;
+    feeTotal: string;
+    discountTax: string;
+    discountTotal: string;
+  };
 }

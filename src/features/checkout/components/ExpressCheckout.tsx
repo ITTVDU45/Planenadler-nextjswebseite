@@ -1,13 +1,12 @@
 'use client'
 
-import type { CheckoutGatewayOption, CheckoutGatewayDiagnostics } from '../lib/payment-gateways'
+import type { CheckoutGatewayOption } from '../lib/payment-gateways'
 import type { PaymentMethodId } from '../types/checkout.types'
 
 interface ExpressCheckoutProps {
   title: string
   subtitle: string
   gateways: CheckoutGatewayOption[]
-  diagnostics: CheckoutGatewayDiagnostics | null
   loading: boolean
   error: string | null
   context: 'cart' | 'payment'
@@ -40,7 +39,6 @@ export function ExpressCheckout({
   title,
   subtitle,
   gateways,
-  diagnostics,
   loading,
   error,
   context,
@@ -103,11 +101,6 @@ export function ExpressCheckout({
                     <p className={`mt-1 text-sm ${gateway.expressEligible ? 'text-white/85' : 'text-[#1F5CAB]/75'}`}>
                       {getButtonLabel(gateway, context)}
                     </p>
-                    {gateway.helperText ? (
-                      <p className={`mt-2 text-xs ${gateway.expressEligible ? 'text-white/70' : 'text-[#1F5CAB]/60'}`}>
-                        {gateway.helperText}
-                      </p>
-                    ) : null}
                     {isLoading ? (
                       <p className="mt-2 text-xs text-white/80">Provider wird gestartet...</p>
                     ) : null}
@@ -120,31 +113,6 @@ export function ExpressCheckout({
               WooCommerce liefert fuer diese Session aktuell keine verfuegbaren Zahlungsarten zurueck.
             </div>
           )}
-
-          {diagnostics ? (
-            <div className="mt-5 rounded-xl border border-[#DBE9F9] bg-white p-4 text-sm text-[#1F5CAB]">
-              <p className="font-semibold">Verbindungstest</p>
-              <p className="mt-1 text-[#1F5CAB]/75">
-                {diagnostics.cartFetchOk && diagnostics.checkoutBootstrapOk
-                  ? 'Next.js erreicht Warenkorb und Checkout der WooCommerce Store API.'
-                  : 'Die Verbindung zur WooCommerce Store API ist unvollstaendig.'}
-              </p>
-              <div className="mt-3 grid gap-2 text-xs text-[#1F5CAB]/80 sm:grid-cols-2">
-                <p>Session-Cookie: {diagnostics.cookiePresent ? 'vorhanden' : 'nicht gefunden'}</p>
-                <p>Artikel im Cart: {diagnostics.cartItemCount}</p>
-                <p>Cart-Endpoint: {diagnostics.cartFetchOk ? 'ok' : 'Fehler'}</p>
-                <p>Checkout-Bootstrap: {diagnostics.checkoutBootstrapOk ? 'ok' : 'Fehler'}</p>
-              </div>
-              <p className="mt-3 text-xs text-[#1F5CAB]/70">
-                Backend-Gateways: {diagnostics.availablePaymentMethods.length > 0 ? diagnostics.availablePaymentMethods.join(', ') : 'keine'}
-              </p>
-              {diagnostics.errors.length > 0 ? (
-                <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
-                  {diagnostics.errors.join(' ')}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
         </>
       ) : null}
     </section>

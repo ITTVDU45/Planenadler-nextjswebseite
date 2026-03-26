@@ -7,8 +7,10 @@ import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { GET_CART } from '@/features/cart/api/queries'
+import { AddToCartSuccessModal } from '@/shared/components/AddToCartSuccessModal'
 import type { ConfiguratorHints, ConfiguratorOptionsFromBackend } from './types'
 import {
+  buildConfiguredCartPayload,
   buildPriceCalculationRequest,
   type PriceCalculationResult,
 } from '@/lib/customizer-pricing'
@@ -29,13 +31,6 @@ interface ProductConfiguratorProps {
   hints?: ConfiguratorHints
   configuratorOptions?: ConfiguratorOptionsFromBackend | null
   priceEndpoint?: string
-}
-
-interface SketchPayload {
-  fileName: string
-  fileType: string
-  fileSize: number
-  contentBase64: string
 }
 
 interface GraphQLResponse<T> {
@@ -104,15 +99,6 @@ function createMutationId() {
     return crypto.randomUUID()
   }
   return `cfg-${Date.now()}`
-}
-
-function readFileAsBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
-    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden'))
-    reader.readAsDataURL(file)
-  })
 }
 
 async function postGraphQL<T>(
@@ -356,109 +342,6 @@ function HintPanel({ text }: { text: string }) {
       ) : null}
     </div>
   )
-}
-
-function useChoiceLabelMaps(resolvedConfig: ResolvedCustomizerConfig | null) {
-  return useMemo(() => {
-    if (!resolvedConfig) {
-      return {
-        doorExtras: new Map<string, string>(),
-        extras: new Map<string, string>(),
-        frontClosureExtras: new Map<string, string>(),
-        backClosureExtras: new Map<string, string>(),
-      }
-    }
-
-    const toMap = (choices: ResolvedChoice[]) => new Map(choices.map((choice) => [choice.id, choice.label]))
-
-    return {
-      doorExtras: toMap(resolvedConfig.options.doorExtras),
-      extras: toMap(resolvedConfig.options.extras),
-      frontClosureExtras: toMap(resolvedConfig.options.frontClosureExtras),
-      backClosureExtras: toMap(resolvedConfig.options.backClosureExtras),
-    }
-  }, [resolvedConfig])
-}
-
-function mapSelectedLabels(ids: string[], labels: Map<string, string>): string[] {
-  return ids
-    .map((id) => labels.get(id) ?? id)
-    .filter((label) => label.trim().length > 0)
-}
-
-function buildConfigurationPayload(
-  productId: number,
-  productName: string,
-  resolvedConfig: ResolvedCustomizerConfig,
-  form: ConfigFormState,
-  sketchPayload: SketchPayload | null,
-  labelMaps: ReturnType<typeof useChoiceLabelMaps>,
-) {
-  return {
-    product: {
-      id: productId,
-      name: productName,
-      type: resolvedConfig.productType,
-      material: form.material,
-      color: form.color,
-    },
-    configuration: {
-      material: form.material,
-      farbe: form.color,
-      masse: {
-        laengeACm: form.lengthACm,
-        hoeheRechtsBCm: form.heightRightBCm,
-        hoeheLinksCCm: form.heightLeftCCm,
-        trailerWidthCm: form.trailerWidthCm,
-        trailerLengthCm: form.trailerLengthCm,
-        trailerHeightCm: form.trailerHeightCm,
-        rectangularLengthCm: form.rectangularLengthCm,
-        rectangularWidthCm: form.rectangularWidthCm,
-        rectangularHeightCm: form.rectangularHeightCm,
-        sideACm: form.sideACm,
-        sideBCm: form.sideBCm,
-        sideCCm: form.sideCCm,
-        sideFCm: form.sideFCm,
-        sideHCm: form.sideHCm,
-      },
-      seiten: {
-        oben: form.topSide,
-        links: form.leftSide,
-        rechts: form.rightSide,
-        unten: form.bottomSide,
-      },
-      fenster: {
-        aktiviert: form.hasWindow === 'yes',
-        breiteCm: form.windowWidthCm,
-        hoeheCm: form.windowHeightCm,
-        entfernungSeitenrandCm: form.windowDistanceSideCm,
-        entfernungUnterkanteCm: form.windowDistanceBottomCm,
-        fensterTeilen: form.windowSplit === 'yes',
-      },
-      tuer: {
-        aktiviert: form.hasDoor === 'yes',
-        breiteCm: form.doorWidthCm,
-        hoeheCm: form.doorHeightCm,
-        entfernungLinksCm: form.doorDistanceLeftCm,
-        extras: mapSelectedLabels(form.doorExtras, labelMaps.doorExtras),
-      },
-      oesen: {
-        typ: form.eyeletEdge,
-      },
-      verschluesse: {
-        typ: form.closureType,
-        front: form.frontClosure,
-        frontExtras: mapSelectedLabels(form.frontClosureExtras, labelMaps.frontClosureExtras),
-        back: form.backClosure,
-        backExtras: mapSelectedLabels(form.backClosureExtras, labelMaps.backClosureExtras),
-      },
-      extrasAktiviert: form.hasExtras === 'yes',
-      extrasAuswahl: mapSelectedLabels(form.extrasSelected, labelMaps.extras),
-      extrasNotiz: form.extras,
-      skizze: sketchPayload,
-    },
-    createdAt: new Date().toISOString(),
-  }
 }
 
 function NestedAccordion({
@@ -751,7 +634,6 @@ export default function ProductConfigurator({
   const apolloClient = useApolloClient()
   const resolvedConfig = configuratorOptions?.resolvedConfig ?? null
   const configuratorState = configuratorOptions?.state
-  const labelMaps = useChoiceLabelMaps(resolvedConfig)
   const initialFormState = useMemo(() => createInitialFormState(resolvedConfig), [resolvedConfig])
 
   const [form, setForm] = useState<ConfigFormState>(initialFormState)
@@ -763,6 +645,7 @@ export default function ProductConfigurator({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [successModalOpen, setSuccessModalOpen] = useState(false)
   const [calculatedPrice, setCalculatedPrice] = useState<string | null>(null)
   const [priceLoading, setPriceLoading] = useState(false)
   const [priceError, setPriceError] = useState<string | null>(null)
@@ -973,23 +856,11 @@ export default function ProductConfigurator({
     setSubmitting(true)
 
     try {
-      let sketchPayload: SketchPayload | null = null
-      if (sketch) {
-        sketchPayload = {
-          fileName: sketch.name,
-          fileType: sketch.type || 'application/octet-stream',
-          fileSize: sketch.size,
-          contentBase64: await readFileAsBase64(sketch),
-        }
-      }
-
-      const configurationPayload = buildConfigurationPayload(
-        productId,
-        productName,
-        resolvedConfig,
-        form,
-        sketchPayload,
-        labelMaps,
+      const priceRequest = buildPriceCalculationRequest(productId, form, resolvedConfig)
+      const configuredCartPayload = buildConfiguredCartPayload(
+        priceRequest,
+        createMutationId(),
+        sketch?.name,
       )
 
       const { response } = await postGraphQL<{ addToCart: { cartItem: { key: string } } }>(
@@ -999,7 +870,7 @@ export default function ProductConfigurator({
             clientMutationId: createMutationId(),
             productId,
             quantity: 1,
-            extraData: JSON.stringify(configurationPayload),
+            extraData: JSON.stringify(configuredCartPayload.extraData),
           },
         },
       )
@@ -1008,6 +879,7 @@ export default function ProductConfigurator({
       await apolloClient.refetchQueries({ include: [GET_CART] })
 
       setSuccess('Konfiguration wurde gespeichert und in den Warenkorb gelegt.')
+      setSuccessModalOpen(true)
       setForm(initialFormState)
       setSketch(null)
       setOpenStep(steps[0] ?? null)
@@ -1024,6 +896,11 @@ export default function ProductConfigurator({
 
   return (
     <>
+      <AddToCartSuccessModal
+        open={successModalOpen}
+        productName={productName}
+        onClose={() => setSuccessModalOpen(false)}
+      />
       <div className="pointer-events-none fixed bottom-24 right-4 z-[510] hidden w-[220px] xl:right-6 xl:w-[240px] lg:block">
         <div
           className="pointer-events-auto relative rounded-2xl border border-[#D4E3F7] bg-gradient-to-r from-[#F6FAFF] to-[#EEF5FF] px-4 py-3 shadow-[0_8px_18px_rgba(15,43,82,0.08)] transition-transform duration-300 ease-out"

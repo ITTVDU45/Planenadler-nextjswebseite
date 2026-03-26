@@ -5,8 +5,7 @@ import * as Popover from '@radix-ui/react-popover'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useCartStore } from '@/shared/lib/cartStore'
-import { getAbsoluteImageUrl } from '@/shared/lib/functions'
-import { formatPrice } from '../../services/cartCalculations'
+import { decodePriceDisplay, getAbsoluteImageUrl } from '@/shared/lib/functions'
 import { CartButton } from './CartButton'
 
 const MAX_ITEMS = 5
@@ -96,7 +95,7 @@ export function MiniCartDropdown() {
                         {item.name}
                       </p>
                       <p className="text-xs text-[#1F5CAB]/70">
-                        {item.qty} &times; {formatPrice(item.price)}
+                        {item.qty} &times; {decodePriceDisplay(item.unitPriceDisplay)}
                       </p>
                     </div>
                   </li>
