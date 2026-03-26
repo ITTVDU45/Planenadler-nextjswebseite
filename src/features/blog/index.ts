@@ -7,6 +7,8 @@ export { BlogHeader } from './components/BlogHeader'
 export { BlogMeta } from './components/BlogMeta'
 export { BlogContent } from './components/BlogContent'
 export { BlogSidebar } from './components/BlogSidebar'
+export { RelatedPosts } from './components/RelatedPosts'
+export { ContactCTA } from './components/ContactCTA'
 export {
   getBlogPosts,
   getPaginatedBlogPosts,
