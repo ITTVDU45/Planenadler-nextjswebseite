@@ -125,8 +125,8 @@ function Index({
       </Head>
       <Layout title={PAGE_TITLE} showPageTitle={false}>
         <HeroSlider autoPlayMs={6000} />
-        <BenefitsStrip />
         <CategoriesStrip />
+        <BenefitsStrip />
         <InfoWithImageLeft />
         <ProductsShowcase products={products} />
         <InfoWithImageRight />
