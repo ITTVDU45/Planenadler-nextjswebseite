@@ -12,11 +12,11 @@ import Footer from '@/shared/components/Footer/Footer.component'
 import { SITE_NAME, absoluteUrl } from '@/lib/seo'
 import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
 
-/** ISR: Seite wird bis zu dieser Zeit im Hintergrund neu erzeugt (schnelle Auslieferung aus dem Cache). */
-export const revalidate = Math.max(
-  60,
-  Number.parseInt(process.env.PRODUCT_PAGE_REVALIDATE_SECONDS ?? '300', 10) || 300,
-)
+/**
+ * ISR (Sekunden). Muss ein **konstanter** Wert sein (Next.js Segment Config ist statisch zu analysieren).
+ * Feintuning des Daten-Caches: weiterhin `PRODUCT_PAGE_REVALIDATE_SECONDS` in product-data / product-page-cache.
+ */
+export const revalidate = 300
 
 interface ProductPageProps {
   params: { slug?: string } | Promise<{ slug?: string }>
