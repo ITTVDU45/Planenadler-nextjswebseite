@@ -12,7 +12,6 @@ export const POPULAR_CATEGORIES: Category[] = [
     name: 'Terrassenplanen',
     href: '/product/terrassenplanen',
     image: { src: '/images/Terrassenplane_adlerplanen.png', alt: 'Terrassenplanen' },
-    itemsCount: 0,
     bgColor: '#DBE9F9',
   },
   {
@@ -20,7 +19,6 @@ export const POPULAR_CATEGORIES: Category[] = [
     name: 'Abdeckplanen',
     href: '/product/abdeckplane',
     image: { src: '/images/Abdeckplane Adler Planen.png', alt: 'Abdeckplanen' },
-    itemsCount: 0,
     bgColor: '#B9D4F3',
   },
   {
@@ -28,7 +26,6 @@ export const POPULAR_CATEGORIES: Category[] = [
     name: 'Abdeckhauben',
     href: '/product/abdeckhaube',
     image: { src: '/images/Abdeckhaube_adlerPlanen.png', alt: 'Abdeckhauben' },
-    itemsCount: 0,
     bgColor: '#75AAE7',
   },
   {
@@ -36,7 +33,6 @@ export const POPULAR_CATEGORIES: Category[] = [
     name: 'Anhängerplanen',
     href: '/product/hochplane',
     image: { src: '/images/AnhängerplaneAdlerplanen.png', alt: 'Anhängerplanen' },
-    itemsCount: 0,
     bgColor: '#DBE9F9',
   },
   {
@@ -44,7 +40,6 @@ export const POPULAR_CATEGORIES: Category[] = [
     name: 'Poolplanen',
     href: '/product/poolplane',
     image: { src: '/images/Poolplane Adlerplanen.png', alt: 'Poolplanen' },
-    itemsCount: 0,
     bgColor: '#B9D4F3',
   },
   {
@@ -52,7 +47,6 @@ export const POPULAR_CATEGORIES: Category[] = [
     name: 'Gitterboxen',
     href: '/product/gitterboxen',
     image: { src: '/images/Gitterboxplanenadler.png', alt: 'Gitterboxen' },
-    itemsCount: 0,
     bgColor: '#75AAE7',
   },
 ]
