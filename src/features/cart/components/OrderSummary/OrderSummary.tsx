@@ -1,7 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { decodePriceDisplay, parseCartPriceString } from '@/shared/lib/functions'
+import {
+  decodePriceDisplay,
+  getEffectiveShippingTotal,
+  parseCartPriceString,
+} from '@/shared/lib/functions'
 import type { CartTotals } from '@/shared/types/cart'
 
 interface OrderSummaryProps {
@@ -14,7 +18,8 @@ const SHOP_PATH = '/shop'
 export function OrderSummary({
   totals,
 }: OrderSummaryProps) {
-  const shippingValue = parseCartPriceString(totals.shippingTotal)
+  const shippingValue =
+    parseCartPriceString(totals.shippingTotal) + parseCartPriceString(totals.feeTotal)
 
   return (
     <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6 shadow-[0_8px_24px_rgba(31,92,171,0.06)] lg:sticky lg:top-24">
@@ -31,7 +36,7 @@ export function OrderSummary({
           <dd className="font-medium text-[#1F5CAB]">
             {shippingValue === 0
               ? 'wird im Checkout berechnet'
-              : decodePriceDisplay(totals.shippingTotal)}
+              : decodePriceDisplay(getEffectiveShippingTotal(totals))}
           </dd>
         </div>
         <div className="flex justify-between">

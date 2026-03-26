@@ -4,12 +4,13 @@ import { forwardRef, useEffect, useRef, type InputHTMLAttributes } from 'react'
 import { useForm, FormProvider } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useCheckoutStore } from '../store/checkout.store'
+import { useCartStore } from '@/shared/lib/cartStore'
+import { decodePriceDisplay, getEffectiveShippingTotal } from '@/shared/lib/functions'
 import {
   checkoutShippingSchema,
   type CheckoutShippingFormInput,
   type CheckoutShippingInput,
 } from '../lib/checkoutSchema'
-import { ShippingMethod } from './ShippingMethod'
 import { SHIPPING_METHOD_IDS } from '../types/checkout.types'
 
 const DEFAULT_VALUES: CheckoutShippingFormInput = {
@@ -72,6 +73,7 @@ interface ShippingFormProps {
 
 export function ShippingForm({ onValidSubmit, submitLabel, initialData }: ShippingFormProps) {
   const setSelectedShipping = useCheckoutStore((s) => s.setSelectedShipping)
+  const cartTotals = useCartStore((s) => s.cart?.totals ?? null)
   const appliedInitialRef = useRef(false)
 
   const methods = useForm<CheckoutShippingFormInput, unknown, CheckoutShippingInput>({
@@ -84,7 +86,6 @@ export function ShippingForm({ onValidSubmit, submitLabel, initialData }: Shippi
     register,
     handleSubmit,
     watch,
-    setValue,
     reset,
     formState: { errors, isDirty },
   } = methods
@@ -330,12 +331,23 @@ export function ShippingForm({ onValidSubmit, submitLabel, initialData }: Shippi
           </div>
         ) : null}
 
+        <input type="hidden" {...register('shippingMethod')} />
+
         <hr className="border-[#DBE9F9]" />
-        <ShippingMethod
-          value={shippingMethod}
-          onChange={(id) => setValue('shippingMethod', id)}
-          error={errors.shippingMethod?.message}
-        />
+        <div className="rounded-xl border border-[#DBE9F9] bg-white p-4">
+          <h3 className="text-sm font-semibold text-[#1F5CAB]">Versand</h3>
+          <p className="mt-2 text-sm text-[#1F5CAB]/80">
+            Die Versandkosten werden automatisch aus Gewicht und Flaeche Ihrer Konfiguration berechnet.
+          </p>
+          <ul className="mt-3 space-y-1 text-sm text-[#1F5CAB]/80">
+            <li>Unter 30 kg: 9,00 €</li>
+            <li>Ab 30 kg: 80,00 €</li>
+            <li>Bis 34 m² pro Paket: 9,00 € je Paketstufe</li>
+          </ul>
+          <p className="mt-3 text-sm font-semibold text-[#1F5CAB]">
+            Aktueller Versand: {cartTotals ? decodePriceDisplay(getEffectiveShippingTotal(cartTotals)) : 'wird automatisch berechnet'}
+          </p>
+        </div>
         {submitLabel ? (
           <div className="mt-6">
             <button

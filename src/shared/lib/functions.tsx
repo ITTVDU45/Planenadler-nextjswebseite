@@ -167,7 +167,7 @@ export function parseCartPriceString(priceStr: string | undefined | null): numbe
   return Number.isFinite(value) ? value : 0
 }
 
-function formatCartPriceValue(value: number): string {
+export function formatCartPriceValue(value: number): string {
   if (!Number.isFinite(value) || value <= 0) {
     return 'Preis auf Anfrage'
   }
@@ -176,6 +176,14 @@ function formatCartPriceValue(value: number): string {
     style: 'currency',
     currency: 'EUR',
   }).format(value)
+}
+
+export function getEffectiveShippingTotal(totals: CartTotals): string {
+  const shipping = parseCartPriceString(totals.shippingTotal)
+  const shippingTax = parseCartPriceString(totals.shippingTax)
+  const fee = parseCartPriceString(totals.feeTotal)
+  const feeTax = parseCartPriceString(totals.feeTax)
+  return formatCartPriceValue(shipping + shippingTax + fee + feeTax)
 }
 
 function decodeConfigurationSummary(

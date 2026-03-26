@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useCartStore } from '@/shared/lib/cartStore'
 import {
   decodePriceDisplay,
+  getEffectiveShippingTotal,
   getAbsoluteImageUrl,
   parseCartPriceString,
 } from '@/shared/lib/functions'
@@ -78,9 +79,9 @@ export function CheckoutOrderSummary() {
             <div className="flex justify-between">
               <dt className="text-[#1F5CAB]/80">Versand</dt>
               <dd className="font-medium text-[#1F5CAB]">
-                {parseCartPriceString(totals.shippingTotal) === 0
+                {parseCartPriceString(totals.shippingTotal) + parseCartPriceString(totals.feeTotal) === 0
                   ? 'Preis auf Anfrage'
-                  : decodePriceDisplay(totals.shippingTotal)}
+                  : decodePriceDisplay(getEffectiveShippingTotal(totals))}
               </dd>
             </div>
             <div className="flex justify-between">
