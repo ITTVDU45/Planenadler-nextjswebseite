@@ -158,7 +158,7 @@ export default async function BlogSlugPage({ params }: BlogSlugPageProps) {
                 priority
                 sizes="100vw"
               />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#08264F]/88 via-[#08264F]/62 to-[#08264F]/35" />
+              <div className="absolute inset-0 bg-black/35" />
               <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8 lg:p-10">
                 <div className="max-w-4xl">
                   <h1 className="text-3xl font-bold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
