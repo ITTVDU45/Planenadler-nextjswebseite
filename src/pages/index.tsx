@@ -126,8 +126,8 @@ function Index({
       <Layout title={PAGE_TITLE} showPageTitle={false}>
         <HeroSlider autoPlayMs={6000} />
         <CategoriesStrip />
-        <InfoWithImageLeft />
         <ProductsShowcase products={products} />
+        <InfoWithImageLeft />
         <InfoWithImageRight />
         <InfoWithCounters />
         <BenefitsStrip />
