@@ -61,7 +61,8 @@ export const getStaticProps: GetStaticProps<{
   blogCategories: ArticleCategory[]
   products: ProductCardItem[]
 }> = async () => {
-  const endpoint = process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim()
+  const endpoint =
+    process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim()
 
   const [googleReviews, recentPosts, productsResult] = await Promise.all([
     fetchGoogleReviews(),
