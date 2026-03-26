@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import { unstable_cache } from 'next/cache'
+import { cache } from 'react'
 import ProductHero from './components/ProductHero'
 import ProductFeatures from './components/ProductFeatures'
 import ProductGallery from './components/ProductGallery'
@@ -21,6 +23,20 @@ interface ProductPageProps {
   params: { slug?: string } | Promise<{ slug?: string }>
 }
 
+const getCachedRecentBlogPosts = unstable_cache(
+  async () => getRecentBlogPosts(4),
+  ['product-page-recent-posts'],
+  { revalidate: 3600 }
+)
+
+const getCachedGoogleReviews = unstable_cache(
+  async () => fetchGoogleReviews(),
+  ['product-page-google-reviews'],
+  { revalidate: 3600 }
+)
+
+const getCachedProductPageData = cache(async (slug: string) => getProductPageData(slug))
+
 async function resolveSlug(params: ProductPageProps['params']): Promise<string> {
   const resolved = await params
   return typeof resolved?.slug === 'string' && resolved.slug.length > 0
@@ -30,7 +46,7 @@ async function resolveSlug(params: ProductPageProps['params']): Promise<string> 
 
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const slug = await resolveSlug(params)
-  const product = await getProductPageData(slug)
+  const product = await getCachedProductPageData(slug)
   const title = `${product.title} | ${SITE_NAME}`
   const description = (product.subtitle || `${product.title} online konfigurieren und anfragen.`).slice(0, 160)
   const canonical = absoluteUrl(`/product/${slug}`)
@@ -68,9 +84,9 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 export default async function ProductPage({ params }: ProductPageProps) {
   const slug = await resolveSlug(params)
   const [product, recentPosts, googleReviews] = await Promise.all([
-    getProductPageData(slug),
-    getRecentBlogPosts(4),
-    fetchGoogleReviews(),
+    getCachedProductPageData(slug),
+    getCachedRecentBlogPosts(),
+    getCachedGoogleReviews(),
   ])
   const blogArticles = recentPosts.map(mapBlogPostToArticle)
   const blogCategories = getCategoriesFromBlogPosts(recentPosts)

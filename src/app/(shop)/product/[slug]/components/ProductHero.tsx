@@ -1,6 +1,6 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
-import ProductGallery from './ProductGallery'
 import { GoogleReviewBadge } from '@/shared/components/GoogleReviewBadge'
 import type { TruckTarpProduct } from './types'
 import type { GoogleReviewData } from '@/lib/google-reviews'
@@ -55,7 +55,16 @@ export default function ProductHero({ product, googleReviews }: ProductHeroProps
         </div>
 
         <div className="order-1 md:order-2">
-          <ProductGallery mainImage={product.image} images={product.gallery} />
+          <div className="relative aspect-[5/4] w-full overflow-hidden rounded-2xl bg-[#F7FAFE] shadow-[0_18px_45px_rgba(15,43,82,0.08)]">
+            <Image
+              src={product.image.src}
+              alt={product.image.alt}
+              fill
+              priority
+              sizes="(max-width: 768px) 100vw, 45vw"
+              className="object-contain p-5"
+            />
+          </div>
         </div>
       </div>
     </section>
