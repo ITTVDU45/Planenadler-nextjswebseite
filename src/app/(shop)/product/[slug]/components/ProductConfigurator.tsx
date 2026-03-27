@@ -169,10 +169,6 @@ function getDynamicRequiredFields(
   return dynamic
 }
 
-function areAllFieldsFilled(fields: ConfigFormField[], form: ConfigFormState): boolean {
-  return fields.every((field) => isFilled(field, form))
-}
-
 const REQUIRED_FIELD_LABELS: Partial<Record<ConfigFormField, string>> = {
   material: 'Material',
   color: 'Farbe',
@@ -810,12 +806,6 @@ export default function ProductConfigurator({
     setOpenStep((prev) => (prev === step ? null : step))
   }
 
-  const openNextStep = (current: StepId) => {
-    const currentIndex = steps.indexOf(current)
-    const next = currentIndex >= 0 ? steps[currentIndex + 1] : null
-    if (next) setOpenStep(next)
-  }
-
   const toggleMultiValue = (
     field: 'doorExtras' | 'extrasSelected' | 'frontClosureExtras' | 'backClosureExtras',
     id: string,
@@ -1011,10 +1001,7 @@ export default function ProductConfigurator({
                     <ChoiceGrid
                       choices={resolvedConfig.options.colors}
                       value={form.color}
-                      onChange={(value) => {
-                        setField('color', value)
-                        openNextStep('color')
-                      }}
+                      onChange={(value) => setField('color', value)}
                       variant="color"
                     />
                   </div>
@@ -1034,20 +1021,6 @@ export default function ProductConfigurator({
                         min={field.min}
                         value={form[field.key] as string}
                         onChange={(event) => setField(field.key, event.target.value)}
-                        onBlur={(event) => {
-                          const nextForm = {
-                            ...form,
-                            [field.key]: event.currentTarget.value,
-                          }
-
-                          const requiredSizeFields = resolvedConfig.dimensions.fields
-                            .filter((dimensionField) => dimensionField.required)
-                            .map((dimensionField) => dimensionField.key)
-
-                          if (areAllFieldsFilled(requiredSizeFields, nextForm)) {
-                            openNextStep('size')
-                          }
-                        }}
                         className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm font-medium text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
                         required={field.required}
                       />
@@ -1060,28 +1033,28 @@ export default function ProductConfigurator({
             {steps.includes('topSide') ? (
               <StepAccordionItem id="topSide" title={STEP_TITLES.topSide} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('topSide')}>
                 <HintPanel text={effectiveHints.topSide} />
-                <SideOptionGrid value={form.topSide} onChange={(value) => { setField('topSide', value); openNextStep('topSide') }} choices={resolvedConfig.options.topSide} />
+                <SideOptionGrid value={form.topSide} onChange={(value) => setField('topSide', value)} choices={resolvedConfig.options.topSide} />
               </StepAccordionItem>
             ) : null}
 
             {steps.includes('leftSide') ? (
               <StepAccordionItem id="leftSide" title={STEP_TITLES.leftSide} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('leftSide')}>
                 <HintPanel text={effectiveHints.leftSide} />
-                <SideOptionGrid value={form.leftSide} onChange={(value) => { setField('leftSide', value); openNextStep('leftSide') }} choices={resolvedConfig.options.leftSide} />
+                <SideOptionGrid value={form.leftSide} onChange={(value) => setField('leftSide', value)} choices={resolvedConfig.options.leftSide} />
               </StepAccordionItem>
             ) : null}
 
             {steps.includes('rightSide') ? (
               <StepAccordionItem id="rightSide" title={STEP_TITLES.rightSide} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('rightSide')}>
                 <HintPanel text={effectiveHints.rightSide} />
-                <SideOptionGrid value={form.rightSide} onChange={(value) => { setField('rightSide', value); openNextStep('rightSide') }} choices={resolvedConfig.options.rightSide} />
+                <SideOptionGrid value={form.rightSide} onChange={(value) => setField('rightSide', value)} choices={resolvedConfig.options.rightSide} />
               </StepAccordionItem>
             ) : null}
 
             {steps.includes('bottomSide') ? (
               <StepAccordionItem id="bottomSide" title={STEP_TITLES.bottomSide} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('bottomSide')}>
                 <HintPanel text={effectiveHints.bottomSide} />
-                <SideOptionGrid value={form.bottomSide} onChange={(value) => { setField('bottomSide', value); openNextStep('bottomSide') }} choices={resolvedConfig.options.bottomSide} />
+                <SideOptionGrid value={form.bottomSide} onChange={(value) => setField('bottomSide', value)} choices={resolvedConfig.options.bottomSide} />
               </StepAccordionItem>
             ) : null}
 
@@ -1167,14 +1140,14 @@ export default function ProductConfigurator({
             {steps.includes('eyelets') ? (
               <StepAccordionItem id="eyelets" title={STEP_TITLES.eyelets} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('eyelets')}>
                 <HintPanel text={effectiveHints.eyelets} />
-                <ChoiceGrid choices={resolvedConfig.options.eyelets} value={form.eyeletEdge} onChange={(value) => { setField('eyeletEdge', value); openNextStep('eyelets') }} />
+                <ChoiceGrid choices={resolvedConfig.options.eyelets} value={form.eyeletEdge} onChange={(value) => setField('eyeletEdge', value)} />
               </StepAccordionItem>
             ) : null}
 
             {steps.includes('closureType') ? (
               <StepAccordionItem id="closureType" title={STEP_TITLES.closureType} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('closureType')}>
                 <HintPanel text={effectiveHints.closureType} />
-                <ChoiceGrid choices={resolvedConfig.options.closureTypes} value={form.closureType} onChange={(value) => { setField('closureType', value); openNextStep('closureType') }} />
+                <ChoiceGrid choices={resolvedConfig.options.closureTypes} value={form.closureType} onChange={(value) => setField('closureType', value)} />
               </StepAccordionItem>
             ) : null}
 
