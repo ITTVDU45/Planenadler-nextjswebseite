@@ -3,7 +3,7 @@
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApolloClient } from '@apollo/client'
-import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { GET_CART } from '@/features/cart/api/queries'
@@ -23,6 +23,7 @@ import type {
   StepId,
 } from '@/lib/customizer-runtime'
 import { emptyConfigFormState } from '@/lib/customizer-runtime'
+import { cn } from '@/lib/utils'
 
 interface ProductConfiguratorProps {
   productId: number
@@ -430,6 +431,24 @@ function ColorSwatch({ choice }: { choice: ResolvedChoice }) {
   )
 }
 
+function SelectionCheckBadge({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        'pointer-events-none absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-[#1F5CAB] text-white shadow-[0_4px_14px_rgba(31,92,171,0.45)] ring-[3px] ring-white motion-safe:animate-choice-check-pop',
+        className,
+      )}
+      aria-hidden
+    >
+      <Check className="h-4 w-4" strokeWidth={2.75} aria-hidden />
+    </span>
+  )
+}
+
+const choiceCardSelected =
+  'border-2 border-[#1F5CAB] bg-gradient-to-br from-[#EFF8FF] to-[#E0EFFF] shadow-[0_12px_32px_rgba(31,92,171,0.28)] ring-2 ring-[#1F5CAB]/30'
+const choiceCardUnselected = 'border border-[#D9E7F8] bg-white hover:border-[#AFC9EA] hover:bg-[#F9FCFF]'
+
 function ChoiceGrid({
   choices,
   value,
@@ -450,12 +469,13 @@ function ChoiceGrid({
             key={choice.id}
             type="button"
             onClick={() => onChange(choice.label)}
-            className={`overflow-hidden rounded-xl border p-3 text-left transition ${
-              isSelected
-                ? 'border-[#1F5CAB] bg-[#EFF6FF] shadow-[0_8px_18px_rgba(31,92,171,0.18)]'
-                : 'border-[#D9E7F8] bg-white hover:border-[#AFC9EA] hover:bg-[#F9FCFF]'
-            }`}
+            aria-pressed={isSelected}
+            className={cn(
+              'relative rounded-xl border p-3 text-left transition duration-200',
+              isSelected ? choiceCardSelected : choiceCardUnselected,
+            )}
           >
+            {isSelected ? <SelectionCheckBadge /> : null}
             {variant === 'color' ? (
               <div className="text-center">
                 <ColorSwatch choice={choice} />
@@ -526,12 +546,13 @@ function SideOptionGrid({
             key={choice.id}
             type="button"
             onClick={() => onChange(choice.label)}
-            className={`rounded-xl border p-3 text-left transition ${
-              isSelected
-                ? 'border-[#1F5CAB] bg-[#EFF6FF] shadow-[0_8px_18px_rgba(31,92,171,0.18)]'
-                : 'border-[#D9E7F8] bg-white hover:border-[#AFC9EA] hover:bg-[#F9FCFF]'
-            }`}
+            aria-pressed={isSelected}
+            className={cn(
+              'relative rounded-xl border p-3 text-left transition duration-200',
+              isSelected ? choiceCardSelected : choiceCardUnselected,
+            )}
           >
+            {isSelected ? <SelectionCheckBadge /> : null}
             <SideOptionPreview option={choice.label} />
             <p className="mt-2 text-sm font-semibold text-[#0F2B52]">{choice.label}</p>
           </button>
@@ -560,13 +581,13 @@ function MultiChoiceGrid({
             type="button"
             onClick={() => onToggle(choice.id)}
             aria-pressed={isSelected}
-            className={`group overflow-hidden rounded-2xl border text-left transition ${
-              isSelected
-                ? 'border-[#1F5CAB] bg-[#EFF6FF] shadow-[0_10px_22px_rgba(31,92,171,0.18)]'
-                : 'border-[#D9E7F8] bg-white hover:border-[#AFC9EA] hover:bg-[#F9FCFF]'
-            }`}
+            className={cn(
+              'group rounded-2xl border text-left transition duration-200',
+              isSelected ? choiceCardSelected : choiceCardUnselected,
+            )}
           >
-            <div className="relative h-24 w-full overflow-hidden bg-[#F6FAFF]">
+            <div className="relative h-24 w-full overflow-hidden rounded-t-2xl bg-[#F6FAFF]">
+              {isSelected ? <SelectionCheckBadge className="right-3 top-3" /> : null}
               {isValidImageUrl(choice.imageSrc) ? (
                 <img
                   src={choice.imageSrc}
@@ -578,7 +599,9 @@ function MultiChoiceGrid({
                 <div className="h-full w-full bg-gradient-to-br from-[#F6FAFF] to-[#EAF3FF]" />
               )}
             </div>
-            <div className={`px-4 py-3 text-sm font-semibold transition ${isSelected ? 'bg-[#1F5CAB] text-white' : 'text-[#0F2B52]'}`}>
+            <div
+              className={`rounded-b-2xl px-4 py-3 text-sm font-semibold transition ${isSelected ? 'bg-[#1F5CAB] text-white' : 'bg-white text-[#0F2B52]'}`}
+            >
               {choice.label}
             </div>
           </button>
