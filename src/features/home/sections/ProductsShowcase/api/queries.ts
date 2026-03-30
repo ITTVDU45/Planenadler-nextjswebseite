@@ -4,6 +4,7 @@ export const GET_PRODUCTS_BY_CATEGORY = /* GraphQL */ `
       nodes {
         id
         slug
+        modified
         name
         averageRating
         description
@@ -54,6 +55,7 @@ export const GET_PRODUCTS_ALL = /* GraphQL */ `
       nodes {
         id
         slug
+        modified
         name
         averageRating
         description

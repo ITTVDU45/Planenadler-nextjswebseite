@@ -61,6 +61,7 @@ const PRODUCT_BY_SLUG_QUERY = /* GraphQL */ `
       databaseId
       name
       slug
+      modified
       description
       shortDescription
       onSale
@@ -96,6 +97,7 @@ const PRODUCT_BY_SLUG_QUERY = /* GraphQL */ `
           databaseId
           name
           slug
+          modified
           image {
             sourceUrl
             altText
@@ -115,6 +117,7 @@ const PRODUCT_BY_SLUG_QUERY = /* GraphQL */ `
         databaseId
         name
         slug
+        modified
         image {
           sourceUrl
           altText
@@ -135,11 +138,26 @@ interface WpImage {
   altText?: string | null
 }
 
+function appendImageVersion(sourceUrl: string | null | undefined, version: string | null | undefined): string | null {
+  if (!sourceUrl) return null
+  if (!version) return sourceUrl
+
+  try {
+    const url = new URL(sourceUrl)
+    url.searchParams.set('v', version)
+    return url.toString()
+  } catch {
+    const separator = sourceUrl.includes('?') ? '&' : '?'
+    return `${sourceUrl}${separator}v=${encodeURIComponent(version)}`
+  }
+}
+
 interface WpProductNode {
   id: string
   databaseId: number
   name: string
   slug: string
+  modified?: string | null
   description?: string | null
   shortDescription?: string | null
   onSale?: boolean
@@ -157,6 +175,7 @@ interface WpRelatedNode {
   databaseId: number
   name: string
   slug: string
+  modified?: string | null
   price?: string | null
   image?: WpImage | null
 }
@@ -187,9 +206,14 @@ function decodePrice(raw: string | null | undefined): string {
   return decoded.trim()
 }
 
-function toProductImage(img: WpImage | null | undefined, fallbackAlt: string): ProductImage {
-  if (!img?.sourceUrl) return { ...PLACEHOLDER_IMAGE, alt: fallbackAlt }
-  return { src: img.sourceUrl, alt: img.altText || fallbackAlt }
+function toProductImage(
+  img: WpImage | null | undefined,
+  fallbackAlt: string,
+  version?: string | null,
+): ProductImage {
+  const versionedSrc = appendImageVersion(img?.sourceUrl, version)
+  if (!versionedSrc) return { ...PLACEHOLDER_IMAGE, alt: fallbackAlt }
+  return { src: versionedSrc, alt: img?.altText || fallbackAlt }
 }
 
 function buildFeatures(product: WpProductNode): ProductFeature[] {
@@ -277,15 +301,18 @@ function buildRecommendations(
     if (node.databaseId === currentDatabaseId) return
     if (seen.has(node.databaseId)) return
     seen.add(node.databaseId)
-    result.push({
-      id: node.databaseId,
-      name: node.name,
-      slug: node.slug,
-      price: decodePrice(node.price),
-      image: node.image?.sourceUrl
-        ? { src: node.image.sourceUrl, alt: node.image.altText || node.name }
-        : undefined,
-    })
+      result.push({
+        id: node.databaseId,
+        name: node.name,
+        slug: node.slug,
+        price: decodePrice(node.price),
+        image: node.image?.sourceUrl
+          ? {
+              src: appendImageVersion(node.image.sourceUrl, node.modified) ?? node.image.sourceUrl,
+              alt: node.image.altText || node.name,
+            }
+          : undefined,
+      })
   }
 
   for (const node of related) addNode(node)
@@ -368,11 +395,11 @@ function mapToTruckTarpProduct(
   allProducts: WpRelatedNode[],
   customizerData?: Awaited<ReturnType<typeof fetchCustomizerConfig>>,
 ): TruckTarpProduct {
-  const mainImage = toProductImage(product.image, product.name)
+  const mainImage = toProductImage(product.image, product.name, product.modified)
 
   const gallery: ProductImage[] = (product.galleryImages?.nodes ?? [])
     .filter((img): img is WpImage => !!img?.sourceUrl)
-    .map((img) => toProductImage(img, product.name))
+    .map((img) => toProductImage(img, product.name, product.modified))
 
   const subtitle =
     stripHtml(product.shortDescription) ||

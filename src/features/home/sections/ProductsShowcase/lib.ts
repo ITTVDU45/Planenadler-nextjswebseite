@@ -3,6 +3,7 @@ import type { ProductCardItem } from './types'
 export interface ProductNode {
   id: string
   slug?: string | null
+  modified?: string | null
   name: string
   description?: string | null
   shortDescription?: string | null
@@ -26,6 +27,20 @@ export interface ProductNode {
   } | null
 }
 
+function appendImageVersion(sourceUrl: string | null | undefined, version: string | null | undefined): string {
+  if (!sourceUrl) return '/images/Terrassenplane_adlerplanen.png'
+  if (!version) return sourceUrl
+
+  try {
+    const url = new URL(sourceUrl)
+    url.searchParams.set('v', version)
+    return url.toString()
+  } catch {
+    const separator = sourceUrl.includes('?') ? '&' : '?'
+    return `${sourceUrl}${separator}v=${encodeURIComponent(version)}`
+  }
+}
+
 const PRIORITY_PRODUCT_MATCHERS = [
   ['terrassenplane', 'terrassenplanen'],
   ['poolplane', 'poolplanen'],
@@ -47,11 +62,11 @@ export function mapNodeToCard(node: ProductNode): ProductCardItem {
     description: node.description ?? undefined,
     shortDescription: node.shortDescription ?? undefined,
     image: {
-      src: String(image.sourceUrl ?? '/images/Terrassenplane_adlerplanen.png'),
+      src: appendImageVersion(image.sourceUrl, node.modified),
       alt: String(image.altText ?? node.name ?? 'Produkt'),
     },
     gallery: gallery.map((entry) => ({
-      src: String(entry.sourceUrl ?? ''),
+      src: appendImageVersion(entry.sourceUrl, node.modified),
       alt: String(entry.altText ?? ''),
     })),
     attributes: attributes
