@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/compat/router';
 import { AnimatePresence, LazyMotion, domAnimation, m } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -13,13 +14,13 @@ const leftMenu = [
 ];
 
 const rightMenu = [
-  { label: 'Blog', href: '/blog' },
+  { label: 'FAQ', href: '/faq' },
   { label: 'Kontakt', href: '/kontakt' },
   { label: 'Mein Konto', href: '/mein-konto' },
 ];
 
 const cartLink = { label: 'Warenkorb', href: '/cart' };
-const configuratorLink = { label: 'ZUM KONFIGURATOR', href: '/konfigurator' };
+const configuratorLink = { label: 'ZUM KONFIGURATOR', href: '/shop' };
 
 function getIsActive(asPath: string, href: string) {
   if (!href) return false;
@@ -109,9 +110,16 @@ const Hamburger = ({ isOpen, onOpenChange }: HamburgerProps) => {
                     href="/"
                     onClick={() => onOpenChange(false)}
                     aria-label="Planenadler Home"
-                    className="inline-flex items-center rounded-full bg-[#0F2B52] px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-white shadow-md"
+                    className="inline-flex items-center rounded-full bg-white px-4 py-2 shadow-md ring-1 ring-[#DBE9F9]"
                   >
-                    Planenadler
+                    <Image
+                      src="/Planenadlerlogo.png"
+                      alt="Planenadler"
+                      width={160}
+                      height={42}
+                      className="h-10 w-auto object-contain"
+                      priority
+                    />
                   </Link>
                 </div>
 
@@ -141,7 +149,7 @@ const Hamburger = ({ isOpen, onOpenChange }: HamburgerProps) => {
                     const isActive = getIsActive(asPath, item.href);
                     return (
                       <Link
-                        key={item.href}
+                        key={`${item.href}-${item.label}`}
                         href={item.href}
                         onClick={() => onOpenChange(false)}
                         className={cn(

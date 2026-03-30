@@ -168,7 +168,22 @@ export function TopBar() {
                     </button>
                   </SheetTrigger>
                   <SheetContent side="right" className="bg-white">
-                    <div className="mt-8 flex flex-col gap-3">
+                    <div className="mt-6 flex flex-col gap-4">
+                      <div className="flex items-center justify-center border-b border-[#E7F0FB] pb-4">
+                        <SheetClose asChild>
+                          <Link href="/" aria-label="Planenadler Home" className="flex items-center">
+                            <Image
+                              src="/Planenadlerlogo.png"
+                              alt="Planenadler"
+                              width={170}
+                              height={44}
+                              className="h-11 w-auto object-contain"
+                              priority
+                            />
+                          </Link>
+                        </SheetClose>
+                      </div>
+                      <div className="flex flex-col gap-3">
                       {allLinks.map((item) => {
                         const isActive = getIsActive(asPath, item.href)
                         return (
@@ -187,6 +202,7 @@ export function TopBar() {
                           </SheetClose>
                         )
                       })}
+                      </div>
                     </div>
                   </SheetContent>
                 </Sheet>

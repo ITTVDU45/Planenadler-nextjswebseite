@@ -1,3 +1,6 @@
+ 'use client'
+
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
@@ -10,7 +13,40 @@ interface ProductHeroProps {
   googleReviews?: GoogleReviewData | null
 }
 
+const PAYMENT_BADGES = [
+  { label: 'Affirm', src: '/images/Zahlungsmittel/affirm.png' },
+  { label: 'Afterpay', src: '/images/Zahlungsmittel/afterpay.png' },
+  { label: 'Amazon Pay', src: '/images/Zahlungsmittel/amazon_pay.png' },
+  { label: 'Apple Pay', src: '/images/Zahlungsmittel/apple_pay.png' },
+  { label: 'Bancontact', src: '/images/Zahlungsmittel/bancontact.png' },
+  { label: 'Google Pay', src: '/images/Zahlungsmittel/google_pay.png' },
+  { label: 'JCB', src: '/images/Zahlungsmittel/jcb.png' },
+  { label: 'Klarna', src: '/images/Zahlungsmittel/klarna.png' },
+  { label: 'Visa', src: '/images/Zahlungsmittel/visa.png' },
+  { label: 'Mastercard', src: '/images/Zahlungsmittel/mastercard.png' },
+  { label: 'PayPal', src: '/images/Zahlungsmittel/paypal.png' },
+  { label: 'Stripe', src: '/images/Zahlungsmittel/stripe.png' },
+]
+
 export default function ProductHero({ product, googleReviews }: ProductHeroProps) {
+  const heroImages = useMemo(() => {
+    const unique = new Map<string, typeof product.image>()
+
+    ;[product.image, ...product.gallery].forEach((image) => {
+      if (!image?.src || unique.has(image.src)) {
+        return
+      }
+
+      unique.set(image.src, image)
+    })
+
+    return Array.from(unique.values())
+  }, [product.gallery, product.image])
+
+  const [activeImageSrc, setActiveImageSrc] = useState(heroImages[0]?.src ?? product.image.src)
+  const activeImage =
+    heroImages.find((image) => image.src === activeImageSrc) ?? heroImages[0] ?? product.image
+
   return (
     <section className="py-12 md:py-16" aria-labelledby="product-title">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 md:grid-cols-2 md:items-center">
@@ -36,14 +72,23 @@ export default function ProductHero({ product, googleReviews }: ProductHeroProps
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#3982DC]">
                 Sichere Zahlung
               </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {['Visa', 'Mastercard', 'PayPal', 'Klarna', 'SEPA'].map((method) => (
-                  <span
-                    key={method}
-                    className="rounded-full border border-[#D9E7F8] bg-[#F8FBFF] px-3 py-1 text-[11px] font-semibold text-[#1F5CAB]"
+              <div className="mt-2 flex flex-wrap items-center gap-2.5">
+                {PAYMENT_BADGES.map((method) => (
+                  <div
+                    key={method.label}
+                    className="flex h-14 min-w-[96px] items-center justify-center rounded-2xl border border-[#D9E7F8] bg-[#F8FBFF] px-4 shadow-[0_4px_12px_rgba(15,43,82,0.04)]"
+                    title={method.label}
+                    aria-label={method.label}
                   >
-                    {method}
-                  </span>
+                    <Image
+                      src={method.src}
+                      alt={method.label}
+                      width={72}
+                      height={30}
+                      sizes="72px"
+                      className="h-auto max-h-8 w-auto object-contain"
+                    />
+                  </div>
                 ))}
               </div>
             </div>
@@ -57,14 +102,44 @@ export default function ProductHero({ product, googleReviews }: ProductHeroProps
         <div className="order-1 md:order-2">
           <div className="relative aspect-[5/4] w-full overflow-hidden rounded-2xl bg-[#F7FAFE] shadow-[0_18px_45px_rgba(15,43,82,0.08)]">
             <Image
-              src={product.image.src}
-              alt={product.image.alt}
+              src={activeImage.src}
+              alt={activeImage.alt}
               fill
               priority
               sizes="(max-width: 768px) 100vw, 45vw"
               className="object-contain p-5"
             />
           </div>
+          {heroImages.length > 1 ? (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              {heroImages.map((image, index) => {
+                const isActive = image.src === activeImage.src
+
+                return (
+                  <button
+                    key={image.src}
+                    type="button"
+                    onClick={() => setActiveImageSrc(image.src)}
+                    aria-label={`Produktbild ${index + 1} anzeigen`}
+                    aria-pressed={isActive}
+                    className={`relative h-20 w-20 overflow-hidden rounded-2xl border bg-white p-1.5 transition ${
+                      isActive
+                        ? 'border-[#1F5CAB] shadow-[0_10px_24px_rgba(31,92,171,0.22)]'
+                        : 'border-[#D9E7F8] hover:border-[#AFC9EA]'
+                    }`}
+                  >
+                    <Image
+                      src={image.src}
+                      alt={image.alt}
+                      fill
+                      sizes="80px"
+                      className="rounded-xl object-cover"
+                    />
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
         </div>
       </div>
     </section>

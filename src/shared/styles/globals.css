@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body > div,
+#__next {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 #cart-div {
   width: 300px;
 }

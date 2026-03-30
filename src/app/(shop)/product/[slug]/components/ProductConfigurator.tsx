@@ -670,6 +670,7 @@ export default function ProductConfigurator({
   const [priceError, setPriceError] = useState<string | null>(null)
   const [desktopPricePanelOpen, setDesktopPricePanelOpen] = useState(true)
   const priceAbortRef = useRef<AbortController | null>(null)
+  const configuratorCardRef = useRef<HTMLDivElement | null>(null)
 
   const effectiveHints = useMemo(
     () => mergeHints(resolvedConfig?.hints ?? {
@@ -825,8 +826,33 @@ export default function ProductConfigurator({
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
+  const preserveConfiguratorScroll = (update: () => void) => {
+    const anchor = configuratorCardRef.current
+    const beforeTop = anchor?.getBoundingClientRect().top ?? null
+
+    update()
+
+    if (beforeTop === null || typeof window === 'undefined') {
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      const afterTop = anchor?.getBoundingClientRect().top ?? null
+      if (afterTop === null) {
+        return
+      }
+
+      const delta = afterTop - beforeTop
+      if (Math.abs(delta) > 1) {
+        window.scrollBy({ top: delta, behavior: 'auto' })
+      }
+    })
+  }
+
   const toggleStep = (step: StepId) => {
-    setOpenStep((prev) => (prev === step ? null : step))
+    preserveConfiguratorScroll(() => {
+      setOpenStep((prev) => (prev === step ? null : step))
+    })
   }
 
   const toggleMultiValue = (
@@ -974,6 +1000,7 @@ export default function ProductConfigurator({
         </div>
       </div>
 
+      <div ref={configuratorCardRef}>
       <Card className="rounded-3xl border-[#D4E3F7] bg-gradient-to-b from-[#FFFFFF] to-[#FAFCFF] shadow-[0_14px_32px_rgba(15,43,82,0.08)]">
         <CardHeader>
           <CardTitle className="text-3xl text-[#0F2B52]">Konfigurieren Sie Ihre Plane</CardTitle>
@@ -1149,7 +1176,7 @@ export default function ProductConfigurator({
                         </label>
                       </div>
                       {resolvedConfig.options.doorExtras.length > 0 ? (
-                        <NestedAccordion title="Extras zur Tuer" isOpen={doorExtrasAccordionOpen} onToggle={() => setDoorExtrasAccordionOpen((prev) => !prev)}>
+                        <NestedAccordion title="Extras zur Tuer" isOpen={doorExtrasAccordionOpen} onToggle={() => preserveConfiguratorScroll(() => setDoorExtrasAccordionOpen((prev) => !prev))}>
                           <p className="mb-3 text-xs font-medium text-[#1F5CAB]/80">Mehrfachauswahl moeglich.</p>
                           <MultiChoiceGrid choices={resolvedConfig.options.doorExtras} selectedIds={form.doorExtras} onToggle={(value) => toggleMultiValue('doorExtras', value)} />
                         </NestedAccordion>
@@ -1184,7 +1211,7 @@ export default function ProductConfigurator({
                 )}
                 {resolvedConfig.options.frontClosureExtras.length > 0 ? (
                   <div className="mt-4">
-                    <NestedAccordion title="Zubehoer fuer den Frontverschluss" isOpen={frontClosureExtrasOpen} onToggle={() => setFrontClosureExtrasOpen((prev) => !prev)}>
+                    <NestedAccordion title="Zubehoer fuer den Frontverschluss" isOpen={frontClosureExtrasOpen} onToggle={() => preserveConfiguratorScroll(() => setFrontClosureExtrasOpen((prev) => !prev))}>
                       <MultiChoiceGrid choices={resolvedConfig.options.frontClosureExtras} selectedIds={form.frontClosureExtras} onToggle={(value) => toggleMultiValue('frontClosureExtras', value)} />
                     </NestedAccordion>
                   </div>
@@ -1202,7 +1229,7 @@ export default function ProductConfigurator({
                 )}
                 {resolvedConfig.options.backClosureExtras.length > 0 ? (
                   <div className="mt-4">
-                    <NestedAccordion title="Zubehoer fuer den Rueckenverschluss" isOpen={backClosureExtrasOpen} onToggle={() => setBackClosureExtrasOpen((prev) => !prev)}>
+                    <NestedAccordion title="Zubehoer fuer den Rueckenverschluss" isOpen={backClosureExtrasOpen} onToggle={() => preserveConfiguratorScroll(() => setBackClosureExtrasOpen((prev) => !prev))}>
                       <MultiChoiceGrid choices={resolvedConfig.options.backClosureExtras} selectedIds={form.backClosureExtras} onToggle={(value) => toggleMultiValue('backClosureExtras', value)} />
                     </NestedAccordion>
                   </div>
@@ -1301,6 +1328,7 @@ export default function ProductConfigurator({
           )}
         </CardContent>
       </Card>
+      </div>
     </>
   )
 }
