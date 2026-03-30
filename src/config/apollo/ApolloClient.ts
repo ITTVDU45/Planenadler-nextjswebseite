@@ -1,7 +1,23 @@
 import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client'
 
-const serverUri =
-  process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim()
+const DEFAULT_GRAPHQL_SERVER_URL = 'https://wp.planenadler.de/graphql'
+
+function resolveServerUri(): string {
+  const configuredUrl =
+    process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim()
+
+  if (!configuredUrl) {
+    return DEFAULT_GRAPHQL_SERVER_URL
+  }
+
+  try {
+    return new URL(configuredUrl).toString()
+  } catch {
+    return DEFAULT_GRAPHQL_SERVER_URL
+  }
+}
+
+const serverUri = resolveServerUri()
 
 const httpLink =
   typeof window === 'undefined'
