@@ -1,6 +1,9 @@
 import type { BlogPost } from '@/features/blog/types'
 import type { Article, ArticleCategory } from './types'
 
+const BLOG_AUTHOR_NAME = 'Ahmet Karadag'
+const BLOG_AUTHOR_AVATAR_SRC = '/images/Planenadler%20bild%20von%20Mitarbeiter.png'
+
 export interface WordPressBlogPost {
   id: number
   slug: string
@@ -55,7 +58,6 @@ function formatDate(date: string): string {
 }
 
 export function mapBlogPostToArticle(post: BlogShowcaseSourcePost): Article {
-  const author = isWordPressBlogPost(post) ? post._embedded?.author?.[0] : null
   const title = stripHtml(post.title)
   const excerpt = stripHtml(post.excerpt)
   const publishedAt = isWordPressBlogPost(post) ? post.date : post.publishedAt
@@ -77,12 +79,10 @@ export function mapBlogPostToArticle(post: BlogShowcaseSourcePost): Article {
       alt: title || 'Blog-Artikel',
     },
     author: {
-      name: isWordPressBlogPost(post) ? author?.name ?? 'Redaktion' : post.author ?? 'Redaktion',
+      name: BLOG_AUTHOR_NAME,
       avatar: {
-        src: isWordPressBlogPost(post)
-          ? author?.avatar_urls?.['48'] ?? 'https://i.pravatar.cc/150?img=47'
-          : 'https://i.pravatar.cc/150?img=47',
-        alt: isWordPressBlogPost(post) ? author?.name ?? 'Redaktion' : post.author ?? 'Redaktion',
+        src: BLOG_AUTHOR_AVATAR_SRC,
+        alt: BLOG_AUTHOR_NAME,
       },
     },
   }

@@ -61,10 +61,12 @@ const PRODUCT_BY_SLUG_QUERY = /* GraphQL */ `
       databaseId
       name
       slug
-      modified
       description
       shortDescription
       onSale
+      ... on Product {
+        modified
+      }
       image {
         sourceUrl
         altText
@@ -97,7 +99,9 @@ const PRODUCT_BY_SLUG_QUERY = /* GraphQL */ `
           databaseId
           name
           slug
-          modified
+          ... on Product {
+            modified
+          }
           image {
             sourceUrl
             altText
@@ -117,7 +121,9 @@ const PRODUCT_BY_SLUG_QUERY = /* GraphQL */ `
         databaseId
         name
         slug
-        modified
+        ... on Product {
+          modified
+        }
         image {
           sourceUrl
           altText

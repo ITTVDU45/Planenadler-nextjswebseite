@@ -5,6 +5,7 @@ import { POSTS_LIST_QUERY, POST_BY_SLUG_QUERY } from './queries'
 import { PLACEHOLDER_IMAGE_DATA_URL } from '@/shared/lib/functions'
 
 const DEFAULT_COVER_ALT = 'Blog-Bild'
+const BLOG_AUTHOR_NAME = 'Ahmet Karadag'
 
 function stripHtml(html: string | null | undefined): string {
   if (!html || typeof html !== 'string') return ''
@@ -32,8 +33,6 @@ export function mapWpPostToBlogPost(node: WPGraphQLPostNode): BlogPost {
   const alt =
     node.featuredImage?.node?.altText ?? node.title ?? DEFAULT_COVER_ALT
   const category = node.categories?.nodes?.[0]?.name ?? undefined
-  const author = node.author?.node?.name ?? undefined
-
   const base: BlogPost = {
     id: String(node.databaseId ?? node.id),
     slug: node.slug,
@@ -42,7 +41,7 @@ export function mapWpPostToBlogPost(node: WPGraphQLPostNode): BlogPost {
     coverImage: { src, alt },
     publishedAt: node.date ?? '',
     category,
-    author,
+    author: BLOG_AUTHOR_NAME,
   }
 
   if (node.content != null || (node.categories?.nodes?.length ?? 0) > 0 || (node.tags?.nodes?.length ?? 0) > 0) {
