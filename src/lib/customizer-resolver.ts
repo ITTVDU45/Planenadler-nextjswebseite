@@ -56,6 +56,13 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
+function hasMeaningfulScalar(value: unknown): boolean {
+  if (isNonEmptyString(value)) return true
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0
+  if (typeof value === 'boolean') return value
+  return false
+}
+
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : []
 }
@@ -74,6 +81,24 @@ function toNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null
   }
   return null
+}
+
+function hasMeaningfulMap(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value)) return false
+
+  return Object.values(value).some((entry) => {
+    if (Array.isArray(entry)) return entry.length > 0
+    if (isRecord(entry)) return hasMeaningfulMap(entry)
+    return hasMeaningfulScalar(entry)
+  })
+}
+
+function hasWindowConfig(windowData: CustomizerWindowData | null): boolean {
+  return hasMeaningfulMap(windowData)
+}
+
+function hasDoorConfig(doorData: CustomizerDoorData | null): boolean {
+  return hasMeaningfulMap(doorData)
 }
 
 function normalizeProductType(value: string | undefined): SupportedProductType {
@@ -328,8 +353,8 @@ function buildStepOrder(
     if (config.left.length) steps.push('leftSide')
     if (config.right.length) steps.push('rightSide')
     if (config.bottom.length) steps.push('bottomSide')
-    if (config.windowData && isRecord(config.windowData)) steps.push('window')
-    if (config.doorData || config.doorExtras.length) steps.push('door')
+    if (hasWindowConfig(config.windowData)) steps.push('window')
+    if (hasDoorConfig(config.doorData)) steps.push('door')
   }
 
   if (productType === 'lounge' || productType === 'rectangular') {
@@ -426,6 +451,8 @@ export function resolveCustomizerConfig(config: CustomizerConfig): ResolvedCusto
 
   const dimensions = resolveDimensionConfig(productType, config.dimentions)
   const sizeFields = dimensions.fields.filter((field) => field.required).map((field) => field.key)
+  const hasWindowStep = hasWindowConfig(config.window_data)
+  const hasDoorStep = hasDoorConfig(config.door_data)
   const steps = buildStepOrder(productType, {
     colors,
     materials,
@@ -478,8 +505,8 @@ export function resolveCustomizerConfig(config: CustomizerConfig): ResolvedCusto
     pricingCapabilities: {
       livePrice,
       allowsEdges: productType === 'tarpaulins',
-      allowsWindow: productType === 'tarpaulins' && isRecord(config.window_data),
-      allowsDoor: productType === 'tarpaulins' && (!!config.door_data || doorExtras.length > 0),
+      allowsWindow: productType === 'tarpaulins' && hasWindowStep,
+      allowsDoor: productType === 'tarpaulins' && hasDoorStep,
       supportsEyelets: (productType === 'lounge' || productType === 'rectangular') && eyelets.length > 0,
       supportsClosureType:
         (productType === 'lounge' || productType === 'rectangular') &&

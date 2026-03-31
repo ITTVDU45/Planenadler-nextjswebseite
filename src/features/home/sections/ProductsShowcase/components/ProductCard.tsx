@@ -95,7 +95,7 @@ export function ProductCard({ product }: ProductCardProps) {
   }, [product.id])
 
   return (
-    <div className="rounded-[2rem] bg-white p-4 shadow-[0_10px_30px_rgba(31,92,171,0.08)] transition hover:-translate-y-1 sm:p-5">
+    <div className="rounded-[1.5rem] bg-white p-3 shadow-[0_10px_30px_rgba(31,92,171,0.08)] transition hover:-translate-y-1 sm:rounded-[2rem] sm:p-5">
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[2rem] bg-[#F9F9F4]">
         <Sheet>
           <SheetTrigger asChild>
@@ -262,7 +262,7 @@ export function ProductCard({ product }: ProductCardProps) {
         />
       </div>
 
-      <div className="mt-5 flex items-center justify-between">
+      <div className="mt-4 flex items-center justify-between">
         <div className="flex items-center gap-1">
           {[1, 2, 3, 4, 5].map((value) => (
             <StarIcon key={value} filled={value <= 5} />
@@ -271,12 +271,12 @@ export function ProductCard({ product }: ProductCardProps) {
         </div>
       </div>
 
-      <div className="mt-4 text-sm font-semibold text-[#1F5CAB] sm:text-base">{product.name}</div>
+      <div className="mt-3 text-sm font-semibold leading-5 text-[#1F5CAB] sm:mt-4 sm:text-base">{product.name}</div>
       <div className="mt-1 text-sm font-bold text-[#3982DC] sm:text-base">{priceLabel}</div>
-      <div className="mt-4">
+      <div className="mt-3 sm:mt-4">
         <Link
           href={productHref}
-          className="inline-flex items-center rounded-full bg-[#1F5CAB] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#0F2B52]"
+          className="inline-flex items-center rounded-full bg-[#1F5CAB] px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-[#0F2B52] sm:px-4 sm:text-xs"
           aria-label={`Jetzt konfigurieren: ${product.name}`}
         >
           Jetzt konfigurieren
