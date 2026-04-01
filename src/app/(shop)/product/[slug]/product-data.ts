@@ -29,6 +29,31 @@ interface GqlResponse<T> {
   errors?: Array<{ message: string }>
 }
 
+function isCustomizerAssetKey(key: string): boolean {
+  const normalized = key.toLowerCase()
+  return normalized.includes('image') || normalized.endsWith('_url') || normalized === 'image_url'
+}
+
+function appendCustomizerAssetVersion<T>(value: T, version: string): T {
+  if (Array.isArray(value)) {
+    return value.map((entry) => appendCustomizerAssetVersion(entry, version)) as T
+  }
+
+  if (value && typeof value === 'object') {
+    const nextEntries = Object.entries(value as Record<string, unknown>).map(([key, entry]) => {
+      if (typeof entry === 'string' && isCustomizerAssetKey(key)) {
+        return [key, appendImageVersion(entry, version) ?? entry]
+      }
+
+      return [key, appendCustomizerAssetVersion(entry, version)]
+    })
+
+    return Object.fromEntries(nextEntries) as T
+  }
+
+  return value
+}
+
 async function gqlFetch<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
   if (!GRAPHQL_URL) throw new Error('NEXT_PUBLIC_GRAPHQL_URL ist nicht konfiguriert')
 
@@ -351,7 +376,7 @@ async function fetchCustomizerConfig(productId: number): Promise<{
     }
     const res = await fetch(url, {
       headers,
-      next: { revalidate: DATA_REVALIDATE_SECONDS },
+      cache: 'no-store',
     })
     if (res.status === 404) {
       return {
@@ -375,9 +400,17 @@ async function fetchCustomizerConfig(productId: number): Promise<{
     }
 
     const json = (await res.json()) as CustomizerApiResponse
-    const { state, resolvedConfig } = resolveCustomizerState(json)
+    const assetVersion = Date.now().toString()
+    const versionedJson: CustomizerApiResponse =
+      json.success && json.data
+        ? {
+            ...json,
+            data: appendCustomizerAssetVersion(json.data, assetVersion),
+          }
+        : json
+    const { state, resolvedConfig } = resolveCustomizerState(versionedJson)
     return {
-      rawConfig: json.success && json.data ? json.data : null,
+      rawConfig: versionedJson.success && versionedJson.data ? versionedJson.data : null,
       resolvedConfig,
       state,
     }
