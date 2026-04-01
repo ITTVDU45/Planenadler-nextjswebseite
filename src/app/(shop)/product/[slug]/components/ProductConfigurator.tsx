@@ -3,7 +3,7 @@
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApolloClient } from '@apollo/client'
-import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { GET_CART } from '@/features/cart/api/queries'
@@ -445,6 +445,29 @@ function SelectionCheckBadge({ className }: { className?: string }) {
   )
 }
 
+function PreviewBadge({
+  label,
+  onClick,
+}: {
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onClick()
+      }}
+      aria-label={`Bildvorschau fuer ${label} anzeigen`}
+      className="absolute left-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#CFE0F5] bg-white/95 text-[#1F5CAB] shadow-[0_4px_12px_rgba(15,43,82,0.16)] transition hover:border-[#1F5CAB] hover:text-[#0F2B52]"
+    >
+      <Search className="h-4 w-4" />
+    </button>
+  )
+}
+
 const choiceCardSelected =
   'border-2 border-[#1F5CAB] bg-gradient-to-br from-[#EFF8FF] to-[#E0EFFF] shadow-[0_12px_32px_rgba(31,92,171,0.28)] ring-2 ring-[#1F5CAB]/30'
 const choiceCardUnselected = 'border border-[#D9E7F8] bg-white hover:border-[#AFC9EA] hover:bg-[#F9FCFF]'
@@ -453,11 +476,13 @@ function ChoiceGrid({
   choices,
   value,
   onChange,
+  onPreview,
   variant = 'default',
 }: {
   choices: ResolvedChoice[]
   value: string
   onChange: (value: string) => void
+  onPreview?: (choice: ResolvedChoice) => void
   variant?: 'default' | 'color'
 }) {
   return (
@@ -465,40 +490,47 @@ function ChoiceGrid({
       {choices.map((choice) => {
         const isSelected = value === choice.label
         return (
-          <button
+          <div
             key={choice.id}
-            type="button"
-            onClick={() => onChange(choice.label)}
-            aria-pressed={isSelected}
             className={cn(
-              'relative rounded-xl border p-3 text-left transition duration-200',
+              'relative rounded-xl border p-3 transition duration-200',
               isSelected ? choiceCardSelected : choiceCardUnselected,
             )}
           >
             {isSelected ? <SelectionCheckBadge /> : null}
-            {variant === 'color' ? (
-              <div className="text-center">
-                <ColorSwatch choice={choice} />
-                <span className="text-xs font-semibold text-[#0F2B52]">{choice.label}</span>
-              </div>
-            ) : (
-              <>
-                <div className="relative h-20 w-full overflow-hidden rounded-lg bg-[#F6FAFF]">
-                  {isValidImageUrl(choice.imageSrc) ? (
-                    <img
-                      src={choice.imageSrc}
-                      alt={choice.label}
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="h-full w-full bg-gradient-to-br from-[#F6FAFF] to-[#EAF3FF]" />
-                  )}
+            {!variant && isValidImageUrl(choice.imageSrc) && onPreview ? (
+              <PreviewBadge label={choice.label} onClick={() => onPreview(choice)} />
+            ) : null}
+            <button
+              type="button"
+              onClick={() => onChange(choice.label)}
+              aria-pressed={isSelected}
+              className="block w-full text-left"
+            >
+              {variant === 'color' ? (
+                <div className="text-center">
+                  <ColorSwatch choice={choice} />
+                  <span className="text-xs font-semibold text-[#0F2B52]">{choice.label}</span>
                 </div>
-                <p className="mt-2 text-sm font-semibold text-[#0F2B52]">{choice.label}</p>
-              </>
-            )}
-          </button>
+              ) : (
+                <>
+                  <div className="relative h-20 w-full overflow-hidden rounded-lg bg-[#F6FAFF]">
+                    {isValidImageUrl(choice.imageSrc) ? (
+                      <img
+                        src={choice.imageSrc}
+                        alt={choice.label}
+                        loading="lazy"
+                        className="h-full w-full object-contain"
+                      />
+                    ) : (
+                      <div className="h-full w-full bg-gradient-to-br from-[#F6FAFF] to-[#EAF3FF]" />
+                    )}
+                  </div>
+                  <p className="mt-2 text-sm font-semibold text-[#0F2B52]">{choice.label}</p>
+                </>
+              )}
+            </button>
+          </div>
         )
       })}
     </div>
@@ -545,30 +577,39 @@ function SideOptionGrid({
   value,
   onChange,
   choices,
+  onPreview,
 }: {
   value: string
   onChange: (value: string) => void
   choices: ResolvedChoice[]
+  onPreview?: (choice: ResolvedChoice) => void
 }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {choices.map((choice) => {
         const isSelected = value === choice.label
         return (
-          <button
+          <div
             key={choice.id}
-            type="button"
-            onClick={() => onChange(choice.label)}
-            aria-pressed={isSelected}
             className={cn(
-              'relative rounded-xl border p-3 text-left transition duration-200',
+              'relative rounded-xl border p-3 transition duration-200',
               isSelected ? choiceCardSelected : choiceCardUnselected,
             )}
           >
             {isSelected ? <SelectionCheckBadge /> : null}
-            <SideOptionPreview option={choice.label} imageSrc={choice.imageSrc} />
-            <p className="mt-2 text-sm font-semibold text-[#0F2B52]">{choice.label}</p>
-          </button>
+            {isValidImageUrl(choice.imageSrc) && onPreview ? (
+              <PreviewBadge label={choice.label} onClick={() => onPreview(choice)} />
+            ) : null}
+            <button
+              type="button"
+              onClick={() => onChange(choice.label)}
+              aria-pressed={isSelected}
+              className="block w-full text-left"
+            >
+              <SideOptionPreview option={choice.label} imageSrc={choice.imageSrc} />
+              <p className="mt-2 text-sm font-semibold text-[#0F2B52]">{choice.label}</p>
+            </button>
+          </div>
         )
       })}
     </div>
@@ -579,45 +620,54 @@ function MultiChoiceGrid({
   choices,
   selectedIds,
   onToggle,
+  onPreview,
 }: {
   choices: ResolvedChoice[]
   selectedIds: string[]
   onToggle: (value: string) => void
+  onPreview?: (choice: ResolvedChoice) => void
 }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {choices.map((choice) => {
         const isSelected = selectedIds.includes(choice.id)
         return (
-          <button
+          <div
             key={choice.id}
-            type="button"
-            onClick={() => onToggle(choice.id)}
-            aria-pressed={isSelected}
             className={cn(
-              'group rounded-2xl border text-left transition duration-200',
+              'group relative rounded-2xl border transition duration-200',
               isSelected ? choiceCardSelected : choiceCardUnselected,
             )}
           >
-            <div className="relative h-24 w-full overflow-hidden rounded-t-2xl bg-[#F6FAFF]">
-              {isSelected ? <SelectionCheckBadge className="right-3 top-3" /> : null}
-              {isValidImageUrl(choice.imageSrc) ? (
-                <img
-                  src={choice.imageSrc}
-                  alt={choice.label}
-                  loading="lazy"
-                  className={`h-full w-full object-cover transition ${isSelected ? 'scale-[1.02]' : 'group-hover:scale-[1.02]'}`}
-                />
-              ) : (
-                <div className="h-full w-full bg-gradient-to-br from-[#F6FAFF] to-[#EAF3FF]" />
-              )}
-            </div>
-            <div
-              className={`rounded-b-2xl px-4 py-3 text-sm font-semibold transition ${isSelected ? 'bg-[#1F5CAB] text-white' : 'bg-white text-[#0F2B52]'}`}
+            {isValidImageUrl(choice.imageSrc) && onPreview ? (
+              <PreviewBadge label={choice.label} onClick={() => onPreview(choice)} />
+            ) : null}
+            <button
+              type="button"
+              onClick={() => onToggle(choice.id)}
+              aria-pressed={isSelected}
+              className="block w-full text-left"
             >
-              {choice.label}
-            </div>
-          </button>
+              <div className="relative h-24 w-full overflow-hidden rounded-t-2xl bg-[#F6FAFF]">
+                {isSelected ? <SelectionCheckBadge className="right-3 top-3" /> : null}
+                {isValidImageUrl(choice.imageSrc) ? (
+                  <img
+                    src={choice.imageSrc}
+                    alt={choice.label}
+                    loading="lazy"
+                    className={`h-full w-full object-contain transition ${isSelected ? 'scale-[1.02]' : 'group-hover:scale-[1.02]'}`}
+                  />
+                ) : (
+                  <div className="h-full w-full bg-gradient-to-br from-[#F6FAFF] to-[#EAF3FF]" />
+                )}
+              </div>
+              <div
+                className={`rounded-b-2xl px-4 py-3 text-sm font-semibold transition ${isSelected ? 'bg-[#1F5CAB] text-white' : 'bg-white text-[#0F2B52]'}`}
+              >
+                {choice.label}
+              </div>
+            </button>
+          </div>
         )
       })}
     </div>
@@ -678,6 +728,7 @@ export default function ProductConfigurator({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [successModalOpen, setSuccessModalOpen] = useState(false)
+  const [previewChoice, setPreviewChoice] = useState<ResolvedChoice | null>(null)
   const [calculatedPrice, setCalculatedPrice] = useState<string | null>(null)
   const [priceLoading, setPriceLoading] = useState(false)
   const [priceError, setPriceError] = useState<string | null>(null)
@@ -953,6 +1004,36 @@ export default function ProductConfigurator({
         productName={productName}
         onClose={() => setSuccessModalOpen(false)}
       />
+      {previewChoice && isValidImageUrl(previewChoice.imageSrc) ? (
+        <div
+          className="fixed inset-0 z-[600] flex items-center justify-center bg-[#0F2B52]/75 px-4 py-8"
+          onClick={() => setPreviewChoice(null)}
+        >
+          <div
+            className="relative w-full max-w-4xl rounded-[28px] bg-white p-4 shadow-[0_20px_60px_rgba(15,43,82,0.35)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewChoice(null)}
+              aria-label="Vorschau schliessen"
+              className="absolute right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#CFE0F5] bg-white text-[#1F5CAB] transition hover:border-[#1F5CAB] hover:text-[#0F2B52]"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="overflow-hidden rounded-[22px] bg-[#F6FAFF] p-4 sm:p-6">
+              <img
+                src={previewChoice.imageSrc!}
+                alt={previewChoice.label}
+                className="mx-auto max-h-[75vh] w-auto max-w-full object-contain"
+              />
+            </div>
+            <p className="mt-4 text-center text-base font-semibold text-[#0F2B52]">
+              {previewChoice.label}
+            </p>
+          </div>
+        </div>
+      ) : null}
       <div className="pointer-events-none fixed bottom-24 right-4 z-[510] hidden w-[220px] xl:right-6 xl:w-[240px] lg:block">
         <div
           className="pointer-events-auto relative rounded-2xl border border-[#D4E3F7] bg-gradient-to-r from-[#F6FAFF] to-[#EEF5FF] px-4 py-3 shadow-[0_8px_18px_rgba(15,43,82,0.08)] transition-transform duration-300 ease-out"
@@ -1054,6 +1135,7 @@ export default function ProductConfigurator({
                         choices={resolvedConfig.options.materials}
                         value={form.material}
                         onChange={(value) => setField('material', value)}
+                        onPreview={setPreviewChoice}
                       />
                     )}
                   </div>
@@ -1061,11 +1143,11 @@ export default function ProductConfigurator({
                 {resolvedConfig.options.colors.length > 0 ? (
                   <div className="mt-4 space-y-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#3982DC]">Farbe</p>
-                    <ChoiceGrid
-                      choices={resolvedConfig.options.colors}
-                      value={form.color}
-                      onChange={(value) => setField('color', value)}
-                      variant="color"
+                      <ChoiceGrid
+                        choices={resolvedConfig.options.colors}
+                        value={form.color}
+                        onChange={(value) => setField('color', value)}
+                        variant="color"
                     />
                   </div>
                 ) : null}
@@ -1096,28 +1178,28 @@ export default function ProductConfigurator({
             {steps.includes('topSide') ? (
               <StepAccordionItem id="topSide" title={STEP_TITLES.topSide} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('topSide')}>
                 <HintPanel text={effectiveHints.topSide} />
-                <SideOptionGrid value={form.topSide} onChange={(value) => setField('topSide', value)} choices={resolvedConfig.options.topSide} />
+                <SideOptionGrid value={form.topSide} onChange={(value) => setField('topSide', value)} choices={resolvedConfig.options.topSide} onPreview={setPreviewChoice} />
               </StepAccordionItem>
             ) : null}
 
             {steps.includes('leftSide') ? (
               <StepAccordionItem id="leftSide" title={STEP_TITLES.leftSide} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('leftSide')}>
                 <HintPanel text={effectiveHints.leftSide} />
-                <SideOptionGrid value={form.leftSide} onChange={(value) => setField('leftSide', value)} choices={resolvedConfig.options.leftSide} />
+                <SideOptionGrid value={form.leftSide} onChange={(value) => setField('leftSide', value)} choices={resolvedConfig.options.leftSide} onPreview={setPreviewChoice} />
               </StepAccordionItem>
             ) : null}
 
             {steps.includes('rightSide') ? (
               <StepAccordionItem id="rightSide" title={STEP_TITLES.rightSide} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('rightSide')}>
                 <HintPanel text={effectiveHints.rightSide} />
-                <SideOptionGrid value={form.rightSide} onChange={(value) => setField('rightSide', value)} choices={resolvedConfig.options.rightSide} />
+                <SideOptionGrid value={form.rightSide} onChange={(value) => setField('rightSide', value)} choices={resolvedConfig.options.rightSide} onPreview={setPreviewChoice} />
               </StepAccordionItem>
             ) : null}
 
             {steps.includes('bottomSide') ? (
               <StepAccordionItem id="bottomSide" title={STEP_TITLES.bottomSide} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('bottomSide')}>
                 <HintPanel text={effectiveHints.bottomSide} />
-                <SideOptionGrid value={form.bottomSide} onChange={(value) => setField('bottomSide', value)} choices={resolvedConfig.options.bottomSide} />
+                <SideOptionGrid value={form.bottomSide} onChange={(value) => setField('bottomSide', value)} choices={resolvedConfig.options.bottomSide} onPreview={setPreviewChoice} />
               </StepAccordionItem>
             ) : null}
 
@@ -1191,7 +1273,7 @@ export default function ProductConfigurator({
                       {resolvedConfig.options.doorExtras.length > 0 ? (
                         <NestedAccordion title="Extras zur Tuer" isOpen={doorExtrasAccordionOpen} onToggle={() => preserveConfiguratorScroll(() => setDoorExtrasAccordionOpen((prev) => !prev))}>
                           <p className="mb-3 text-xs font-medium text-[#1F5CAB]/80">Mehrfachauswahl moeglich.</p>
-                          <MultiChoiceGrid choices={resolvedConfig.options.doorExtras} selectedIds={form.doorExtras} onToggle={(value) => toggleMultiValue('doorExtras', value)} />
+                          <MultiChoiceGrid choices={resolvedConfig.options.doorExtras} selectedIds={form.doorExtras} onToggle={(value) => toggleMultiValue('doorExtras', value)} onPreview={setPreviewChoice} />
                         </NestedAccordion>
                       ) : null}
                     </div>
@@ -1203,14 +1285,14 @@ export default function ProductConfigurator({
             {steps.includes('eyelets') ? (
               <StepAccordionItem id="eyelets" title={STEP_TITLES.eyelets} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('eyelets')}>
                 <HintPanel text={effectiveHints.eyelets} />
-                <ChoiceGrid choices={resolvedConfig.options.eyelets} value={form.eyeletEdge} onChange={(value) => setField('eyeletEdge', value)} />
+                <ChoiceGrid choices={resolvedConfig.options.eyelets} value={form.eyeletEdge} onChange={(value) => setField('eyeletEdge', value)} onPreview={setPreviewChoice} />
               </StepAccordionItem>
             ) : null}
 
             {steps.includes('closureType') ? (
               <StepAccordionItem id="closureType" title={STEP_TITLES.closureType} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('closureType')}>
                 <HintPanel text={effectiveHints.closureType} />
-                <ChoiceGrid choices={resolvedConfig.options.closureTypes} value={form.closureType} onChange={(value) => setField('closureType', value)} />
+                <ChoiceGrid choices={resolvedConfig.options.closureTypes} value={form.closureType} onChange={(value) => setField('closureType', value)} onPreview={setPreviewChoice} />
               </StepAccordionItem>
             ) : null}
 
@@ -1218,14 +1300,14 @@ export default function ProductConfigurator({
               <StepAccordionItem id="frontClosure" title={STEP_TITLES.frontClosure} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('frontClosure')}>
                 <HintPanel text={effectiveHints.frontClosure} />
                 {resolvedConfig.options.frontClosures.length > 0 ? (
-                  <ChoiceGrid choices={resolvedConfig.options.frontClosures} value={form.frontClosure} onChange={(value) => setField('frontClosure', value)} />
+                  <ChoiceGrid choices={resolvedConfig.options.frontClosures} value={form.frontClosure} onChange={(value) => setField('frontClosure', value)} onPreview={setPreviewChoice} />
                 ) : (
                   <p className="text-sm text-[#1F5CAB]">Es sind nur Frontverschluss-Extras verfuegbar.</p>
                 )}
                 {resolvedConfig.options.frontClosureExtras.length > 0 ? (
                   <div className="mt-4">
                     <NestedAccordion title="Zubehoer fuer den Frontverschluss" isOpen={frontClosureExtrasOpen} onToggle={() => preserveConfiguratorScroll(() => setFrontClosureExtrasOpen((prev) => !prev))}>
-                      <MultiChoiceGrid choices={resolvedConfig.options.frontClosureExtras} selectedIds={form.frontClosureExtras} onToggle={(value) => toggleMultiValue('frontClosureExtras', value)} />
+                      <MultiChoiceGrid choices={resolvedConfig.options.frontClosureExtras} selectedIds={form.frontClosureExtras} onToggle={(value) => toggleMultiValue('frontClosureExtras', value)} onPreview={setPreviewChoice} />
                     </NestedAccordion>
                   </div>
                 ) : null}
@@ -1236,14 +1318,14 @@ export default function ProductConfigurator({
               <StepAccordionItem id="backClosure" title={STEP_TITLES.backClosure} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('backClosure')}>
                 <HintPanel text={effectiveHints.backClosure} />
                 {resolvedConfig.options.backClosures.length > 0 ? (
-                  <ChoiceGrid choices={resolvedConfig.options.backClosures} value={form.backClosure} onChange={(value) => setField('backClosure', value)} />
+                  <ChoiceGrid choices={resolvedConfig.options.backClosures} value={form.backClosure} onChange={(value) => setField('backClosure', value)} onPreview={setPreviewChoice} />
                 ) : (
                   <p className="text-sm text-[#1F5CAB]">Es sind nur Rueckenverschluss-Extras verfuegbar.</p>
                 )}
                 {resolvedConfig.options.backClosureExtras.length > 0 ? (
                   <div className="mt-4">
                     <NestedAccordion title="Zubehoer fuer den Rueckenverschluss" isOpen={backClosureExtrasOpen} onToggle={() => preserveConfiguratorScroll(() => setBackClosureExtrasOpen((prev) => !prev))}>
-                      <MultiChoiceGrid choices={resolvedConfig.options.backClosureExtras} selectedIds={form.backClosureExtras} onToggle={(value) => toggleMultiValue('backClosureExtras', value)} />
+                      <MultiChoiceGrid choices={resolvedConfig.options.backClosureExtras} selectedIds={form.backClosureExtras} onToggle={(value) => toggleMultiValue('backClosureExtras', value)} onPreview={setPreviewChoice} />
                     </NestedAccordion>
                   </div>
                 ) : null}
@@ -1269,7 +1351,7 @@ export default function ProductConfigurator({
                   {form.hasExtras === 'yes' ? (
                     <>
                       {resolvedConfig.options.extras.length > 0 ? (
-                        <MultiChoiceGrid choices={resolvedConfig.options.extras} selectedIds={form.extrasSelected} onToggle={(value) => toggleMultiValue('extrasSelected', value)} />
+                        <MultiChoiceGrid choices={resolvedConfig.options.extras} selectedIds={form.extrasSelected} onToggle={(value) => toggleMultiValue('extrasSelected', value)} onPreview={setPreviewChoice} />
                       ) : null}
                       <label className="space-y-1">
                         <span className="text-xs font-semibold text-[#1F5CAB]">Hinweise zu den Extras (optional)</span>
