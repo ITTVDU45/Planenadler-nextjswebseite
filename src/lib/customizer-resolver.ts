@@ -245,7 +245,14 @@ function resolveClosureExtras(entries: CustomizerClosureExtra[] | null, prefix: 
         entry.price ??
         entry.front_clouser_extra_price ??
         entry.back_clouser_extra_price
-      return makeChoice(`${prefix}-${index}`, label, price, entry.image_url)
+      const selector = isNonEmptyString(entry.front_clouser_extra_selector)
+        ? entry.front_clouser_extra_selector
+        : isNonEmptyString(entry.back_clouser_extra_selector)
+          ? entry.back_clouser_extra_selector
+          : undefined
+      return makeChoice(`${prefix}-${index}`, label, price, entry.image_url, {
+        selector: selector?.trim().toLowerCase(),
+      })
     })
     .filter((choice): choice is ResolvedChoice => choice !== null)
 }

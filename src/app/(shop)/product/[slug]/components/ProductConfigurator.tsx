@@ -153,6 +153,32 @@ function isValidImageUrl(url?: string | null): boolean {
   return Boolean(url && url !== 'http://null' && url !== 'http://null/' && !url.endsWith('/null'))
 }
 
+function normalizeChoiceSelector(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase()
+}
+
+function filterClosureExtrasBySelection(
+  choices: ResolvedChoice[],
+  selectedClosure: string,
+): ResolvedChoice[] {
+  const normalizedSelection = normalizeChoiceSelector(selectedClosure)
+
+  return choices.filter((choice) => {
+    const selector = typeof choice.meta?.selector === 'string'
+      ? normalizeChoiceSelector(choice.meta.selector)
+      : ''
+
+    if (!selector) return true
+    if (!normalizedSelection) return false
+
+    return selector === normalizedSelection
+  })
+}
+
+function hasConditionalClosureExtras(choices: ResolvedChoice[]): boolean {
+  return choices.some((choice) => typeof choice.meta?.selector === 'string' && choice.meta.selector.trim().length > 0)
+}
+
 function getDynamicRequiredFields(
   form: ConfigFormState,
   resolvedConfig: ResolvedCustomizerConfig,
@@ -827,6 +853,54 @@ export default function ProductConfigurator({
     )
   }, [missingRequiredFields, resolvedConfig])
 
+  const filteredFrontClosureExtras = useMemo(
+    () =>
+      resolvedConfig
+        ? filterClosureExtrasBySelection(
+            resolvedConfig.options.frontClosureExtras,
+            form.frontClosure,
+          )
+        : [],
+    [form.frontClosure, resolvedConfig],
+  )
+
+  const filteredBackClosureExtras = useMemo(
+    () =>
+      resolvedConfig
+        ? filterClosureExtrasBySelection(
+            resolvedConfig.options.backClosureExtras,
+            form.backClosure,
+          )
+        : [],
+    [form.backClosure, resolvedConfig],
+  )
+
+  useEffect(() => {
+    setForm((prev) => {
+      const allowedIds = new Set(filteredFrontClosureExtras.map((choice) => choice.id))
+      const nextSelected = prev.frontClosureExtras.filter((id) => allowedIds.has(id))
+
+      if (nextSelected.length === prev.frontClosureExtras.length) {
+        return prev
+      }
+
+      return { ...prev, frontClosureExtras: nextSelected }
+    })
+  }, [filteredFrontClosureExtras])
+
+  useEffect(() => {
+    setForm((prev) => {
+      const allowedIds = new Set(filteredBackClosureExtras.map((choice) => choice.id))
+      const nextSelected = prev.backClosureExtras.filter((id) => allowedIds.has(id))
+
+      if (nextSelected.length === prev.backClosureExtras.length) {
+        return prev
+      }
+
+      return { ...prev, backClosureExtras: nextSelected }
+    })
+  }, [filteredBackClosureExtras])
+
   useEffect(() => {
     if (!resolvedConfig || !priceEndpoint?.trim()) return
     if (!resolvedConfig.pricingCapabilities.livePrice) return
@@ -1369,7 +1443,17 @@ export default function ProductConfigurator({
                 {resolvedConfig.options.frontClosureExtras.length > 0 ? (
                   <div className="mt-4">
                     <NestedAccordion title="Zubehoer fuer den Frontverschluss" isOpen={frontClosureExtrasOpen} onToggle={() => preserveConfiguratorScroll(() => setFrontClosureExtrasOpen((prev) => !prev))}>
-                      <MultiChoiceGrid choices={resolvedConfig.options.frontClosureExtras} selectedIds={form.frontClosureExtras} onToggle={(value) => toggleMultiValue('frontClosureExtras', value)} onPreview={setPreviewChoice} />
+                      {!form.frontClosure && hasConditionalClosureExtras(resolvedConfig.options.frontClosureExtras) ? (
+                        <p className="text-sm text-[#1F5CAB]">
+                          Bitte waehlen Sie zuerst einen Frontverschluss, damit das passende Zubehoer angezeigt wird.
+                        </p>
+                      ) : filteredFrontClosureExtras.length > 0 ? (
+                        <MultiChoiceGrid choices={filteredFrontClosureExtras} selectedIds={form.frontClosureExtras} onToggle={(value) => toggleMultiValue('frontClosureExtras', value)} onPreview={setPreviewChoice} />
+                      ) : (
+                        <p className="text-sm text-[#1F5CAB]">
+                          Fuer den gewaehlten Frontverschluss ist kein Zubehoer hinterlegt.
+                        </p>
+                      )}
                     </NestedAccordion>
                   </div>
                 ) : null}
@@ -1387,7 +1471,17 @@ export default function ProductConfigurator({
                 {resolvedConfig.options.backClosureExtras.length > 0 ? (
                   <div className="mt-4">
                     <NestedAccordion title="Zubehoer fuer den Rueckenverschluss" isOpen={backClosureExtrasOpen} onToggle={() => preserveConfiguratorScroll(() => setBackClosureExtrasOpen((prev) => !prev))}>
-                      <MultiChoiceGrid choices={resolvedConfig.options.backClosureExtras} selectedIds={form.backClosureExtras} onToggle={(value) => toggleMultiValue('backClosureExtras', value)} onPreview={setPreviewChoice} />
+                      {!form.backClosure && hasConditionalClosureExtras(resolvedConfig.options.backClosureExtras) ? (
+                        <p className="text-sm text-[#1F5CAB]">
+                          Bitte waehlen Sie zuerst einen Rueckenverschluss, damit das passende Zubehoer angezeigt wird.
+                        </p>
+                      ) : filteredBackClosureExtras.length > 0 ? (
+                        <MultiChoiceGrid choices={filteredBackClosureExtras} selectedIds={form.backClosureExtras} onToggle={(value) => toggleMultiValue('backClosureExtras', value)} onPreview={setPreviewChoice} />
+                      ) : (
+                        <p className="text-sm text-[#1F5CAB]">
+                          Fuer den gewaehlten Rueckenverschluss ist kein Zubehoer hinterlegt.
+                        </p>
+                      )}
                     </NestedAccordion>
                   </div>
                 ) : null}

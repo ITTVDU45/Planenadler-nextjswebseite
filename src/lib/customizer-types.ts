@@ -148,8 +148,10 @@ export interface CustomizerClosureExtra {
   image_url?: string
   front_clouser_extra__subtitle?: string
   front_clouser_extra_price?: number | string
+  front_clouser_extra_selector?: string
   back_clouser_extra__subtitle?: string
   back_clouser_extra_price?: number | string
+  back_clouser_extra_selector?: string
   [key: string]: unknown
 }
 
