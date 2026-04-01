@@ -55,24 +55,46 @@ interface ProductsResult {
   }
 }
 
+const DEFAULT_GRAPHQL_ENDPOINT = 'https://wp.planenadler.de/graphql'
+
+async function fetchHomepageProducts(): Promise<ProductsResult> {
+  const configuredEndpoint =
+    process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim()
+
+  const endpoints = Array.from(
+    new Set([configuredEndpoint, DEFAULT_GRAPHQL_ENDPOINT].filter((value): value is string => Boolean(value))),
+  )
+
+  let lastError: unknown = null
+
+  for (const endpoint of endpoints) {
+    try {
+      return await gqlFetch<ProductsResult>(endpoint, {
+        query: GET_PRODUCTS_ALL,
+        timeoutMs: 12000,
+      })
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  if (lastError) {
+    console.error('[HomepageProducts] GraphQL fetch failed', lastError)
+  }
+
+  return { products: { nodes: [] } }
+}
+
 export const getStaticProps: GetStaticProps<{
   googleReviews: GoogleReviewData
   blogArticles: Article[]
   blogCategories: ArticleCategory[]
   products: ProductCardItem[]
 }> = async () => {
-  const endpoint =
-    process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim()
-
   const [googleReviews, recentPosts, productsResult] = await Promise.all([
     fetchGoogleReviews(),
     getRecentBlogPosts(4),
-    endpoint
-      ? gqlFetch<ProductsResult>(endpoint, {
-          query: GET_PRODUCTS_ALL,
-          timeoutMs: 12000,
-        }).catch(() => ({ products: { nodes: [] } }))
-      : Promise.resolve({ products: { nodes: [] } }),
+    fetchHomepageProducts(),
   ])
 
   const blogArticles = recentPosts.map(mapBlogPostToArticle)
