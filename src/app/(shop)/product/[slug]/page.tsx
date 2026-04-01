@@ -123,7 +123,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
         <section id="konfigurator" className="py-12 md:py-16" aria-labelledby="configurator-title">
           <div className="mx-auto grid max-w-7xl gap-8 px-4 lg:grid-cols-[1.1fr_1fr] lg:items-start">
-            <div className="lg:sticky lg:top-24">
+            <div className="lg:sticky lg:top-24 lg:self-start">
               <h2 id="configurator-title" className="mb-4 text-2xl font-bold text-[#0F2B52]">
                 Individuelle Konfiguration
               </h2>

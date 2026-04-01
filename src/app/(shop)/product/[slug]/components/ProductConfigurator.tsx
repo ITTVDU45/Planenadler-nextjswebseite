@@ -1152,7 +1152,10 @@ export default function ProductConfigurator({
         </div>
       </div>
 
-      <div ref={configuratorCardRef}>
+      <div
+        ref={configuratorCardRef}
+        className="lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-2"
+      >
       <Card className="rounded-3xl border-[#D4E3F7] bg-gradient-to-b from-[#FFFFFF] to-[#FAFCFF] shadow-[0_14px_32px_rgba(15,43,82,0.08)]">
         <CardHeader>
           <CardTitle className="text-3xl text-[#0F2B52]">Konfigurieren Sie Ihre Plane</CardTitle>
