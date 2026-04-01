@@ -505,7 +505,20 @@ function ChoiceGrid({
   )
 }
 
-function SideOptionPreview({ option }: { option: string }) {
+function SideOptionPreview({ option, imageSrc }: { option: string; imageSrc?: string }) {
+  if (isValidImageUrl(imageSrc)) {
+    return (
+      <div className="relative h-24 w-full overflow-hidden rounded-lg bg-white p-2">
+        <img
+          src={imageSrc}
+          alt={option}
+          loading="lazy"
+          className="h-full w-full object-contain"
+        />
+      </div>
+    )
+  }
+
   if (option.toLowerCase().includes('oese')) {
     const spacingClass = option.includes('30') ? 'gap-1' : 'gap-3'
     return (
@@ -553,7 +566,7 @@ function SideOptionGrid({
             )}
           >
             {isSelected ? <SelectionCheckBadge /> : null}
-            <SideOptionPreview option={choice.label} />
+            <SideOptionPreview option={choice.label} imageSrc={choice.imageSrc} />
             <p className="mt-2 text-sm font-semibold text-[#0F2B52]">{choice.label}</p>
           </button>
         )
