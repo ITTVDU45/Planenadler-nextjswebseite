@@ -9,8 +9,13 @@ import type { CustomizerConfig, CustomizerApiResponse } from '@/lib/customizer-t
 import { resolveCustomizerState } from '@/lib/customizer-resolver'
 import type { ConfiguratorState } from '@/lib/customizer-runtime'
 
-const GRAPHQL_URL = process.env.NEXT_PUBLIC_GRAPHQL_URL ?? ''
-const CUSTOMIZER_API_BASE = process.env.CUSTOMIZER_API_URL ?? ''
+const DEFAULT_GRAPHQL_URL = 'https://wp.planenadler.de/graphql'
+const DEFAULT_CUSTOMIZER_API_BASE = 'https://wp.planenadler.de/wp-json/planenadler-customizer/v1/config'
+const GRAPHQL_URL =
+  process.env.GRAPHQL_SERVER_URL?.trim() ||
+  process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim() ||
+  DEFAULT_GRAPHQL_URL
+const CUSTOMIZER_API_BASE = process.env.CUSTOMIZER_API_URL?.trim() || DEFAULT_CUSTOMIZER_API_BASE
 const CUSTOMIZER_REST_API_KEY = process.env.CUSTOMIZER_REST_API_KEY?.trim() ?? ''
 
 /** Sollte mit PRODUCT_PAGE_REVALIDATE_SECONDS / product-page-cache.ts übereinstimmen */
@@ -55,8 +60,6 @@ function appendCustomizerAssetVersion<T>(value: T, version: string): T {
 }
 
 async function gqlFetch<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
-  if (!GRAPHQL_URL) throw new Error('NEXT_PUBLIC_GRAPHQL_URL ist nicht konfiguriert')
-
   const res = await fetch(GRAPHQL_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
