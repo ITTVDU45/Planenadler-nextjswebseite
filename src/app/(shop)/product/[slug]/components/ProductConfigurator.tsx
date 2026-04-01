@@ -160,7 +160,11 @@ function getDynamicRequiredFields(
   const dynamic: ConfigFormField[] = []
 
   if (resolvedConfig.steps.includes('window') && form.hasWindow === 'yes') {
-    dynamic.push('windowWidthCm', 'windowHeightCm')
+    if (form.windowSplit === 'yes') {
+      dynamic.push('windowSplitLeftWidthCm', 'windowSplitRightWidthCm')
+    } else {
+      dynamic.push('windowWidthCm', 'windowHeightCm')
+    }
   }
 
   if (resolvedConfig.steps.includes('door') && form.hasDoor === 'yes') {
@@ -180,6 +184,8 @@ const REQUIRED_FIELD_LABELS: Partial<Record<ConfigFormField, string>> = {
   hasWindow: 'Fenster: Bitte Ja oder Nein waehlen',
   windowWidthCm: 'Fensterbreite',
   windowHeightCm: 'Fensterhoehe',
+  windowSplitLeftWidthCm: 'Fensterbreite links',
+  windowSplitRightWidthCm: 'Fensterbreite rechts',
   hasDoor: 'Tuer: Bitte Ja oder Nein waehlen',
   doorWidthCm: 'Tuerbreite',
   doorHeightCm: 'Tuerhoehe',
@@ -890,6 +896,26 @@ export default function ProductConfigurator({
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
+  const clearSingleWindowFields = (state: ConfigFormState): ConfigFormState => ({
+    ...state,
+    windowWidthCm: '',
+    windowHeightCm: '',
+    windowDistanceSideCm: '',
+    windowDistanceBottomCm: '',
+  })
+
+  const clearSplitWindowFields = (state: ConfigFormState): ConfigFormState => ({
+    ...state,
+    windowSplitLeftWidthCm: '',
+    windowSplitLeftHeightCm: '',
+    windowSplitRightWidthCm: '',
+    windowSplitRightHeightCm: '',
+    windowSplitRightDistanceRightCm: '',
+    windowSplitLeftDistanceLeftCm: '',
+    windowSplitLeftDistanceBottomCm: '',
+    windowSplitRightDistanceBottomCm: '',
+  })
+
   const preserveConfiguratorScroll = (update: () => void) => {
     const anchor = configuratorCardRef.current
     const beforeTop = anchor?.getBoundingClientRect().top ?? null
@@ -916,6 +942,38 @@ export default function ProductConfigurator({
   const toggleStep = (step: StepId) => {
     preserveConfiguratorScroll(() => {
       setOpenStep((prev) => (prev === step ? null : step))
+    })
+  }
+
+  const setWindowEnabled = (value: '' | 'yes' | 'no') => {
+    preserveConfiguratorScroll(() => {
+      setForm((prev) => {
+        let next: ConfigFormState = { ...prev, hasWindow: value }
+
+        if (value !== 'yes') {
+          next = clearSingleWindowFields(next)
+          next = clearSplitWindowFields(next)
+          next.windowSplit = ''
+        }
+
+        return next
+      })
+    })
+  }
+
+  const setWindowSplitMode = (value: '' | 'yes' | 'no') => {
+    preserveConfiguratorScroll(() => {
+      setForm((prev) => {
+        let next: ConfigFormState = { ...prev, windowSplit: value }
+
+        if (value === 'yes') {
+          next = clearSingleWindowFields(next)
+        } else {
+          next = clearSplitWindowFields(next)
+        }
+
+        return next
+      })
     })
   }
 
@@ -1207,30 +1265,12 @@ export default function ProductConfigurator({
               <StepAccordionItem id="window" title={STEP_TITLES.window} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('window')}>
                 <HintPanel text={effectiveHints.window} />
                 <div className="space-y-3">
-                  <YesNoToggle value={form.hasWindow} onChange={(value) => setField('hasWindow', value)} />
+                  <YesNoToggle value={form.hasWindow} onChange={setWindowEnabled} />
                   {form.hasWindow === 'yes' ? (
                     <>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="space-y-1">
-                          <span className="text-xs font-semibold text-[#1F5CAB]">Fensterbreite (a) in cm</span>
-                          <input type="number" min="1" value={form.windowWidthCm} onChange={(event) => setField('windowWidthCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
-                        </label>
-                        <label className="space-y-1">
-                          <span className="text-xs font-semibold text-[#1F5CAB]">Fensterhoehe (b) in cm</span>
-                          <input type="number" min="1" value={form.windowHeightCm} onChange={(event) => setField('windowHeightCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
-                        </label>
-                        <label className="space-y-1">
-                          <span className="text-xs font-semibold text-[#1F5CAB]">Entfernung zum Seitenrand (c) in cm</span>
-                          <input type="number" min="0" value={form.windowDistanceSideCm} onChange={(event) => setField('windowDistanceSideCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
-                        </label>
-                        <label className="space-y-1">
-                          <span className="text-xs font-semibold text-[#1F5CAB]">Entfernung zur unteren Seite (d) in cm</span>
-                          <input type="number" min="0" value={form.windowDistanceBottomCm} onChange={(event) => setField('windowDistanceBottomCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
-                        </label>
-                      </div>
                       <div className="space-y-1">
                         <p className="text-xs font-semibold text-[#1F5CAB]">Fenster teilen</p>
-                        <YesNoToggle value={form.windowSplit} onChange={(value) => setField('windowSplit', value)} />
+                        <YesNoToggle value={form.windowSplit} onChange={setWindowSplitMode} />
                       </div>
                       {form.windowSplit === 'yes' ? (
                         <div className="grid gap-3 sm:grid-cols-2">
@@ -1243,7 +1283,26 @@ export default function ProductConfigurator({
                             <input type="number" min="0" value={form.windowSplitRightWidthCm} onChange={(event) => setField('windowSplitRightWidthCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
                           </label>
                         </div>
-                      ) : null}
+                      ) : (
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="space-y-1">
+                            <span className="text-xs font-semibold text-[#1F5CAB]">Fensterbreite (a) in cm</span>
+                            <input type="number" min="1" value={form.windowWidthCm} onChange={(event) => setField('windowWidthCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
+                          </label>
+                          <label className="space-y-1">
+                            <span className="text-xs font-semibold text-[#1F5CAB]">Fensterhoehe (b) in cm</span>
+                            <input type="number" min="1" value={form.windowHeightCm} onChange={(event) => setField('windowHeightCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
+                          </label>
+                          <label className="space-y-1">
+                            <span className="text-xs font-semibold text-[#1F5CAB]">Entfernung zum Seitenrand (c) in cm</span>
+                            <input type="number" min="0" value={form.windowDistanceSideCm} onChange={(event) => setField('windowDistanceSideCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
+                          </label>
+                          <label className="space-y-1">
+                            <span className="text-xs font-semibold text-[#1F5CAB]">Entfernung zur unteren Seite (d) in cm</span>
+                            <input type="number" min="0" value={form.windowDistanceBottomCm} onChange={(event) => setField('windowDistanceBottomCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
+                          </label>
+                        </div>
+                      )}
                     </>
                   ) : null}
                 </div>
