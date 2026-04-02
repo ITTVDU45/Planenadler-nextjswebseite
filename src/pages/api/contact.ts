@@ -2,6 +2,11 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
 const RATE_LIMIT_MAX = 5
+const DEFAULT_WORDPRESS_CONTACT_URL =
+  'https://wp.planenadler.de/wp-json/planenadler-customizer/v1/contact'
+const WORDPRESS_CONTACT_URL =
+  process.env.WORDPRESS_CONTACT_API_URL?.trim() || DEFAULT_WORDPRESS_CONTACT_URL
+const CUSTOMIZER_REST_API_KEY = process.env.CUSTOMIZER_REST_API_KEY?.trim() ?? ''
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
 
@@ -64,7 +69,7 @@ function validate(body: ContactBody): { ok: true } | { ok: false; errors: Valida
   return { ok: true }
 }
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST'])
     return res.status(405).json({ error: 'Method not allowed' })
@@ -94,5 +99,48 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(400).json({ success: false, errors: result.errors })
   }
 
-  return res.status(200).json({ success: true })
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+
+  if (CUSTOMIZER_REST_API_KEY) {
+    headers.x_planenadler_customizer_key = CUSTOMIZER_REST_API_KEY
+  }
+
+  try {
+    const response = await fetch(WORDPRESS_CONTACT_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        firstName: body.firstName?.trim() ?? '',
+        lastName: body.lastName?.trim() ?? '',
+        email: body.email?.trim() ?? '',
+        phone: body.phone?.trim() ?? '',
+        subject: body.subject?.trim() ?? '',
+        message: body.message?.trim() ?? '',
+        privacy: body.privacy === true,
+        website: '',
+      }),
+    })
+
+    const data = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        success: false,
+        error:
+          data.error ??
+          'Ihre Nachricht konnte aktuell nicht versendet werden. Bitte versuchen Sie es erneut.',
+        errors: data.errors,
+      })
+    }
+
+    return res.status(200).json({ success: true })
+  } catch {
+    return res.status(502).json({
+      success: false,
+      error:
+        'Die Verbindung zum Maildienst ist aktuell nicht verfuegbar. Bitte versuchen Sie es erneut.',
+    })
+  }
 }

@@ -530,7 +530,7 @@ function ChoiceGrid({
             )}
           >
             {isSelected ? <SelectionCheckBadge /> : null}
-            {!variant && isValidImageUrl(choice.imageSrc) && onPreview ? (
+            {isValidImageUrl(choice.imageSrc) && onPreview ? (
               <PreviewBadge label={choice.label} onClick={() => onPreview(choice)} />
             ) : null}
             <button
