@@ -19,11 +19,6 @@ const CUSTOMIZER_API_BASE = process.env.CUSTOMIZER_API_URL?.trim() || DEFAULT_CU
 const CUSTOMIZER_REST_API_KEY = process.env.CUSTOMIZER_REST_API_KEY?.trim() ?? ''
 
 /** Sollte mit PRODUCT_PAGE_REVALIDATE_SECONDS / product-page-cache.ts übereinstimmen */
-const DATA_REVALIDATE_SECONDS = Math.max(
-  60,
-  Number.parseInt(process.env.PRODUCT_PAGE_REVALIDATE_SECONDS ?? '300', 10) || 300,
-)
-
 const PLACEHOLDER_IMAGE: ProductImage = {
   src: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iNDAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZTVlN2ViIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjI0IiBmaWxsPSIjOWNhM2FmIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5LZWluIEJpbGQ8L3RleHQ+PC9zdmc+',
   alt: 'Kein Bild verfügbar',
@@ -64,7 +59,7 @@ async function gqlFetch<T>(query: string, variables: Record<string, unknown> = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, variables }),
-    next: { revalidate: DATA_REVALIDATE_SECONDS },
+    cache: 'no-store',
   })
 
   if (!res.ok) {
