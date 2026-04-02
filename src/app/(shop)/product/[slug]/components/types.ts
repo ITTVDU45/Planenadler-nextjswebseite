@@ -16,6 +16,7 @@ export interface ProductTabSpec {
 
 export interface ProductTabContent {
   intro: string
+  html?: string
   bullets?: string[]
   specs?: ProductTabSpec[]
 }

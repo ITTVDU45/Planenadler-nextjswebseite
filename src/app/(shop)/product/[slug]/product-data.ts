@@ -247,6 +247,15 @@ function slugifyTabValue(value: string): string {
     .replace(/(^-|-$)/g, '')
 }
 
+function cleanTabHtml(html: string | null | undefined): string {
+  if (!html) return ''
+
+  return html
+    .replace(/^\s*(<p>(?:&nbsp;|\s|<br\s*\/?>)*<\/p>\s*)+/i, '')
+    .replace(/(<p>(?:&nbsp;|\s|<br\s*\/?>)*<\/p>\s*)+$/i, '')
+    .trim()
+}
+
 function buildTabContentFromPlainText(
   text: string,
   options?: { allowSpecs?: boolean },
@@ -308,32 +317,55 @@ function parseDynamicTabs(
   fallbackDescription: string,
   fallbackProductName: string,
 ): ProductTab[] | null {
+  const sourceHtml = descriptionHtml?.trim()
+  if (!sourceHtml) return null
+
+  const markerPatternHtml =
+    /(?:<p[^>]*>\s*)?\*{3}\s*\/([^/<\n]+?)\/\s*\*{3}(?:\s*<\/p>)?/gi
+  const htmlMatches = Array.from(sourceHtml.matchAll(markerPatternHtml))
+
   const plain = htmlToPlainText(descriptionHtml)
   if (!plain) return null
 
   const markerPattern = /\*{3}\s*\/([^/\n]+?)\/\s*\*{3}/g
   const matches = Array.from(plain.matchAll(markerPattern))
-  if (matches.length === 0) return null
+  if (matches.length === 0 || htmlMatches.length === 0 || matches.length !== htmlMatches.length) return null
 
   const tabs: ProductTab[] = []
   const descriptionIntro = plain.slice(0, matches[0].index ?? 0).trim()
+  const descriptionHtmlSegment = cleanTabHtml(sourceHtml.slice(0, htmlMatches[0].index ?? 0))
 
   tabs.push({
     value: 'beschreibung',
     label: 'Beschreibung',
-    content: buildTabContentFromPlainText(
-      descriptionIntro || fallbackDescription || `${fallbackProductName} - individuell konfigurierbar und in hoechster Qualitaet gefertigt.`,
-      { allowSpecs: false },
-    ),
+    content: descriptionHtmlSegment
+      ? {
+          intro:
+            descriptionIntro ||
+            fallbackDescription ||
+            `${fallbackProductName} - individuell konfigurierbar und in hoechster Qualitaet gefertigt.`,
+          html: descriptionHtmlSegment,
+        }
+      : buildTabContentFromPlainText(
+          descriptionIntro ||
+            fallbackDescription ||
+            `${fallbackProductName} - individuell konfigurierbar und in hoechster Qualitaet gefertigt.`,
+          { allowSpecs: false },
+        ),
   })
 
   for (let index = 0; index < matches.length; index += 1) {
     const current = matches[index]
     const next = matches[index + 1]
+    const currentHtml = htmlMatches[index]
+    const nextHtml = htmlMatches[index + 1]
     const label = current[1].trim()
     const start = (current.index ?? 0) + current[0].length
     const end = next?.index ?? plain.length
     const body = plain.slice(start, end).trim()
+    const htmlStart = (currentHtml.index ?? 0) + currentHtml[0].length
+    const htmlEnd = nextHtml?.index ?? sourceHtml.length
+    const bodyHtml = cleanTabHtml(sourceHtml.slice(htmlStart, htmlEnd))
 
     if (!label || !body) continue
 
@@ -355,7 +387,12 @@ function parseDynamicTabs(
     tabs.push({
       value,
       label,
-      content: buildTabContentFromPlainText(body, { allowSpecs }),
+      content: bodyHtml
+        ? {
+            ...buildTabContentFromPlainText(body, { allowSpecs }),
+            html: bodyHtml,
+          }
+        : buildTabContentFromPlainText(body, { allowSpecs }),
     })
   }
 
@@ -427,7 +464,10 @@ function buildTabs(product: WpProductNode): ProductTab[] {
     tabs.push({
       value: 'beschreibung',
       label: 'Beschreibung',
-      content: { intro: desc },
+      content: {
+        intro: desc,
+        html: cleanTabHtml(product.description),
+      },
     })
   } else {
     tabs.push({
