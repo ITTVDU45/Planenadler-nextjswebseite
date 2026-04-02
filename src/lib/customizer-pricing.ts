@@ -194,6 +194,7 @@ export function buildWordPressPriceFormData(body: PriceCalculationRequestBody): 
       params.set('trailer_height', body.dimensions.trailerHeightCm || '0')
       params.set('front_clouser', body.selections.frontClosure || 'Without front clouser')
       params.set('back_clouser', body.selections.backClosure || 'Without back clouser')
+      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Ã–se')
       params.set('front_clouser_accessories', '')
       params.set('back_clouser_accessories', '')
       for (const extra of body.selections.frontClosureExtras) {

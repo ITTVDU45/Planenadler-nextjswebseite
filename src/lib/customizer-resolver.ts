@@ -372,6 +372,7 @@ function buildStepOrder(
   if (productType === 'trailer') {
     if (config.frontClosures.length || config.frontClosureExtras.length) steps.push('frontClosure')
     if (config.backClosures.length || config.backClosureExtras.length) steps.push('backClosure')
+    if (config.eyelets.length) steps.push('eyelets')
   }
 
   if (config.extras.length) steps.push('extras')
@@ -514,7 +515,7 @@ export function resolveCustomizerConfig(config: CustomizerConfig): ResolvedCusto
       allowsEdges: productType === 'tarpaulins',
       allowsWindow: productType === 'tarpaulins' && hasWindowStep,
       allowsDoor: productType === 'tarpaulins' && hasDoorStep,
-      supportsEyelets: (productType === 'lounge' || productType === 'rectangular') && eyelets.length > 0,
+      supportsEyelets: (productType === 'lounge' || productType === 'rectangular' || productType === 'trailer') && eyelets.length > 0,
       supportsClosureType:
         (productType === 'lounge' || productType === 'rectangular') &&
         closureTypes.length > 0,
