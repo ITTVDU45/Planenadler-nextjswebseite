@@ -219,6 +219,140 @@ function stripHtml(html: string | null | undefined): string {
   return html.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
 }
 
+function htmlToPlainText(html: string | null | undefined): string {
+  if (!html) return ''
+
+  let normalized = html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '- ')
+    .replace(/<[^>]+>/g, '')
+
+  for (const [entity, char] of Object.entries(HTML_ENTITIES)) {
+    normalized = normalized.split(entity).join(char)
+  }
+
+  normalized = normalized
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+
+  return normalized
+}
+
+function slugifyTabValue(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
+
+function buildTabContentFromPlainText(text: string): ProductTab['content'] {
+  const blocks = text
+    .split(/\n{2,}/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+
+  const introParts: string[] = []
+  const bullets: string[] = []
+  const specs: Array<{ label: string; value: string }> = []
+
+  for (const block of blocks) {
+    const lines = block
+      .split('\n')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+
+    if (lines.length === 0) continue
+
+    const bulletLines = lines
+      .filter((line) => /^[-•*]\s+/.test(line))
+      .map((line) => line.replace(/^[-•*]\s+/, '').trim())
+
+    if (bulletLines.length === lines.length) {
+      bullets.push(...bulletLines)
+      continue
+    }
+
+    const specLines = lines
+      .map((line) => {
+        const match = line.match(/^([^:]{2,}):\s+(.+)$/)
+        if (!match) return null
+        return { label: match[1].trim(), value: match[2].trim() }
+      })
+      .filter((entry): entry is { label: string; value: string } => entry !== null)
+
+    if (specLines.length === lines.length) {
+      specs.push(...specLines)
+      continue
+    }
+
+    introParts.push(lines.join('\n'))
+  }
+
+  return {
+    intro: introParts.join('\n\n').trim(),
+    bullets: bullets.length ? bullets : undefined,
+    specs: specs.length ? specs : undefined,
+  }
+}
+
+function parseDynamicTabs(
+  descriptionHtml: string | null | undefined,
+  fallbackDescription: string,
+  fallbackProductName: string,
+): ProductTab[] | null {
+  const plain = htmlToPlainText(descriptionHtml)
+  if (!plain) return null
+
+  const markerPattern = /\*{3}\s*\/([^/\n]+?)\/\s*\*{3}/g
+  const matches = Array.from(plain.matchAll(markerPattern))
+  if (matches.length === 0) return null
+
+  const tabs: ProductTab[] = []
+  const descriptionIntro = plain.slice(0, matches[0].index ?? 0).trim()
+
+  tabs.push({
+    value: 'beschreibung',
+    label: 'Beschreibung',
+    content: buildTabContentFromPlainText(
+      descriptionIntro || fallbackDescription || `${fallbackProductName} - individuell konfigurierbar und in hoechster Qualitaet gefertigt.`,
+    ),
+  })
+
+  for (let index = 0; index < matches.length; index += 1) {
+    const current = matches[index]
+    const next = matches[index + 1]
+    const label = current[1].trim()
+    const start = (current.index ?? 0) + current[0].length
+    const end = next?.index ?? plain.length
+    const body = plain.slice(start, end).trim()
+
+    if (!label || !body) continue
+
+    const baseValue = slugifyTabValue(label) || `tab-${index + 1}`
+    let value = baseValue
+    let suffix = 2
+    while (tabs.some((tab) => tab.value === value)) {
+      value = `${baseValue}-${suffix}`
+      suffix += 1
+    }
+
+    tabs.push({
+      value,
+      label,
+      content: buildTabContentFromPlainText(body),
+    })
+  }
+
+  return tabs.length > 1 ? tabs : null
+}
+
 const HTML_ENTITIES: Record<string, string> = {
   '&nbsp;': ' ',
   '&amp;': '&',
@@ -274,9 +408,12 @@ function buildFeatures(product: WpProductNode): ProductFeature[] {
 }
 
 function buildTabs(product: WpProductNode): ProductTab[] {
+  const desc = stripHtml(product.description)
+  const dynamicTabs = parseDynamicTabs(product.description, desc, product.name)
+  if (dynamicTabs) return dynamicTabs
+
   const tabs: ProductTab[] = []
 
-  const desc = stripHtml(product.description)
   if (desc) {
     tabs.push({
       value: 'beschreibung',

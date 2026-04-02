@@ -31,7 +31,7 @@ export default function ProductTabs({ tabs }: ProductTabsProps) {
             <TabsContent key={tab.value} value={tab.value}>
               <Card>
                 <CardContent className="p-6">
-                  <p className="text-sm leading-7 text-[#1F5CAB]/90">{tab.content.intro}</p>
+                  <p className="whitespace-pre-line text-sm leading-7 text-[#1F5CAB]/90">{tab.content.intro}</p>
 
                   {tab.content.bullets?.length ? (
                     <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-[#1F5CAB]/85">
