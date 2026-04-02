@@ -247,7 +247,11 @@ function slugifyTabValue(value: string): string {
     .replace(/(^-|-$)/g, '')
 }
 
-function buildTabContentFromPlainText(text: string): ProductTab['content'] {
+function buildTabContentFromPlainText(
+  text: string,
+  options?: { allowSpecs?: boolean },
+): ProductTab['content'] {
+  const allowSpecs = options?.allowSpecs === true
   const blocks = text
     .split(/\n{2,}/)
     .map((entry) => entry.trim())
@@ -266,25 +270,27 @@ function buildTabContentFromPlainText(text: string): ProductTab['content'] {
     if (lines.length === 0) continue
 
     const bulletLines = lines
-      .filter((line) => /^[-•*]\s+/.test(line))
-      .map((line) => line.replace(/^[-•*]\s+/, '').trim())
+      .filter((line) => /^[-•*–—]\s+/.test(line) || /^\d+[.)]\s+/.test(line))
+      .map((line) => line.replace(/^[-•*–—]\s+/, '').replace(/^\d+[.)]\s+/, '').trim())
 
     if (bulletLines.length === lines.length) {
       bullets.push(...bulletLines)
       continue
     }
 
-    const specLines = lines
-      .map((line) => {
-        const match = line.match(/^([^:]{2,}):\s+(.+)$/)
-        if (!match) return null
-        return { label: match[1].trim(), value: match[2].trim() }
-      })
-      .filter((entry): entry is { label: string; value: string } => entry !== null)
+    if (allowSpecs) {
+      const specLines = lines
+        .map((line) => {
+          const match = line.match(/^([^:]{2,}):\s+(.+)$/)
+          if (!match) return null
+          return { label: match[1].trim(), value: match[2].trim() }
+        })
+        .filter((entry): entry is { label: string; value: string } => entry !== null)
 
-    if (specLines.length === lines.length) {
-      specs.push(...specLines)
-      continue
+      if (specLines.length === lines.length) {
+        specs.push(...specLines)
+        continue
+      }
     }
 
     introParts.push(lines.join('\n'))
@@ -317,6 +323,7 @@ function parseDynamicTabs(
     label: 'Beschreibung',
     content: buildTabContentFromPlainText(
       descriptionIntro || fallbackDescription || `${fallbackProductName} - individuell konfigurierbar und in hoechster Qualitaet gefertigt.`,
+      { allowSpecs: false },
     ),
   })
 
@@ -330,7 +337,14 @@ function parseDynamicTabs(
 
     if (!label || !body) continue
 
-    const baseValue = slugifyTabValue(label) || `tab-${index + 1}`
+    const normalizedLabel = slugifyTabValue(label)
+    const allowSpecs =
+      normalizedLabel.includes('technische-daten') ||
+      normalizedLabel.includes('technische') ||
+      normalizedLabel.includes('datenblatt') ||
+      normalizedLabel.includes('spezifikation')
+
+    const baseValue = normalizedLabel || `tab-${index + 1}`
     let value = baseValue
     let suffix = 2
     while (tabs.some((tab) => tab.value === value)) {
@@ -341,7 +355,7 @@ function parseDynamicTabs(
     tabs.push({
       value,
       label,
-      content: buildTabContentFromPlainText(body),
+      content: buildTabContentFromPlainText(body, { allowSpecs }),
     })
   }
 
