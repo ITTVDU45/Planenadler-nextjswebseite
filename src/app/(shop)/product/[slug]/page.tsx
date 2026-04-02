@@ -122,27 +122,26 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <ProductFeatures items={product.features} />
 
         <section id="konfigurator" className="py-12 md:py-16" aria-labelledby="configurator-title">
-          <div className="mx-auto grid max-w-7xl gap-8 px-4 lg:grid-cols-[1.1fr_1fr] lg:items-start">
-            <div className="lg:self-stretch">
-              <div className="lg:sticky lg:top-24 lg:flex lg:max-h-[calc(100vh-8rem)] lg:flex-col">
-                <h2 id="configurator-title" className="mb-4 text-2xl font-bold text-[#0F2B52] lg:flex-none">
+          <div className="mx-auto max-w-7xl px-4 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
+            <div className="grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:items-start">
+              <div className="lg:sticky lg:top-0 lg:self-start">
+                <h2 id="configurator-title" className="mb-4 text-2xl font-bold text-[#0F2B52]">
                   Individuelle Konfiguration
                 </h2>
                 <ProductGallery
                   mainImage={product.image}
                   images={product.gallery}
-                  className="lg:min-h-0 lg:flex-1"
                 />
               </div>
+              <ProductConfigurator
+                productId={product.databaseId}
+                productName={product.title}
+                price={product.price}
+                hints={product.configuratorHints}
+                configuratorOptions={product.configuratorOptions}
+                priceEndpoint={product.priceEndpoint}
+              />
             </div>
-            <ProductConfigurator
-              productId={product.databaseId}
-              productName={product.title}
-              price={product.price}
-              hints={product.configuratorHints}
-              configuratorOptions={product.configuratorOptions}
-              priceEndpoint={product.priceEndpoint}
-            />
           </div>
         </section>
 

@@ -27,8 +27,8 @@ export default function ProductGallery({ mainImage, images, className }: Product
   const activeItem = items.find((item) => item.src === activeSrc) ?? items[0] ?? mainImage
 
   return (
-    <div className={cn('space-y-4 lg:flex lg:h-full lg:flex-col lg:space-y-0', className)}>
-      <div className="relative aspect-[5/4] w-full overflow-hidden rounded-2xl bg-[#F7FAFE] lg:min-h-0 lg:flex-1 lg:aspect-auto">
+    <div className={cn('space-y-4', className)}>
+      <div className="relative aspect-[5/4] w-full overflow-hidden rounded-2xl bg-[#F7FAFE]">
         <Image
           src={activeItem.src}
           alt={activeItem.alt}
@@ -39,7 +39,7 @@ export default function ProductGallery({ mainImage, images, className }: Product
         />
       </div>
 
-      <div className="grid grid-cols-5 gap-2 lg:mt-4 lg:flex-none">
+      <div className="grid grid-cols-5 gap-2">
         {items.slice(0, 5).map((item, index) => {
           const isActive = item.src === activeItem.src
           return (
