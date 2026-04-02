@@ -18,9 +18,12 @@ import {
   mapBlogPostToArticle,
 } from '@/features/home/sections/BlogShowcase/mapBlogPostToArticle'
 import type { ProductGroupCard } from '@/features/about/types'
-import { mergeProductGroupsWithApiProducts } from '@/features/about/lib/mergeProductGroupsWithApi'
-import client from '@/config/apollo/ApolloClient'
+import {
+  mergeProductGroupsWithApiProducts,
+  type ApiProductForMerge,
+} from '@/features/about/lib/mergeProductGroupsWithApi'
 import { FETCH_ALL_PRODUCTS_QUERY } from '@/features/product/api/queries'
+import { fetchGraphqlWithFallback } from '@/features/product/api/server-fetch'
 import { getRecentBlogPosts } from '@/features/blog'
 import type { Article, ArticleCategory } from '@/features/home/sections/BlogShowcase/types'
 import { absoluteUrl } from '@/lib/seo'
@@ -108,10 +111,13 @@ export const getStaticProps: GetStaticProps<{
   }
 
   try {
-    const productsResult = await client.query({ query: FETCH_ALL_PRODUCTS_QUERY })
-    const nodes = productsResult.data?.products?.nodes ?? []
+    const productsResult = await fetchGraphqlWithFallback<{
+      products?: { nodes?: ApiProductForMerge[] }
+    }>(FETCH_ALL_PRODUCTS_QUERY)
+    const nodes = productsResult.products?.nodes ?? []
     productGroups = mergeProductGroupsWithApiProducts(nodes)
-  } catch {
+  } catch (error) {
+    console.error('[AboutPage] GraphQL fetch failed', error)
     productGroups = mergeProductGroupsWithApiProducts([])
   }
 

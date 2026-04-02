@@ -3,9 +3,8 @@ import { NextPage, InferGetStaticPropsType, GetStaticProps } from 'next';
 import Categories from '@/shared/components/Category/Categories.component';
 import Layout from '@/shared/components/Layout.component';
 
-import client from '@/config/apollo/ApolloClient';
-
 import { FETCH_ALL_CATEGORIES_QUERY } from '@/features/product/api/queries';
+import { fetchGraphqlWithFallback } from '@/features/product/api/server-fetch';
 
 /**
  * Category page displays all of the categories
@@ -21,13 +20,21 @@ const Kategorier: NextPage = ({
 export default Kategorier;
 
 export const getStaticProps: GetStaticProps = async () => {
-  const result = await client.query({
-    query: FETCH_ALL_CATEGORIES_QUERY,
-  });
+  let categories: { id: string; name: string; slug: string }[] = []
+
+  try {
+    const result = await fetchGraphqlWithFallback<{
+      productCategories?: { nodes?: { id: string; name: string; slug: string }[] }
+    }>(FETCH_ALL_CATEGORIES_QUERY)
+
+    categories = result.productCategories?.nodes ?? []
+  } catch (error) {
+    console.error('[CategoriesPage] GraphQL fetch failed', error)
+  }
 
   return {
     props: {
-      categories: result.data.productCategories.nodes,
+      categories,
     },
     revalidate: 10,
   };

@@ -1,8 +1,9 @@
 import Head from 'next/head';
 import Layout from '@/shared/components/Layout.component';
 import ProductList from '@/features/product/components/ProductList.component';
-import client from '@/config/apollo/ApolloClient';
 import { FETCH_ALL_PRODUCTS_QUERY } from '@/features/product/api/queries';
+import { fetchGraphqlWithFallback } from '@/features/product/api/server-fetch';
+import type { Product } from '@/shared/types/product';
 import type { NextPage, GetStaticProps, InferGetStaticPropsType } from 'next';
 
 const Produkter: NextPage = ({
@@ -43,15 +44,23 @@ const Produkter: NextPage = ({
 export default Produkter;
 
 export const getStaticProps: GetStaticProps = async () => {
-  const { data, loading, networkStatus } = await client.query({
-    query: FETCH_ALL_PRODUCTS_QUERY,
-  });
+  let products: Product[] = []
+
+  try {
+    const data = await fetchGraphqlWithFallback<{
+      products?: { nodes?: Product[] }
+    }>(FETCH_ALL_PRODUCTS_QUERY)
+
+    products = data.products?.nodes ?? []
+  } catch (error) {
+    console.error('[ProductsPage] GraphQL fetch failed', error)
+  }
 
   return {
     props: {
-      products: data.products.nodes,
-      loading,
-      networkStatus,
+      products,
+      loading: false,
+      networkStatus: 7,
     },
     revalidate: 60,
   };
