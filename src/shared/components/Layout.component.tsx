@@ -50,7 +50,7 @@ interface ILayoutProps {
 
 const Layout = ({ children, title, showPageTitle = true }: ILayoutProps) => {
   return (
-    <div className="flex min-h-screen w-full min-w-0 flex-col overflow-x-hidden pt-0 sm:pt-20">
+    <div className="flex min-h-screen w-full min-w-0 flex-col overflow-x-hidden pt-20">
       <Header title={title} />
       <TopBar />
       {!showPageTitle ? (

@@ -18,7 +18,7 @@ const Stickynav = () => {
   return (
     <nav
       id="footer"
-      className="fixed inset-x-0 bottom-0 z-[500] w-full overflow-visible bg-transparent md:hidden"
+      className="fixed inset-x-0 bottom-0 z-[500] w-full overflow-visible bg-transparent lg:hidden"
     >
       <div
         className="relative mt-0 flex w-full items-center justify-between overflow-hidden bg-blue-800 px-6 py-3"

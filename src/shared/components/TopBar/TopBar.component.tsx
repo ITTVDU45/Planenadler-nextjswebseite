@@ -3,8 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/compat/router'
-import { useEffect, useMemo, useState } from 'react'
-import { Sheet, SheetClose, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ContentShell } from '@/shared/components/ContentShell.component'
 import { MiniCartDropdown } from '@/features/cart/components/MiniCartDropdown'
@@ -35,27 +34,17 @@ function getIsActive(asPath: string, href: string) {
 export function TopBar() {
   const router = useRouter()
   const [clientPath, setClientPath] = useState('')
-  const [mounted, setMounted] = useState(false)
   const asPath = router?.asPath ?? clientPath
 
   useEffect(() => {
     setClientPath(window.location.pathname)
   }, [])
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  const allLinks = useMemo(
-    () => [...leftMenu, ...rightMenu, cartLink, configuratorLink],
-    []
-  )
-
   return (
-    <div className="fixed left-0 right-0 top-0 z-50 hidden w-full bg-transparent sm:block">
+    <div className="fixed left-0 right-0 top-0 z-50 w-full bg-transparent">
       <ContentShell className="py-3 sm:py-4">
         <div className="rounded-full border border-[#DBE9F9] bg-white/95 px-3 py-2.5 shadow-[0_16px_40px_rgba(15,43,82,0.12)] backdrop-blur sm:px-4 sm:py-3">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
             <div className="hidden items-center justify-start gap-6 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB] lg:flex">
               {leftMenu.map((item) => {
                 const isActive = getIsActive(asPath, item.href)
@@ -146,82 +135,6 @@ export function TopBar() {
               >
                 {configuratorLink.label}
               </Link>
-            </div>
-
-            <div className="flex items-center justify-end lg:hidden">
-              {mounted ? (
-                <Sheet>
-                  <SheetTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label="Open navigation menu"
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#DBE9F9] text-[#1F5CAB] transition hover:bg-[#DBE9F9]"
-                    >
-                      <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden>
-                        <path
-                          d="M1 1h16M1 6h16M1 11h16"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                    </button>
-                  </SheetTrigger>
-                  <SheetContent side="right" className="bg-white">
-                    <div className="mt-6 flex flex-col gap-4">
-                      <div className="flex items-center justify-center border-b border-[#E7F0FB] pb-4">
-                        <SheetClose asChild>
-                          <Link href="/" aria-label="Planenadler Home" className="flex items-center">
-                            <Image
-                              src="/Planenadlerlogo.png"
-                              alt="Planenadler"
-                              width={170}
-                              height={44}
-                              className="h-11 w-auto object-contain"
-                              priority
-                            />
-                          </Link>
-                        </SheetClose>
-                      </div>
-                      <div className="flex flex-col gap-3">
-                      {allLinks.map((item) => {
-                        const isActive = getIsActive(asPath, item.href)
-                        return (
-                          <SheetClose key={item.href} asChild>
-                            <Link
-                              href={item.href}
-                              className={cn(
-                                'rounded-xl px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB]/80 transition hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
-                                isActive && 'bg-[#DBE9F9] text-[#1F5CAB]',
-                                item.href === configuratorLink.href &&
-                                  'bg-[#1F5CAB] text-white hover:bg-[#0F2B52] hover:text-white'
-                              )}
-                            >
-                              {item.label}
-                            </Link>
-                          </SheetClose>
-                        )
-                      })}
-                      </div>
-                    </div>
-                  </SheetContent>
-                </Sheet>
-              ) : (
-                <button
-                  type="button"
-                  aria-label="Open navigation menu"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#DBE9F9] text-[#1F5CAB] transition hover:bg-[#DBE9F9]"
-                >
-                  <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden>
-                    <path
-                      d="M1 1h16M1 6h16M1 11h16"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </button>
-              )}
             </div>
           </div>
         </div>

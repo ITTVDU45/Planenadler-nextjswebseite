@@ -13,6 +13,38 @@ export const INFO_WITH_IMAGE_RIGHT: InfoWithImageRightContent = {
       src: '/images/AnhängerplaneAdlerplanen.png',
       alt: 'Anhängerplane – maßgefertigt',
     },
+    {
+      src: '/images/image1%20%281%29.png',
+      alt: 'Planenadler – Produktimpression',
+    },
+    {
+      src: '/images/image1.png',
+      alt: 'Hochwertige Plane im Einsatz',
+    },
+    {
+      src: '/images/image2.png',
+      alt: 'Individuelle Abdecklösung',
+    },
+    {
+      src: '/images/Planenadler%202.jpg',
+      alt: 'PVC-Plane – Detailansicht',
+    },
+    {
+      src: '/images/Planenadler%203.jpg',
+      alt: 'Maßgefertigte Plane',
+    },
+    {
+      src: '/images/Planenadler%204.jpg',
+      alt: 'Plane nach Maß',
+    },
+    {
+      src: '/images/Planenadler%207.png',
+      alt: 'Planenadler Qualität',
+    },
+    {
+      src: '/images/Arbeiter%20terrassenplane.png',
+      alt: 'Montage einer Terrassenplane',
+    },
   ],
   buttons: [
     {

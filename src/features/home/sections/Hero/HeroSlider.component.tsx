@@ -88,19 +88,23 @@ export function HeroSlider({ slides = HERO_SLIDES, autoPlayMs }: HeroSliderProps
                 </div>
 
                 <div className="col-span-12 sm:hidden">
-                  <div className="mt-8 flex items-center gap-4">
-                    <HeroSlideCard
-                      image={activeSlide.thumbMain}
-                      variant="active"
-                      ariaLabel={`Slide: ${activeSlide.title}`}
-                    />
-                    {nextSlide ? (
+                  <div className="mt-6 flex w-full items-end justify-end gap-3 overflow-visible pr-1">
+                    <div className="shrink-0">
                       <HeroSlideCard
-                        image={nextSlide.background}
-                        variant="preview"
-                        onClick={() => setActiveIndex(nextIndex)}
-                        ariaLabel={`Zum naechsten Slide: ${nextSlide.title}`}
+                        image={activeSlide.thumbMain}
+                        variant="active"
+                        ariaLabel={`Slide: ${activeSlide.title}`}
                       />
+                    </div>
+                    {nextSlide ? (
+                      <div className="shrink-0">
+                        <HeroSlideCard
+                          image={nextSlide.background}
+                          variant="preview"
+                          onClick={() => setActiveIndex(nextIndex)}
+                          ariaLabel={`Zum naechsten Slide: ${nextSlide.title}`}
+                        />
+                      </div>
                     ) : null}
                   </div>
                 </div>
