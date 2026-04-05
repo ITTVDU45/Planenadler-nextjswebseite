@@ -381,7 +381,7 @@ function NestedAccordion({
 }: {
   title: string
   isOpen: boolean
-  onToggle: () => void
+  onToggle: (anchorEl?: HTMLElement | null) => void
   children: ReactNode
 }) {
   return (
@@ -389,7 +389,7 @@ function NestedAccordion({
       <button
         type="button"
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#F4F9FF]"
-        onClick={onToggle}
+        onClick={(event) => onToggle(event.currentTarget)}
         aria-expanded={isOpen}
       >
         <span className="text-base font-semibold text-[#0F2B52]">{title}</span>
@@ -415,7 +415,7 @@ function StepAccordionItem({
   id: StepId
   title: string
   openStep: StepId | null
-  onToggle: (id: StepId) => void
+  onToggle: (id: StepId, anchorEl?: HTMLElement | null) => void
   showWarning?: boolean
   children: ReactNode
 }) {
@@ -426,7 +426,7 @@ function StepAccordionItem({
       <button
         type="button"
         className="flex w-full items-center justify-between gap-4 bg-gradient-to-r from-[#FFFFFF] to-[#F7FBFF] px-5 py-4 text-left transition hover:from-[#F8FBFF] hover:to-[#F2F8FF]"
-        onClick={() => onToggle(id)}
+        onClick={(event) => onToggle(id, event.currentTarget)}
         aria-expanded={isOpen}
       >
         <span className="text-lg font-semibold text-[#0F2B52]">{title}</span>
@@ -711,13 +711,13 @@ function YesNoToggle({
   onChange,
 }: {
   value: '' | 'yes' | 'no'
-  onChange: (value: '' | 'yes' | 'no') => void
+  onChange: (value: '' | 'yes' | 'no', anchorEl?: HTMLElement | null) => void
 }) {
   return (
     <div className="inline-flex rounded-xl border border-[#CFE0F5] bg-[#F8FBFF] p-1">
       <button
         type="button"
-        onClick={() => onChange('yes')}
+        onClick={(event) => onChange('yes', event.currentTarget)}
         className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
           value === 'yes' ? 'bg-[#1F5CAB] text-white' : 'text-[#1F5CAB] hover:bg-[#EAF3FF]'
         }`}
@@ -726,7 +726,7 @@ function YesNoToggle({
       </button>
       <button
         type="button"
-        onClick={() => onChange('no')}
+        onClick={(event) => onChange('no', event.currentTarget)}
         className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
           value === 'no' ? 'bg-[#1F5CAB] text-white' : 'text-[#1F5CAB] hover:bg-[#EAF3FF]'
         }`}
@@ -990,8 +990,11 @@ export default function ProductConfigurator({
     windowSplitRightDistanceBottomCm: '',
   })
 
-  const preserveConfiguratorScroll = (update: () => void) => {
-    const anchor = configuratorCardRef.current
+  const preserveConfiguratorScroll = (
+    update: () => void,
+    anchorElement?: HTMLElement | null,
+  ) => {
+    const anchor = anchorElement ?? configuratorCardRef.current
     const beforeTop = anchor?.getBoundingClientRect().top ?? null
 
     update()
@@ -1001,25 +1004,27 @@ export default function ProductConfigurator({
     }
 
     window.requestAnimationFrame(() => {
-      const afterTop = anchor?.getBoundingClientRect().top ?? null
-      if (afterTop === null) {
-        return
-      }
+      window.requestAnimationFrame(() => {
+        const afterTop = anchor?.getBoundingClientRect().top ?? null
+        if (afterTop === null) {
+          return
+        }
 
-      const delta = afterTop - beforeTop
-      if (Math.abs(delta) > 1) {
-        window.scrollBy({ top: delta, behavior: 'auto' })
-      }
+        const delta = afterTop - beforeTop
+        if (Math.abs(delta) > 1) {
+          window.scrollBy({ top: delta, behavior: 'auto' })
+        }
+      })
     })
   }
 
-  const toggleStep = (step: StepId) => {
+  const toggleStep = (step: StepId, anchorElement?: HTMLElement | null) => {
     preserveConfiguratorScroll(() => {
       setOpenStep((prev) => (prev === step ? null : step))
-    })
+    }, anchorElement)
   }
 
-  const setWindowEnabled = (value: '' | 'yes' | 'no') => {
+  const setWindowEnabled = (value: '' | 'yes' | 'no', anchorElement?: HTMLElement | null) => {
     preserveConfiguratorScroll(() => {
       setForm((prev) => {
         let next: ConfigFormState = { ...prev, hasWindow: value }
@@ -1032,10 +1037,10 @@ export default function ProductConfigurator({
 
         return next
       })
-    })
+    }, anchorElement)
   }
 
-  const setWindowSplitMode = (value: '' | 'yes' | 'no') => {
+  const setWindowSplitMode = (value: '' | 'yes' | 'no', anchorElement?: HTMLElement | null) => {
     preserveConfiguratorScroll(() => {
       setForm((prev) => {
         let next: ConfigFormState = { ...prev, windowSplit: value }
@@ -1048,7 +1053,7 @@ export default function ProductConfigurator({
 
         return next
       })
-    })
+    }, anchorElement)
   }
 
   const toggleMultiValue = (
