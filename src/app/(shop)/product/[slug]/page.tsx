@@ -45,6 +45,10 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
     alternates: {
       canonical,
     },
+    robots: {
+      index: true,
+      follow: true,
+    },
     openGraph: {
       title,
       description,

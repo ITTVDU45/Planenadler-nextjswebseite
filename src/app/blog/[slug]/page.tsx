@@ -15,16 +15,14 @@ import {
   BlogSidebar,
   RelatedPosts,
 } from '@/features/blog'
-
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://planenadler.de'
+import { SITE_URL, absoluteUrl } from '@/lib/seo'
 
 interface BlogSlugPageProps {
   params: Promise<{ slug: string }>
 }
 
 function buildCanonical(slug: string): string {
-  const base = SITE_URL.replace(/\/$/, '')
-  return `${base}/blog/${slug}`
+  return absoluteUrl(`/blog/${slug}`)
 }
 
 function categoryNameToSlug(name: string): string {
@@ -63,29 +61,38 @@ export async function generateMetadata({ params }: BlogSlugPageProps): Promise<M
   const title = `${post.title} | Planenadler`
   const description = post.excerpt.slice(0, 160).trim()
   const canonical = buildCanonical(slug)
-  const image = post.coverImage?.src
-    ? post.coverImage.src.startsWith('http')
-      ? post.coverImage.src
-      : `${SITE_URL}${post.coverImage.src}`
-    : undefined
+  const coverSrc = post.coverImage?.src
+  const imageUrl = coverSrc
+    ? coverSrc.startsWith('http')
+      ? coverSrc
+      : absoluteUrl(coverSrc)
+    : absoluteUrl('/Planenadlerlogo.png')
+  const imageAlt = post.coverImage?.alt?.trim() || post.title
 
   return {
     title,
     description,
     alternates: { canonical },
+    robots: {
+      index: true,
+      follow: true,
+    },
     openGraph: {
       title,
       description,
       url: canonical,
+      siteName: 'Planenadler',
+      locale: 'de_DE',
       type: 'article',
       publishedTime: post.publishedAt,
       authors: post.author ? [post.author] : undefined,
-      images: image ? [{ url: image, alt: post.coverImage?.alt ?? post.title }] : undefined,
+      images: [{ url: imageUrl, alt: imageAlt }],
     },
     twitter: {
       card: 'summary_large_image',
       title,
       description,
+      images: [imageUrl],
     },
   }
 }
@@ -116,7 +123,7 @@ export default async function BlogSlugPage({ params }: BlogSlugPageProps) {
     image: post.coverImage?.src
       ? post.coverImage.src.startsWith('http')
         ? post.coverImage.src
-        : `${SITE_URL}${post.coverImage.src}`
+        : absoluteUrl(post.coverImage.src)
       : undefined,
     datePublished: post.publishedAt,
     mainEntityOfPage: shareUrl,
@@ -129,7 +136,7 @@ export default async function BlogSlugPage({ params }: BlogSlugPageProps) {
       url: SITE_URL,
       logo: {
         '@type': 'ImageObject',
-        url: `${SITE_URL}/Planenadlerlogo.png`,
+        url: absoluteUrl('/Planenadlerlogo.png'),
       },
     },
   }

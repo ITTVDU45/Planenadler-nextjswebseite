@@ -33,7 +33,7 @@ const Stickynav = () => {
           >
             <Image
               src="/Planenadlerlogoweiß.png"
-              alt="Planenadler"
+              alt="Planenadler Logo"
               width={220}
               height={58}
               className="h-12 w-auto object-contain sm:h-14"
@@ -47,16 +47,16 @@ const Stickynav = () => {
       >
         <ul className="items-center justify-between pt-4 text-base text-gray-700 md:flex md:pt-0">
           <li>
-            <Link href="/produkter">
+            <Link href="/shop">
               <span className="inline-block py-2 pr-4 text-xl font-bold no-underline hover:underline">
-                Produkter
+                Shop
               </span>
             </Link>
           </li>
           <li>
-            <Link href="/kategorier">
+            <Link href="/blog">
               <span className="inline-block py-2 pr-4 text-xl font-bold no-underline hover:underline">
-                Kategorier
+                Blog
               </span>
             </Link>
           </li>

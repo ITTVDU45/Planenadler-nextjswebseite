@@ -71,7 +71,7 @@ export function TopBar() {
               >
                 <Image
                   src="/Planenadlerlogo.png"
-                  alt="Planenadler"
+                  alt="Planenadler Logo"
                   width={180}
                   height={48}
                   className="h-10 w-auto object-contain sm:h-12"

@@ -9,8 +9,9 @@ import { cn } from '@/lib/utils';
 
 const leftMenu = [
   { label: 'Home', href: '/' },
-  { label: 'Über Uns', href: '/ueber-uns' },
+  { label: 'Ueber uns', href: '/ueber-uns' },
   { label: 'Shop', href: '/shop' },
+  { label: 'News & Ratgeber', href: '/blog' },
 ];
 
 const rightMenu = [
@@ -114,7 +115,7 @@ const Hamburger = ({ isOpen, onOpenChange }: HamburgerProps) => {
                   >
                     <Image
                       src="/Planenadlerlogo.png"
-                      alt="Planenadler"
+                      alt="Planenadler Logo"
                       width={160}
                       height={42}
                       className="h-10 w-auto object-contain"

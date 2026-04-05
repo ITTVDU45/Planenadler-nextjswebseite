@@ -1,6 +1,9 @@
 import type { MetadataRoute } from 'next'
 import { getBlogPosts } from '@/features/blog'
+import { paginate } from '@/features/blog/lib/paginate'
 import { SITE_URL, absoluteUrl } from '@/lib/seo'
+
+const BLOG_PER_PAGE = 9
 
 interface ProductSitemapNode {
   slug?: string | null
@@ -112,6 +115,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const [posts, products] = await Promise.all([getBlogPosts(), fetchProductSlugs()])
 
+  const { totalPages: blogTotalPages } = paginate(posts, 1, BLOG_PER_PAGE)
+
+  const blogPaginationRoutes: MetadataRoute.Sitemap =
+    blogTotalPages > 1
+      ? Array.from({ length: blogTotalPages - 1 }, (_, i) => {
+          const pageNum = i + 2
+          return {
+            url: absoluteUrl(`/blog/page/${pageNum}`),
+            lastModified: now,
+            changeFrequency: 'weekly' as const,
+            priority: 0.65,
+          }
+        })
+      : []
+
   const blogRoutes: MetadataRoute.Sitemap = posts.map((post) => ({
     url: absoluteUrl(`/blog/${post.slug}`),
     lastModified: post.publishedAt ? new Date(post.publishedAt) : now,
@@ -128,5 +146,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.85,
     }))
 
-  return [...staticRoutes, ...productRoutes, ...blogRoutes]
+  return [...staticRoutes, ...productRoutes, ...blogRoutes, ...blogPaginationRoutes]
 }

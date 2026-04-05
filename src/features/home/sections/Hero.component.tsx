@@ -21,7 +21,7 @@ const Hero = () => (
     <div className="absolute inset-0 z-0">
       <Image
         src={HERO_IMAGE_SRC}
-        alt="Hero image"
+        alt="Planenadler – PVC-Planen und Abdeckungen"
         fill
         priority
         sizes="(max-width: 768px) 100vw, 50vw"
@@ -37,7 +37,7 @@ const Hero = () => (
           Stripete Zig Zag Pute Sett
         </h1>
         <Button
-          href="/produkter"
+          href="/shop"
           variant="hero"
         >
           Se Utvalget

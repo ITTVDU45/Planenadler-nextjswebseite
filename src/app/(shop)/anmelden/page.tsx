@@ -22,7 +22,7 @@ export default function AnmeldenPage() {
             <div className="w-full max-w-md">
               <Image
                 src="/Planenadlerlogo.png"
-                alt="Planenadler"
+                alt="Planenadler Logo"
                 width={220}
                 height={56}
                 className="mb-6 h-12 w-auto object-contain sm:h-14"
@@ -44,7 +44,7 @@ export default function AnmeldenPage() {
           <section className="relative min-h-[320px] lg:min-h-[760px]">
             <Image
               src="/images/Planenadler1.jpg"
-              alt="Planenadler Impression"
+              alt="Planenadler – Produktion und Qualitaet bei PVC-Planen"
               fill
               priority
               className="object-cover"

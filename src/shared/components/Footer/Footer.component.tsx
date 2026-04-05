@@ -19,8 +19,10 @@ const footerLinks = [
     title: 'Produkt',
     links: [
       { label: 'Home', href: '/' },
-      { label: 'Über uns', href: '/ueber-uns' },
+      { label: 'Ueber uns', href: '/ueber-uns' },
       { label: 'Shop', href: '/shop' },
+      { label: 'News & Ratgeber', href: '/blog' },
+      { label: 'FAQ', href: '/faq' },
       { label: 'Kontakt', href: '/kontakt' },
     ],
   },
@@ -50,7 +52,7 @@ function Footer() {
             <Link href="/" aria-label="Planenadler Home" className="inline-block">
               <Image
                 src="/Planenadlerlogo.png"
-                alt="Planenadler"
+                alt="Planenadler Logo"
                 width={160}
                 height={43}
                 className="h-10 w-auto object-contain sm:h-11"
