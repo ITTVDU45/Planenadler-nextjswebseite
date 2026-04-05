@@ -332,6 +332,19 @@ function resolveDimensionConfig(
       }
     case 'tarpaulins':
     default:
+      if (config && isPoolProductConfig(config)) {
+        return {
+          title: 'Masse waehlen',
+          description: dimensionDescription,
+          imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
+          minimumValue: minValue,
+          fields: [
+            makeField('lengthACm', 'Laenge A (cm)'),
+            makeField('heightRightBCm', 'Hoehe rechts B (cm)'),
+          ],
+        }
+      }
+
       return {
         title: 'Masse waehlen',
         description: dimensionDescription,
