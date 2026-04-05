@@ -17,6 +17,7 @@ const GRAPHQL_URL =
   DEFAULT_GRAPHQL_URL
 const CUSTOMIZER_API_BASE = process.env.CUSTOMIZER_API_URL?.trim() || DEFAULT_CUSTOMIZER_API_BASE
 const CUSTOMIZER_REST_API_KEY = process.env.CUSTOMIZER_REST_API_KEY?.trim() ?? ''
+const PRODUCT_PAGE_REVALIDATE_SECONDS = 60
 
 /** Sollte mit PRODUCT_PAGE_REVALIDATE_SECONDS / product-page-cache.ts übereinstimmen */
 const PLACEHOLDER_IMAGE: ProductImage = {
@@ -59,7 +60,7 @@ async function gqlFetch<T>(query: string, variables: Record<string, unknown> = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, variables }),
-    cache: 'no-store',
+    next: { revalidate: PRODUCT_PAGE_REVALIDATE_SECONDS },
   })
 
   if (!res.ok) {
@@ -565,7 +566,7 @@ async function fetchCustomizerConfig(productId: number): Promise<{
     }
     const res = await fetch(url, {
       headers,
-      cache: 'no-store',
+      next: { revalidate: PRODUCT_PAGE_REVALIDATE_SECONDS },
     })
     if (res.status === 404) {
       return {
