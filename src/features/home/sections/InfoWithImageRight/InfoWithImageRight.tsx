@@ -21,6 +21,7 @@ export function InfoWithImageRight({
   const activeImage = useMemo(() => images[activeIndex], [images, activeIndex])
   const goNext = () => setActiveIndex((index) => (index + 1) % total)
   const goPrev = () => setActiveIndex((index) => (index - 1 + total) % total)
+  const canSlide = total > 1
 
   return (
     <section className="w-full bg-white py-16 lg:py-24">
@@ -49,8 +50,12 @@ export function InfoWithImageRight({
               <div className="relative aspect-[4/3] w-full sm:aspect-[16/9]">
                 <button
                   type="button"
-                  onClick={goPrev}
-                  className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/90 p-3 text-[#1F5CAB] shadow-md transition hover:bg-white"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    goPrev()
+                  }}
+                  disabled={!canSlide}
+                  className="absolute left-3 top-1/2 z-20 flex h-14 w-14 -translate-y-1/2 touch-manipulation items-center justify-center rounded-full bg-white/95 text-2xl font-light text-[#1F5CAB] shadow-lg transition hover:bg-white disabled:cursor-default disabled:opacity-50 sm:left-4 sm:h-16 sm:w-16"
                   aria-label="Vorheriges Bild"
                 >
                   ‹
@@ -59,13 +64,18 @@ export function InfoWithImageRight({
                   src={activeImage.src}
                   alt={activeImage.alt}
                   fill
+                  draggable={false}
                   className="object-cover"
                   sizes="(max-width: 1024px) 100vw, 66vw"
                 />
                 <button
                   type="button"
-                  onClick={goNext}
-                  className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/90 p-3 text-[#1F5CAB] shadow-md transition hover:bg-white"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    goNext()
+                  }}
+                  disabled={!canSlide}
+                  className="absolute right-3 top-1/2 z-20 flex h-14 w-14 -translate-y-1/2 touch-manipulation items-center justify-center rounded-full bg-white/95 text-2xl font-light text-[#1F5CAB] shadow-lg transition hover:bg-white disabled:cursor-default disabled:opacity-50 sm:right-4 sm:h-16 sm:w-16"
                   aria-label="Nächstes Bild"
                 >
                   ›

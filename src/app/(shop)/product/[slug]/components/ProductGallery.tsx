@@ -39,8 +39,8 @@ export default function ProductGallery({ mainImage, images, className }: Product
         />
       </div>
 
-      <div className="grid grid-cols-5 gap-2">
-        {items.slice(0, 5).map((item, index) => {
+      <div className="grid grid-cols-5 gap-2 sm:grid-cols-6 lg:grid-cols-5">
+        {items.map((item, index) => {
           const isActive = item.src === activeItem.src
           return (
             <button
