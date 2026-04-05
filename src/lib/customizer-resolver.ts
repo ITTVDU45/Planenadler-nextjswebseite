@@ -110,6 +110,11 @@ function normalizeProductType(value: string | undefined): SupportedProductType {
   return 'unknown'
 }
 
+function isPoolProductConfig(config: Pick<CustomizerConfig, 'product_title'>): boolean {
+  const title = (config.product_title ?? '').trim().toLowerCase()
+  return title.includes('pool')
+}
+
 function normalizeUnitSelector(value: string | undefined): SupportedUnitSelector {
   const normalized = (value ?? '').trim().toLowerCase()
   if (normalized === 'squaremeter') return 'squaremeter'
@@ -260,6 +265,7 @@ function resolveClosureExtras(entries: CustomizerClosureExtra[] | null, prefix: 
 function resolveDimensionConfig(
   productType: SupportedProductType,
   dimensions: CustomizerDimensions | null,
+  config?: Pick<CustomizerConfig, 'product_title'>,
 ): ResolvedDimensionConfig {
   const minValue = toNumber(dimensions?.minimum_value) ?? 1
   const dimensionDescription = isNonEmptyString(dimensions?.dimension_description)
@@ -300,6 +306,19 @@ function resolveDimensionConfig(
         ],
       }
     case 'rectangular':
+      if (config && isPoolProductConfig(config)) {
+        return {
+          title: 'Masse waehlen',
+          description: dimensionDescription,
+          imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
+          minimumValue: minValue,
+          fields: [
+            makeField('rectangularLengthCm', 'Laenge (cm)'),
+            makeField('rectangularWidthCm', 'Breite (cm)'),
+          ],
+        }
+      }
+
       return {
         title: 'Masse waehlen',
         description: dimensionDescription,
@@ -457,7 +476,7 @@ export function resolveCustomizerConfig(config: CustomizerConfig): ResolvedCusto
     issues.push('Die Berechnungseinheit aus WordPress ist unvollstaendig.')
   }
 
-  const dimensions = resolveDimensionConfig(productType, config.dimentions)
+  const dimensions = resolveDimensionConfig(productType, config.dimentions, config)
   const sizeFields = dimensions.fields.filter((field) => field.required).map((field) => field.key)
   const hasWindowStep = hasWindowConfig(config.window_data)
   const hasDoorStep = hasDoorConfig(config.door_data)
