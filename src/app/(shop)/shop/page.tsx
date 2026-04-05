@@ -8,6 +8,7 @@ import {
   buildFaqSchema,
   SHOP_FAQ_ITEMS,
 } from '@/features/shop'
+import { fetchShopCategoriesWithProductImages } from '@/features/shop/lib/fetchShopCategoriesWithProductImages'
 import { BlogShowcase } from '@/features/home'
 import { mapBlogPostToArticle, getCategoriesFromBlogPosts } from '@/features/home/sections/BlogShowcase/mapBlogPostToArticle'
 import { FAQSection } from '@/features/about'
@@ -27,6 +28,7 @@ export default async function ShopPage() {
     { name: 'Startseite', path: '/' },
     { name: 'Shop', path: '/shop' },
   ])
+  const shopCategories = await fetchShopCategoriesWithProductImages()
   const recentPosts = await getRecentBlogPosts(4)
   const blogArticles = recentPosts.map(mapBlogPostToArticle)
   const blogCategories = getCategoriesFromBlogPosts(recentPosts)
@@ -44,7 +46,7 @@ export default async function ShopPage() {
       <main className="min-h-screen bg-white pb-16 sm:pt-20">
         <TopBar />
         <ShopHeroSection />
-        <ShopCategoryGridSection />
+        <ShopCategoryGridSection categories={shopCategories} />
         <BlogShowcase articles={blogArticles} categories={blogCategories} />
         <FAQSection items={SHOP_FAQ_ITEMS} />
         <Footer />
