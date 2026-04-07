@@ -573,6 +573,7 @@ src/
     seo-schema.ts
     seo.ts
     sync.ts
+    tarpaulin-opening-rules.ts
     utils.ts
     woo-session-cookie.ts
   pages/
@@ -15286,6 +15287,192 @@ export async function syncPendingActions() {
 }
 ````
 
+## File: src/lib/tarpaulin-opening-rules.ts
+````typescript
+import type { ConfigFormState, ResolvedCustomizerConfig } from '@/lib/customizer-runtime'
+export const TARPAULIN_OPENING_MARGIN_CM = 10
+export const TARPAULIN_MAX_WINDOW_HEIGHT_CM = 130
+export const TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM = 10
+function parseCm(value: string | undefined | null): number | null {
+  if (value === undefined || value === null) return null
+  const trimmed = String(value).trim()
+  if (!trimmed) return null
+  const parsed = Number(trimmed.replace(',', '.'))
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+}
+/** Terrassen-Tarp (3 Massfelder A/B/C), kein 2-Feld-Pool-Tarp. */
+export function isTerraceTarpaulinLayout(resolvedConfig: ResolvedCustomizerConfig): boolean {
+  if (resolvedConfig.productType !== 'tarpaulins') return false
+  return resolvedConfig.dimensions.fields.some((f) => f.key === 'heightLeftCCm')
+}
+function usableHeightCm(form: ConfigFormState, hasLeftHeight: boolean): number | null {
+  const b = parseCm(form.heightRightBCm)
+  if (b === null || b <= 0) return null
+  if (!hasLeftHeight) return b
+  const c = parseCm(form.heightLeftCCm)
+  if (c === null || c <= 0) return null
+  return Math.min(b, c)
+}
+/** Aufsteigend sortiert; benachbarte Intervalle mindestens gapCm auseinander. */
+function horizontalOpeningsSeparated(
+  intervals: Array<[number, number]>,
+  gapCm: number,
+): boolean {
+  const valid = intervals.filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b >= a)
+  if (valid.length <= 1) return true
+  const sorted = [...valid].sort((x, y) => x[0] - y[0])
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const end = sorted[i][1]
+    const nextStart = sorted[i + 1][0]
+    if (end + gapCm > nextStart) return false
+  }
+  return true
+}
+export function getTarpaulinOpeningValidationIssues(
+  resolvedConfig: ResolvedCustomizerConfig,
+  form: ConfigFormState,
+): string[] {
+  if (!isTerraceTarpaulinLayout(resolvedConfig)) return []
+  const lengthA = parseCm(form.lengthACm)
+  const hasLeftHeight = resolvedConfig.dimensions.fields.some((f) => f.key === 'heightLeftCCm')
+  const usableH = usableHeightCm(form, hasLeftHeight)
+  const issues: string[] = []
+  const needsWindow = form.hasWindow === 'yes' && resolvedConfig.steps.includes('window')
+  const needsDoor = form.hasDoor === 'yes' && resolvedConfig.steps.includes('door')
+  if (!needsWindow && !needsDoor) return []
+  if (lengthA === null || lengthA <= 0) {
+    issues.push('Bitte zuerst eine gueltige Laenge A (cm) eintragen, damit Fenster- und Tuer-Masse geprueft werden koennen.')
+    return issues
+  }
+  if (usableH === null || usableH <= 0) {
+    issues.push('Bitte zuerst gueltige Hoehen B/C (cm) eintragen, damit Fenster- und Tuer-Masse geprueft werden koennen.')
+    return issues
+  }
+  const m = TARPAULIN_OPENING_MARGIN_CM
+  const gap = TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM
+  const maxWinH = TARPAULIN_MAX_WINDOW_HEIGHT_CM
+  type HInterval = { left: number; right: number }
+  const windowIntervals: HInterval[] = []
+  if (needsWindow && form.windowSplit !== 'yes') {
+    const side = parseCm(form.windowDistanceSideCm)
+    const bottom = parseCm(form.windowDistanceBottomCm)
+    const w = parseCm(form.windowWidthCm)
+    const h = parseCm(form.windowHeightCm)
+    if (side !== null && bottom !== null && w !== null && h !== null) {
+      if (side < m) {
+        issues.push(`Abstand Fenster zum Seitenrand (c) muss mindestens ${m} cm betragen.`)
+      }
+      if (bottom < m) {
+        issues.push(`Abstand Fenster zur unteren Seite (d) muss mindestens ${m} cm betragen.`)
+      }
+      if (h > maxWinH) {
+        issues.push(`Fensterhoehe (b) darf hoechstens ${maxWinH} cm betragen.`)
+      }
+      if (w > lengthA - 2 * m) {
+        issues.push(`Fensterbreite (a) darf hoechstens ${lengthA - 2 * m} cm betragen (je ${m} cm Rand links/rechts).`)
+      }
+      if (side + w > lengthA - m) {
+        issues.push(
+          'Fenster ragt ueber die rechte Kante: Abstand (c) plus Breite (a) muss so gewaehlt sein, dass rechts mindestens 10 cm Rand bleiben.',
+        )
+      }
+      if (bottom + h > usableH - m) {
+        issues.push(
+          'Fenster ragt nach oben: Abstand unten (d) plus Hoehe (b) muss so gewaehlt sein, dass oben mindestens 10 cm Rand bleiben.',
+        )
+      }
+      windowIntervals.push({ left: side, right: side + w })
+    }
+  }
+  if (needsWindow && form.windowSplit === 'yes') {
+    const leftM = parseCm(form.windowSplitLeftDistanceLeftCm)
+    const rightM = parseCm(form.windowSplitRightDistanceRightCm)
+    const w1 = parseCm(form.windowSplitLeftWidthCm)
+    const w2 = parseCm(form.windowSplitRightWidthCm)
+    const h1 = parseCm(form.windowSplitLeftHeightCm)
+    const h2 = parseCm(form.windowSplitRightHeightCm)
+    const b1 = parseCm(form.windowSplitLeftDistanceBottomCm)
+    const b2 = parseCm(form.windowSplitRightDistanceBottomCm)
+    if (
+      leftM !== null &&
+      rightM !== null &&
+      w1 !== null &&
+      w2 !== null &&
+      h1 !== null &&
+      h2 !== null &&
+      b1 !== null &&
+      b2 !== null
+    ) {
+      if (leftM < m) {
+        issues.push(`Abstand linkes Fenster zum linken Rand muss mindestens ${m} cm betragen.`)
+      }
+      if (rightM < m) {
+        issues.push(`Abstand rechtes Fenster zum rechten Rand muss mindestens ${m} cm betragen.`)
+      }
+      if (w1 <= 0 || w2 <= 0) {
+        issues.push('Fensterbreiten links und rechts muessen groesser als 0 sein.')
+      }
+      if (leftM + w1 + gap + w2 + rightM > lengthA) {
+        issues.push(
+          `Summe aus linkem Rand, beiden Fensterbreiten, ${gap} cm Zwischenraum und rechtem Rand darf die Laenge A (${lengthA} cm) nicht ueberschreiten.`,
+        )
+      }
+      if (h1 > maxWinH) issues.push(`Fensterhoehe links darf hoechstens ${maxWinH} cm betragen.`)
+      if (h2 > maxWinH) issues.push(`Fensterhoehe rechts darf hoechstens ${maxWinH} cm betragen.`)
+      if (b1 < m) {
+        issues.push(`Abstand linkes Fenster zum unteren Rand muss mindestens ${m} cm betragen.`)
+      }
+      if (b2 < m) {
+        issues.push(`Abstand rechtes Fenster zum unteren Rand muss mindestens ${m} cm betragen.`)
+      }
+      if (b1 + h1 > usableH - m) {
+        issues.push('Linkes Fenster: Abstand unten plus Hoehe verletzt den oberen Mindestrand (10 cm).')
+      }
+      if (b2 + h2 > usableH - m) {
+        issues.push('Rechtes Fenster: Abstand unten plus Hoehe verletzt den oberen Mindestrand (10 cm).')
+      }
+      const x1 = leftM
+      const x2 = leftM + w1 + gap
+      windowIntervals.push({ left: x1, right: x1 + w1 }, { left: x2, right: x2 + w2 })
+    }
+  }
+  let doorInterval: HInterval | null = null
+  if (needsDoor) {
+    const dLeft = parseCm(form.doorDistanceLeftCm)
+    const dw = parseCm(form.doorWidthCm)
+    const dh = parseCm(form.doorHeightCm)
+    if (dLeft !== null && dw !== null && dh !== null) {
+      if (dLeft < m) {
+        issues.push(`Abstand der Tuer zur linken Seite muss mindestens ${m} cm betragen.`)
+      }
+      if (dLeft + dw > lengthA - m) {
+        issues.push(
+          'Tuer ragt ueber die rechte Kante: Abstand plus Tuerbreite muss so sein, dass rechts mindestens 10 cm Rand bleiben.',
+        )
+      }
+      if (dh > usableH - m) {
+        issues.push(
+          'Tuerhoehe ist zu gross fuer die gewaehlte Planenhoehe (unterer Rand 10 cm, oberer Mindestrand 10 cm).',
+        )
+      }
+      doorInterval = { left: dLeft, right: dLeft + dw }
+    }
+  }
+  if (windowIntervals.length > 0 && doorInterval) {
+    const pairs: Array<[number, number]> = [
+      ...windowIntervals.map((i) => [i.left, i.right] as [number, number]),
+      [doorInterval.left, doorInterval.right],
+    ]
+    if (!horizontalOpeningsSeparated(pairs, gap)) {
+      issues.push(
+        `Fenster und Tuer duerfen sich nicht ueberlappen; zwischen den Oeffnungen muessen mindestens ${gap} cm frei bleiben.`,
+      )
+    }
+  }
+  return issues
+}
+````
+
 ## File: src/lib/utils.ts
 ````typescript
 export function cn(
@@ -23886,6 +24073,105 @@ module.exports = {
 };
 ````
 
+## File: .github/workflows/react-doctor.yml
+````yaml
+name: React Doctor
+on:
+  pull_request:
+    branches: [main, master]
+jobs:
+  react-doctor:
+    name: React Health Check
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm ci
+      - name: Run React Doctor
+        id: doctor
+        run: |
+          # Run react-doctor via local devDependency (avoids npx isolation issues with typescript)
+          npm run doctor 2>&1 | tee /tmp/react-doctor-raw.txt
+          # Strip ANSI escape codes for clean output
+          sed 's/\x1b\[[0-9;]*m//g; s/\x1b\[[0-9;]*[A-Za-z]//g' /tmp/react-doctor-raw.txt | tr -d '\r' > /tmp/react-doctor-output.txt
+          # Extract score from the cleaned output (matches "96 / 100" pattern)
+          SCORE=$(grep -oP '\d+ / 100' /tmp/react-doctor-output.txt | head -1 || echo "unknown")
+          echo "score=$SCORE" >> "$GITHUB_OUTPUT"
+          # Extract just the numeric score for threshold check
+          SCORE_NUM=$(echo "$SCORE" | grep -oP '^\d+' || echo "0")
+          echo "score_num=$SCORE_NUM" >> "$GITHUB_OUTPUT"
+          echo "Detected score: $SCORE (numeric: $SCORE_NUM)"
+      - name: Post PR comment with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('/tmp/react-doctor-output.txt', 'utf8');
+            const score = '${{ steps.doctor.outputs.score }}';
+            const body = [
+              `## 🩺 React Doctor — Score: ${score}`,
+              '',
+              '<details>',
+              '<summary>Full diagnostics</summary>',
+              '',
+              '```',
+              output.trim(),
+              '```',
+              '',
+              '</details>',
+              '',
+              '> Powered by [react-doctor](https://github.com/millionco/react-doctor)',
+            ].join('\n');
+            // Find existing comment to update instead of creating duplicates
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(
+              (c) => c.body?.includes('🩺 React Doctor')
+            );
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## 🩺 React Doctor — Score: ${{ steps.doctor.outputs.score }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/react-doctor-output.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Check score threshold
+        run: |
+          SCORE="${{ steps.doctor.outputs.score_num }}"
+          SCORE="${SCORE:-0}"
+          THRESHOLD=80
+          echo "React Doctor score: $SCORE (threshold: $THRESHOLD)"
+          if [ "$SCORE" -lt "$THRESHOLD" ]; then
+            echo "::error::React Doctor score $SCORE is below threshold $THRESHOLD"
+            exit 1
+          fi
+````
+
 ## File: src/app/(shop)/anmelden/page.tsx
 ````typescript
 import type { Metadata } from 'next'
@@ -27216,622 +27502,6 @@ export function ProductCard({ product }: ProductCardProps) {
 }
 ````
 
-## File: src/lib/customizer-pricing.ts
-````typescript
-import type {
-  ConfigFormState,
-  ResolvedChoice,
-  ResolvedCustomizerConfig,
-  SupportedProductType,
-  SupportedUnitSelector,
-} from '@/lib/customizer-runtime'
-export interface PriceCalculationRequestBody {
-  productId: string | number
-  productType: SupportedProductType
-  unitSelector: SupportedUnitSelector
-  material: string
-  color?: string
-  dimensions: Partial<Record<
-    | 'lengthACm'
-    | 'heightRightBCm'
-    | 'heightLeftCCm'
-    | 'trailerWidthCm'
-    | 'trailerLengthCm'
-    | 'trailerHeightCm'
-    | 'rectangularLengthCm'
-    | 'rectangularWidthCm'
-    | 'rectangularHeightCm'
-    | 'sideACm'
-    | 'sideBCm'
-    | 'sideCCm'
-    | 'sideFCm'
-    | 'sideHCm',
-    string
-  >>
-  selections: {
-    topSide?: string
-    leftSide?: string
-    rightSide?: string
-    bottomSide?: string
-    eyeletEdge?: string
-    closureType?: string
-    frontClosure?: string
-    backClosure?: string
-    doorExtras: string[]
-    extrasSelected: string[]
-    frontClosureExtras: string[]
-    backClosureExtras: string[]
-  }
-  toggles: {
-    hasWindow: boolean
-    hasDoor: boolean
-    hasExtras: boolean
-    windowSplit: boolean
-  }
-  window: {
-    widthCm?: string
-    heightCm?: string
-    distanceSideCm?: string
-    distanceBottomCm?: string
-    splitLeftWidthCm?: string
-    splitRightWidthCm?: string
-  }
-  door: {
-    widthCm?: string
-    heightCm?: string
-    distanceLeftCm?: string
-  }
-}
-export interface PriceCalculationResult {
-  total: number
-  formatted: string
-  price: string
-}
-export interface ConfigurationSummaryEntry {
-  label: string
-  value: string
-}
-export interface ConfiguredCartPayload {
-  extraData: Record<string, string>
-  summary: ConfigurationSummaryEntry[]
-}
-function resolveLabels(ids: string[], choices: ResolvedChoice[]): string[] {
-  const choiceMap = new Map(choices.map((choice) => [choice.id, choice.label]))
-  return ids
-    .map((id) => choiceMap.get(id) ?? id)
-    .filter((label) => typeof label === 'string' && label.trim().length > 0)
-}
-function selectionKey(prefix: string, label: string): string {
-  return `${prefix}${label.replace(/\s/g, '_')}`
-}
-function readNumericPrice(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim().length > 0) {
-    const normalized = value.replace(',', '.').replace(/[^\d.-]/g, '')
-    const parsed = Number.parseFloat(normalized)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
-}
-export function buildPriceCalculationRequest(
-  productId: number | string,
-  form: ConfigFormState,
-  resolvedConfig: ResolvedCustomizerConfig,
-): PriceCalculationRequestBody {
-  return {
-    productId,
-    productType: resolvedConfig.productType,
-    unitSelector: resolvedConfig.unitSelector,
-    material: form.material,
-    color: form.color || undefined,
-    dimensions: {
-      lengthACm: form.lengthACm || undefined,
-      heightRightBCm: form.heightRightBCm || undefined,
-      heightLeftCCm: form.heightLeftCCm || undefined,
-      trailerWidthCm: form.trailerWidthCm || undefined,
-      trailerLengthCm: form.trailerLengthCm || undefined,
-      trailerHeightCm: form.trailerHeightCm || undefined,
-      rectangularLengthCm: form.rectangularLengthCm || undefined,
-      rectangularWidthCm: form.rectangularWidthCm || undefined,
-      rectangularHeightCm: form.rectangularHeightCm || undefined,
-      sideACm: form.sideACm || undefined,
-      sideBCm: form.sideBCm || undefined,
-      sideCCm: form.sideCCm || undefined,
-      sideFCm: form.sideFCm || undefined,
-      sideHCm: form.sideHCm || undefined,
-    },
-    selections: {
-      topSide: form.topSide || undefined,
-      leftSide: form.leftSide || undefined,
-      rightSide: form.rightSide || undefined,
-      bottomSide: form.bottomSide || undefined,
-      eyeletEdge: form.eyeletEdge || undefined,
-      closureType: form.closureType || undefined,
-      frontClosure: form.frontClosure || undefined,
-      backClosure: form.backClosure || undefined,
-      doorExtras: resolveLabels(form.doorExtras, resolvedConfig.options.doorExtras),
-      extrasSelected: resolveLabels(form.extrasSelected, resolvedConfig.options.extras),
-      frontClosureExtras: resolveLabels(form.frontClosureExtras, resolvedConfig.options.frontClosureExtras),
-      backClosureExtras: resolveLabels(form.backClosureExtras, resolvedConfig.options.backClosureExtras),
-    },
-    toggles: {
-      hasWindow: form.hasWindow === 'yes',
-      hasDoor: form.hasDoor === 'yes',
-      hasExtras: form.hasExtras === 'yes',
-      windowSplit: form.windowSplit === 'yes',
-    },
-    window: {
-      widthCm: form.windowWidthCm || undefined,
-      heightCm: form.windowHeightCm || undefined,
-      distanceSideCm: form.windowDistanceSideCm || undefined,
-      distanceBottomCm: form.windowDistanceBottomCm || undefined,
-      splitLeftWidthCm: form.windowSplitLeftWidthCm || undefined,
-      splitRightWidthCm: form.windowSplitRightWidthCm || undefined,
-    },
-    door: {
-      widthCm: form.doorWidthCm || undefined,
-      heightCm: form.doorHeightCm || undefined,
-      distanceLeftCm: form.doorDistanceLeftCm || undefined,
-    },
-  }
-}
-export function buildWordPressPriceFormData(body: PriceCalculationRequestBody): URLSearchParams {
-  const params = new URLSearchParams()
-  params.set('action', 'prices_update_request')
-  params.set('product_id', String(body.productId))
-  params.set('fabric', body.material || '')
-  switch (body.productType) {
-    case 'lounge':
-      params.set('side_a', body.dimensions.sideACm || '0')
-      params.set('side_b', body.dimensions.sideBCm || '0')
-      params.set('side_c', body.dimensions.sideCCm || '0')
-      params.set('side_f', body.dimensions.sideFCm || '0')
-      params.set('side_h', body.dimensions.sideHCm || '0')
-      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Öse')
-      params.set('closureType', body.selections.closureType || 'Ohne Verschluss')
-      break
-    case 'trailer':
-      params.set('trailer_width', body.dimensions.trailerWidthCm || '0')
-      params.set('trailer_length', body.dimensions.trailerLengthCm || '0')
-      params.set('trailer_height', body.dimensions.trailerHeightCm || '0')
-      params.set('front_clouser', body.selections.frontClosure || 'Without front clouser')
-      params.set('back_clouser', body.selections.backClosure || 'Without back clouser')
-      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Ã–se')
-      params.set('front_clouser_accessories', '')
-      params.set('back_clouser_accessories', '')
-      for (const extra of body.selections.frontClosureExtras) {
-        params.set(selectionKey('Zubehör_für_den_Frontverschluss_', extra), extra)
-      }
-      for (const extra of body.selections.backClosureExtras) {
-        params.set(selectionKey('Zubehör_für_den_Rückenverschluss_', extra), extra)
-      }
-      break
-    case 'rectangular':
-      params.set('rectangular_length', body.dimensions.rectangularLengthCm || '0')
-      params.set('rectangular_width', body.dimensions.rectangularWidthCm || '0')
-      params.set('rectangular_height', body.dimensions.rectangularHeightCm || '0')
-      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Öse')
-      params.set('closureType', body.selections.closureType || 'Ohne Verschluss')
-      break
-    case 'tarpaulins':
-    default:
-      params.set('width', body.dimensions.lengthACm || '0')
-      params.set('height_right', body.dimensions.heightRightBCm || '0')
-      params.set('height_left', body.dimensions.heightLeftCCm || body.dimensions.heightRightBCm || '0')
-      params.set('has_top_edge', body.selections.topSide || 'Ohne Extras')
-      params.set('has_edge_left_0', body.selections.leftSide || 'Ohne Extras')
-      params.set('has_edge_right_0', body.selections.rightSide || 'Ohne Extras')
-      params.set('has_edge_bottom_0', body.selections.bottomSide || 'Ohne Extras')
-      if (body.toggles.hasWindow) {
-        if (body.window.widthCm) params.set('window_width', body.window.widthCm)
-        if (body.window.heightCm) params.set('window_height', body.window.heightCm)
-        if (body.toggles.windowSplit) {
-          let splitCount = 0
-          if (body.window.splitLeftWidthCm) splitCount += 1
-          if (body.window.splitRightWidthCm) splitCount += 1
-          if (splitCount > 0) params.set('window_split_num', String(splitCount))
-        }
-      }
-      if (body.toggles.hasDoor) {
-        if (body.door.widthCm) params.set('door_width', body.door.widthCm)
-        if (body.door.heightCm) params.set('door_height', body.door.heightCm)
-        for (const extra of body.selections.doorExtras) {
-          params.set(selectionKey('Door_Extra_', extra), extra)
-        }
-      }
-      break
-  }
-  if (body.toggles.hasExtras) {
-    for (const extra of body.selections.extrasSelected) {
-      params.set(selectionKey('Extra_', extra), extra)
-    }
-  }
-  return params
-}
-function addSummaryEntry(
-  entries: ConfigurationSummaryEntry[],
-  label: string,
-  value: string | string[] | undefined,
-) {
-  if (Array.isArray(value)) {
-    const normalized = value.map((entry) => entry.trim()).filter((entry) => entry.length > 0)
-    if (normalized.length === 0) return
-    entries.push({ label, value: normalized.join(', ') })
-    return
-  }
-  if (!value) return
-  const normalized = value.trim()
-  if (!normalized) return
-  entries.push({ label, value: normalized })
-}
-export function buildConfigurationSummary(
-  body: PriceCalculationRequestBody,
-  sketchFileName?: string,
-): ConfigurationSummaryEntry[] {
-  const entries: ConfigurationSummaryEntry[] = []
-  addSummaryEntry(entries, 'Material', body.material)
-  addSummaryEntry(entries, 'Farbe', body.color)
-  switch (body.productType) {
-    case 'lounge':
-      addSummaryEntry(entries, 'Seite A', body.dimensions.sideACm ? `${body.dimensions.sideACm} cm` : undefined)
-      addSummaryEntry(entries, 'Seite B', body.dimensions.sideBCm ? `${body.dimensions.sideBCm} cm` : undefined)
-      addSummaryEntry(entries, 'Seite C', body.dimensions.sideCCm ? `${body.dimensions.sideCCm} cm` : undefined)
-      addSummaryEntry(entries, 'Seite F', body.dimensions.sideFCm ? `${body.dimensions.sideFCm} cm` : undefined)
-      addSummaryEntry(entries, 'Hoehe H', body.dimensions.sideHCm ? `${body.dimensions.sideHCm} cm` : undefined)
-      break
-    case 'trailer':
-      addSummaryEntry(entries, 'Anhaengerbreite A', body.dimensions.trailerWidthCm ? `${body.dimensions.trailerWidthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Anhaengerlaenge B', body.dimensions.trailerLengthCm ? `${body.dimensions.trailerLengthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Planenhoehe C', body.dimensions.trailerHeightCm ? `${body.dimensions.trailerHeightCm} cm` : undefined)
-      break
-    case 'rectangular':
-      addSummaryEntry(entries, 'Laenge A', body.dimensions.rectangularLengthCm ? `${body.dimensions.rectangularLengthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Breite B', body.dimensions.rectangularWidthCm ? `${body.dimensions.rectangularWidthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Hoehe C', body.dimensions.rectangularHeightCm ? `${body.dimensions.rectangularHeightCm} cm` : undefined)
-      break
-    case 'tarpaulins':
-    default:
-      addSummaryEntry(entries, 'Laenge A', body.dimensions.lengthACm ? `${body.dimensions.lengthACm} cm` : undefined)
-      addSummaryEntry(entries, 'Hoehe rechts B', body.dimensions.heightRightBCm ? `${body.dimensions.heightRightBCm} cm` : undefined)
-      addSummaryEntry(entries, 'Hoehe links C', body.dimensions.heightLeftCCm ? `${body.dimensions.heightLeftCCm} cm` : undefined)
-      break
-  }
-  addSummaryEntry(entries, 'Obere Seite', body.selections.topSide)
-  addSummaryEntry(entries, 'Linke Seite', body.selections.leftSide)
-  addSummaryEntry(entries, 'Rechte Seite', body.selections.rightSide)
-  addSummaryEntry(entries, 'Untere Seite', body.selections.bottomSide)
-  addSummaryEntry(entries, 'Oesen', body.selections.eyeletEdge)
-  addSummaryEntry(entries, 'Verschlussart', body.selections.closureType)
-  addSummaryEntry(entries, 'Frontverschluss', body.selections.frontClosure)
-  addSummaryEntry(entries, 'Rueckenverschluss', body.selections.backClosure)
-  if (body.toggles.hasWindow) {
-    addSummaryEntry(entries, 'Fenster', 'Ja')
-    addSummaryEntry(entries, 'Fensterbreite', body.window.widthCm ? `${body.window.widthCm} cm` : undefined)
-    addSummaryEntry(entries, 'Fensterhoehe', body.window.heightCm ? `${body.window.heightCm} cm` : undefined)
-  }
-  if (body.toggles.hasDoor) {
-    addSummaryEntry(entries, 'Tuer', 'Ja')
-    addSummaryEntry(entries, 'Tuerbreite', body.door.widthCm ? `${body.door.widthCm} cm` : undefined)
-    addSummaryEntry(entries, 'Tuerhoehe', body.door.heightCm ? `${body.door.heightCm} cm` : undefined)
-    addSummaryEntry(entries, 'Tuerabstand links', body.door.distanceLeftCm ? `${body.door.distanceLeftCm} cm` : undefined)
-    addSummaryEntry(entries, 'Tuer-Extras', body.selections.doorExtras)
-  }
-  if (body.toggles.hasExtras) {
-    addSummaryEntry(entries, 'Extras', body.selections.extrasSelected)
-  }
-  addSummaryEntry(entries, 'Frontverschluss-Zubehoer', body.selections.frontClosureExtras)
-  addSummaryEntry(entries, 'Rueckenverschluss-Zubehoer', body.selections.backClosureExtras)
-  addSummaryEntry(entries, 'Skizze', sketchFileName)
-  return entries
-}
-export function buildConfiguredCartPayload(
-  body: PriceCalculationRequestBody,
-  uniqueKey: string,
-  sketchFileName?: string,
-): ConfiguredCartPayload {
-  const extraData = Object.fromEntries(buildWordPressPriceFormData(body).entries())
-  delete extraData.action
-  delete extraData.product_id
-  extraData.custom_option = 'configured'
-  extraData.unique_key = uniqueKey
-  extraData.planenadler_configuration_id = uniqueKey
-  const summary = buildConfigurationSummary(body, sketchFileName)
-  extraData.planenadler_configuration_summary = JSON.stringify(summary)
-  if (sketchFileName?.trim()) {
-    extraData.planenadler_sketch_file_name = sketchFileName.trim()
-  }
-  return {
-    extraData,
-    summary,
-  }
-}
-export function parsePriceCalculationResponse(rawPrice: unknown): PriceCalculationResult {
-  const total =
-    readNumericPrice(rawPrice) ??
-    (typeof rawPrice === 'object' && rawPrice !== null
-      ? readNumericPrice(
-          'price' in rawPrice
-            ? (rawPrice as { price?: unknown }).price
-            : 'total' in rawPrice
-              ? (rawPrice as { total?: unknown }).total
-              : 'data' in rawPrice
-                ? (rawPrice as { data?: unknown }).data
-                : undefined,
-        )
-      : null)
-  if (total === null || !Number.isFinite(total)) {
-    throw new Error('WordPress hat keinen gueltigen Preis zurueckgegeben.')
-  }
-  const formatted = `${total.toFixed(2).replace('.', ',')} €`
-  return {
-    total,
-    formatted,
-    price: formatted,
-  }
-}
-````
-
-## File: src/lib/customizer-runtime.ts
-````typescript
-export type ToggleState = '' | 'yes' | 'no'
-export type SupportedProductType =
-  | 'tarpaulins'
-  | 'trailer'
-  | 'rectangular'
-  | 'lounge'
-  | 'unknown'
-export type SupportedUnitSelector = 'squaremeter' | 'cubicmeter' | 'unknown'
-export type StepId =
-  | 'color'
-  | 'size'
-  | 'topSide'
-  | 'leftSide'
-  | 'rightSide'
-  | 'bottomSide'
-  | 'window'
-  | 'door'
-  | 'eyelets'
-  | 'closureType'
-  | 'frontClosure'
-  | 'backClosure'
-  | 'extras'
-  | 'sketch'
-export type ConfigFormField =
-  | 'material'
-  | 'color'
-  | 'lengthACm'
-  | 'heightRightBCm'
-  | 'heightLeftCCm'
-  | 'trailerWidthCm'
-  | 'trailerLengthCm'
-  | 'trailerHeightCm'
-  | 'rectangularLengthCm'
-  | 'rectangularWidthCm'
-  | 'rectangularHeightCm'
-  | 'sideACm'
-  | 'sideBCm'
-  | 'sideCCm'
-  | 'sideFCm'
-  | 'sideHCm'
-  | 'topSide'
-  | 'leftSide'
-  | 'rightSide'
-  | 'bottomSide'
-  | 'hasWindow'
-  | 'windowWidthCm'
-  | 'windowHeightCm'
-  | 'windowDistanceSideCm'
-  | 'windowDistanceBottomCm'
-  | 'windowSplit'
-  | 'windowSplitLeftWidthCm'
-  | 'windowSplitLeftHeightCm'
-  | 'windowSplitRightWidthCm'
-  | 'windowSplitRightHeightCm'
-  | 'windowSplitRightDistanceRightCm'
-  | 'windowSplitLeftDistanceLeftCm'
-  | 'windowSplitLeftDistanceBottomCm'
-  | 'windowSplitRightDistanceBottomCm'
-  | 'hasDoor'
-  | 'doorWidthCm'
-  | 'doorHeightCm'
-  | 'doorDistanceLeftCm'
-  | 'eyeletEdge'
-  | 'closureType'
-  | 'frontClosure'
-  | 'backClosure'
-  /** Mehrfachauswahl main extras (Pflicht z. B. Poolplane / Hohlsaum) */
-  | 'extrasSelected'
-export interface ConfigFormState {
-  material: string
-  color: string
-  lengthACm: string
-  heightRightBCm: string
-  heightLeftCCm: string
-  trailerWidthCm: string
-  trailerLengthCm: string
-  trailerHeightCm: string
-  rectangularLengthCm: string
-  rectangularWidthCm: string
-  rectangularHeightCm: string
-  sideACm: string
-  sideBCm: string
-  sideCCm: string
-  sideFCm: string
-  sideHCm: string
-  topSide: string
-  leftSide: string
-  rightSide: string
-  bottomSide: string
-  hasWindow: ToggleState
-  windowWidthCm: string
-  windowHeightCm: string
-  windowDistanceSideCm: string
-  windowDistanceBottomCm: string
-  windowSplit: ToggleState
-  windowSplitLeftWidthCm: string
-  windowSplitLeftHeightCm: string
-  windowSplitRightWidthCm: string
-  windowSplitRightHeightCm: string
-  windowSplitRightDistanceRightCm: string
-  windowSplitLeftDistanceLeftCm: string
-  windowSplitLeftDistanceBottomCm: string
-  windowSplitRightDistanceBottomCm: string
-  hasDoor: ToggleState
-  doorWidthCm: string
-  doorHeightCm: string
-  doorDistanceLeftCm: string
-  doorExtras: string[]
-  hasExtras: ToggleState
-  extrasSelected: string[]
-  eyeletEdge: string
-  closureType: string
-  frontClosure: string
-  frontClosureExtras: string[]
-  backClosure: string
-  backClosureExtras: string[]
-}
-export const emptyConfigFormState: ConfigFormState = {
-  material: '',
-  color: '',
-  lengthACm: '',
-  heightRightBCm: '',
-  heightLeftCCm: '',
-  trailerWidthCm: '',
-  trailerLengthCm: '',
-  trailerHeightCm: '',
-  rectangularLengthCm: '',
-  rectangularWidthCm: '',
-  rectangularHeightCm: '',
-  sideACm: '',
-  sideBCm: '',
-  sideCCm: '',
-  sideFCm: '',
-  sideHCm: '',
-  topSide: '',
-  leftSide: '',
-  rightSide: '',
-  bottomSide: '',
-  hasWindow: '',
-  windowWidthCm: '',
-  windowHeightCm: '',
-  windowDistanceSideCm: '',
-  windowDistanceBottomCm: '',
-  windowSplit: '',
-  windowSplitLeftWidthCm: '',
-  windowSplitLeftHeightCm: '',
-  windowSplitRightWidthCm: '',
-  windowSplitRightHeightCm: '',
-  windowSplitRightDistanceRightCm: '',
-  windowSplitLeftDistanceLeftCm: '',
-  windowSplitLeftDistanceBottomCm: '',
-  windowSplitRightDistanceBottomCm: '',
-  hasDoor: '',
-  doorWidthCm: '',
-  doorHeightCm: '',
-  doorDistanceLeftCm: '',
-  doorExtras: [],
-  hasExtras: 'no',
-  extrasSelected: [],
-  eyeletEdge: '',
-  closureType: '',
-  frontClosure: '',
-  frontClosureExtras: [],
-  backClosure: '',
-  backClosureExtras: [],
-}
-export interface ResolvedChoice {
-  id: string
-  label: string
-  imageSrc?: string
-  price?: number | null
-  meta?: Record<string, string | number | boolean | null | undefined>
-}
-export interface ResolvedDimensionField {
-  key: ConfigFormField
-  label: string
-  min: number
-  required: boolean
-}
-export interface ResolvedDimensionConfig {
-  title: string
-  description?: string
-  imageSrc?: string
-  /** Skizze wenn Hoehe rechts B > Hoehe links C (Customizer: „Image if B greater“) */
-  imageSrcWhenBGreater?: string
-  /** Skizze wenn Hoehe links C > Hoehe rechts B (Customizer: „Image if C greater“) */
-  imageSrcWhenCGreater?: string
-  fields: ResolvedDimensionField[]
-  minimumValue?: number
-}
-export interface ResolvedConfiguratorHints {
-  color: string
-  size: string
-  topSide: string
-  leftSide: string
-  rightSide: string
-  bottomSide: string
-  window: string
-  door: string
-  eyelets: string
-  closureType: string
-  frontClosure: string
-  backClosure: string
-  extras: string
-  sketch: string
-}
-export interface ResolvedCustomizerConfig {
-  configId: number
-  productId: string
-  productTitle: string
-  productType: SupportedProductType
-  unitSelector: SupportedUnitSelector
-  steps: StepId[]
-  dimensions: ResolvedDimensionConfig
-  options: {
-    colors: ResolvedChoice[]
-    materials: ResolvedChoice[]
-    topSide: ResolvedChoice[]
-    leftSide: ResolvedChoice[]
-    rightSide: ResolvedChoice[]
-    bottomSide: ResolvedChoice[]
-    doorExtras: ResolvedChoice[]
-    extras: ResolvedChoice[]
-    eyelets: ResolvedChoice[]
-    closureTypes: ResolvedChoice[]
-    frontClosures: ResolvedChoice[]
-    frontClosureExtras: ResolvedChoice[]
-    backClosures: ResolvedChoice[]
-    backClosureExtras: ResolvedChoice[]
-  }
-  pricingCapabilities: {
-    livePrice: boolean
-    allowsEdges: boolean
-    allowsWindow: boolean
-    allowsDoor: boolean
-    supportsEyelets: boolean
-    supportsClosureType: boolean
-    supportsFrontBackClosure: boolean
-  }
-  validationRules: {
-    requiredFields: ConfigFormField[]
-    minimumForPrice: ConfigFormField[]
-  }
-  hints: ResolvedConfiguratorHints
-  issues: string[]
-}
-export type ConfiguratorStatus =
-  | 'ready'
-  | 'partial'
-  | 'missing'
-  | 'error'
-  | 'unsupported'
-export interface ConfiguratorState {
-  status: ConfiguratorStatus
-  message?: string
-  warnings?: string[]
-}
-````
-
 ## File: src/shared/lib/functions.tsx
 ````typescript
 /*eslint complexity: ["error", 20]*/
@@ -28435,105 +28105,6 @@ GOOGLE_PLACES_API_KEY=
 GOOGLE_PLACE_ID=
 ````
 
-## File: .github/workflows/react-doctor.yml
-````yaml
-name: React Doctor
-on:
-  pull_request:
-    branches: [main, master]
-jobs:
-  react-doctor:
-    name: React Health Check
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-      - name: Install dependencies
-        run: npm ci
-      - name: Run React Doctor
-        id: doctor
-        run: |
-          # Run react-doctor via local devDependency (avoids npx isolation issues with typescript)
-          npm run doctor 2>&1 | tee /tmp/react-doctor-raw.txt
-          # Strip ANSI escape codes for clean output
-          sed 's/\x1b\[[0-9;]*m//g; s/\x1b\[[0-9;]*[A-Za-z]//g' /tmp/react-doctor-raw.txt | tr -d '\r' > /tmp/react-doctor-output.txt
-          # Extract score from the cleaned output (matches "96 / 100" pattern)
-          SCORE=$(grep -oP '\d+ / 100' /tmp/react-doctor-output.txt | head -1 || echo "unknown")
-          echo "score=$SCORE" >> "$GITHUB_OUTPUT"
-          # Extract just the numeric score for threshold check
-          SCORE_NUM=$(echo "$SCORE" | grep -oP '^\d+' || echo "0")
-          echo "score_num=$SCORE_NUM" >> "$GITHUB_OUTPUT"
-          echo "Detected score: $SCORE (numeric: $SCORE_NUM)"
-      - name: Post PR comment with results
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const fs = require('fs');
-            const output = fs.readFileSync('/tmp/react-doctor-output.txt', 'utf8');
-            const score = '${{ steps.doctor.outputs.score }}';
-            const body = [
-              `## 🩺 React Doctor — Score: ${score}`,
-              '',
-              '<details>',
-              '<summary>Full diagnostics</summary>',
-              '',
-              '```',
-              output.trim(),
-              '```',
-              '',
-              '</details>',
-              '',
-              '> Powered by [react-doctor](https://github.com/millionco/react-doctor)',
-            ].join('\n');
-            // Find existing comment to update instead of creating duplicates
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const botComment = comments.find(
-              (c) => c.body?.includes('🩺 React Doctor')
-            );
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
-      - name: Write job summary
-        if: always()
-        run: |
-          echo "## 🩺 React Doctor — Score: ${{ steps.doctor.outputs.score }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat /tmp/react-doctor-output.txt >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-      - name: Check score threshold
-        run: |
-          SCORE="${{ steps.doctor.outputs.score_num }}"
-          SCORE="${SCORE:-0}"
-          THRESHOLD=80
-          echo "React Doctor score: $SCORE (threshold: $THRESHOLD)"
-          if [ "$SCORE" -lt "$THRESHOLD" ]; then
-            echo "::error::React Doctor score $SCORE is below threshold $THRESHOLD"
-            exit 1
-          fi
-````
-
 ## File: src/features/home/sections/ProductsShowcase/api/queries.ts
 ````typescript
 export const GET_PRODUCTS_BY_CATEGORY = /* GraphQL */ `
@@ -28640,6 +28211,671 @@ export const GET_PRODUCTS_ALL = /* GraphQL */ `
     }
   }
 `
+````
+
+## File: src/lib/customizer-pricing.ts
+````typescript
+import type {
+  ConfigFormState,
+  ResolvedChoice,
+  ResolvedCustomizerConfig,
+  SupportedProductType,
+  SupportedUnitSelector,
+} from '@/lib/customizer-runtime'
+import { TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM } from '@/lib/tarpaulin-opening-rules'
+export interface PriceCalculationRequestBody {
+  productId: string | number
+  productType: SupportedProductType
+  unitSelector: SupportedUnitSelector
+  material: string
+  color?: string
+  dimensions: Partial<Record<
+    | 'lengthACm'
+    | 'heightRightBCm'
+    | 'heightLeftCCm'
+    | 'trailerWidthCm'
+    | 'trailerLengthCm'
+    | 'trailerHeightCm'
+    | 'rectangularLengthCm'
+    | 'rectangularWidthCm'
+    | 'rectangularHeightCm'
+    | 'sideACm'
+    | 'sideBCm'
+    | 'sideCCm'
+    | 'sideFCm'
+    | 'sideHCm',
+    string
+  >>
+  selections: {
+    topSide?: string
+    leftSide?: string
+    rightSide?: string
+    bottomSide?: string
+    eyeletEdge?: string
+    closureType?: string
+    frontClosure?: string
+    backClosure?: string
+    doorExtras: string[]
+    extrasSelected: string[]
+    frontClosureExtras: string[]
+    backClosureExtras: string[]
+  }
+  toggles: {
+    hasWindow: boolean
+    hasDoor: boolean
+    hasExtras: boolean
+    windowSplit: boolean
+  }
+  window: {
+    widthCm?: string
+    heightCm?: string
+    distanceSideCm?: string
+    distanceBottomCm?: string
+    splitLeftWidthCm?: string
+    splitRightWidthCm?: string
+    splitLeftHeightCm?: string
+    splitRightHeightCm?: string
+    splitDistanceLeftCm?: string
+    splitDistanceRightCm?: string
+    splitLeftBottomCm?: string
+    splitRightBottomCm?: string
+  }
+  door: {
+    widthCm?: string
+    heightCm?: string
+    distanceLeftCm?: string
+  }
+}
+export interface PriceCalculationResult {
+  total: number
+  formatted: string
+  price: string
+}
+export interface ConfigurationSummaryEntry {
+  label: string
+  value: string
+}
+export interface ConfiguredCartPayload {
+  extraData: Record<string, string>
+  summary: ConfigurationSummaryEntry[]
+}
+function resolveLabels(ids: string[], choices: ResolvedChoice[]): string[] {
+  const choiceMap = new Map(choices.map((choice) => [choice.id, choice.label]))
+  return ids
+    .map((id) => choiceMap.get(id) ?? id)
+    .filter((label) => typeof label === 'string' && label.trim().length > 0)
+}
+function selectionKey(prefix: string, label: string): string {
+  return `${prefix}${label.replace(/\s/g, '_')}`
+}
+function readNumericPrice(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const normalized = value.replace(',', '.').replace(/[^\d.-]/g, '')
+    const parsed = Number.parseFloat(normalized)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+export function buildPriceCalculationRequest(
+  productId: number | string,
+  form: ConfigFormState,
+  resolvedConfig: ResolvedCustomizerConfig,
+): PriceCalculationRequestBody {
+  return {
+    productId,
+    productType: resolvedConfig.productType,
+    unitSelector: resolvedConfig.unitSelector,
+    material: form.material,
+    color: form.color || undefined,
+    dimensions: {
+      lengthACm: form.lengthACm || undefined,
+      heightRightBCm: form.heightRightBCm || undefined,
+      heightLeftCCm: form.heightLeftCCm || undefined,
+      trailerWidthCm: form.trailerWidthCm || undefined,
+      trailerLengthCm: form.trailerLengthCm || undefined,
+      trailerHeightCm: form.trailerHeightCm || undefined,
+      rectangularLengthCm: form.rectangularLengthCm || undefined,
+      rectangularWidthCm: form.rectangularWidthCm || undefined,
+      rectangularHeightCm: form.rectangularHeightCm || undefined,
+      sideACm: form.sideACm || undefined,
+      sideBCm: form.sideBCm || undefined,
+      sideCCm: form.sideCCm || undefined,
+      sideFCm: form.sideFCm || undefined,
+      sideHCm: form.sideHCm || undefined,
+    },
+    selections: {
+      topSide: form.topSide || undefined,
+      leftSide: form.leftSide || undefined,
+      rightSide: form.rightSide || undefined,
+      bottomSide: form.bottomSide || undefined,
+      eyeletEdge: form.eyeletEdge || undefined,
+      closureType: form.closureType || undefined,
+      frontClosure: form.frontClosure || undefined,
+      backClosure: form.backClosure || undefined,
+      doorExtras: resolveLabels(form.doorExtras, resolvedConfig.options.doorExtras),
+      extrasSelected: resolveLabels(form.extrasSelected, resolvedConfig.options.extras),
+      frontClosureExtras: resolveLabels(form.frontClosureExtras, resolvedConfig.options.frontClosureExtras),
+      backClosureExtras: resolveLabels(form.backClosureExtras, resolvedConfig.options.backClosureExtras),
+    },
+    toggles: {
+      hasWindow: form.hasWindow === 'yes',
+      hasDoor: form.hasDoor === 'yes',
+      hasExtras: form.hasExtras === 'yes',
+      windowSplit: form.windowSplit === 'yes',
+    },
+    window: {
+      widthCm: form.windowWidthCm || undefined,
+      heightCm: form.windowHeightCm || undefined,
+      distanceSideCm: form.windowDistanceSideCm || undefined,
+      distanceBottomCm: form.windowDistanceBottomCm || undefined,
+      splitLeftWidthCm: form.windowSplitLeftWidthCm || undefined,
+      splitRightWidthCm: form.windowSplitRightWidthCm || undefined,
+      splitLeftHeightCm: form.windowSplitLeftHeightCm || undefined,
+      splitRightHeightCm: form.windowSplitRightHeightCm || undefined,
+      splitDistanceLeftCm: form.windowSplitLeftDistanceLeftCm || undefined,
+      splitDistanceRightCm: form.windowSplitRightDistanceRightCm || undefined,
+      splitLeftBottomCm: form.windowSplitLeftDistanceBottomCm || undefined,
+      splitRightBottomCm: form.windowSplitRightDistanceBottomCm || undefined,
+    },
+    door: {
+      widthCm: form.doorWidthCm || undefined,
+      heightCm: form.doorHeightCm || undefined,
+      distanceLeftCm: form.doorDistanceLeftCm || undefined,
+    },
+  }
+}
+export function buildWordPressPriceFormData(body: PriceCalculationRequestBody): URLSearchParams {
+  const params = new URLSearchParams()
+  params.set('action', 'prices_update_request')
+  params.set('product_id', String(body.productId))
+  params.set('fabric', body.material || '')
+  switch (body.productType) {
+    case 'lounge':
+      params.set('side_a', body.dimensions.sideACm || '0')
+      params.set('side_b', body.dimensions.sideBCm || '0')
+      params.set('side_c', body.dimensions.sideCCm || '0')
+      params.set('side_f', body.dimensions.sideFCm || '0')
+      params.set('side_h', body.dimensions.sideHCm || '0')
+      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Öse')
+      params.set('closureType', body.selections.closureType || 'Ohne Verschluss')
+      break
+    case 'trailer':
+      params.set('trailer_width', body.dimensions.trailerWidthCm || '0')
+      params.set('trailer_length', body.dimensions.trailerLengthCm || '0')
+      params.set('trailer_height', body.dimensions.trailerHeightCm || '0')
+      params.set('front_clouser', body.selections.frontClosure || 'Without front clouser')
+      params.set('back_clouser', body.selections.backClosure || 'Without back clouser')
+      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Ã–se')
+      params.set('front_clouser_accessories', '')
+      params.set('back_clouser_accessories', '')
+      for (const extra of body.selections.frontClosureExtras) {
+        params.set(selectionKey('Zubehör_für_den_Frontverschluss_', extra), extra)
+      }
+      for (const extra of body.selections.backClosureExtras) {
+        params.set(selectionKey('Zubehör_für_den_Rückenverschluss_', extra), extra)
+      }
+      break
+    case 'rectangular':
+      params.set('rectangular_length', body.dimensions.rectangularLengthCm || '0')
+      params.set('rectangular_width', body.dimensions.rectangularWidthCm || '0')
+      params.set('rectangular_height', body.dimensions.rectangularHeightCm || '0')
+      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Öse')
+      params.set('closureType', body.selections.closureType || 'Ohne Verschluss')
+      break
+    case 'tarpaulins':
+    default:
+      params.set('width', body.dimensions.lengthACm || '0')
+      params.set('height_right', body.dimensions.heightRightBCm || '0')
+      params.set('height_left', body.dimensions.heightLeftCCm || body.dimensions.heightRightBCm || '0')
+      params.set('has_top_edge', body.selections.topSide || 'Ohne Extras')
+      params.set('has_edge_left_0', body.selections.leftSide || 'Ohne Extras')
+      params.set('has_edge_right_0', body.selections.rightSide || 'Ohne Extras')
+      params.set('has_edge_bottom_0', body.selections.bottomSide || 'Ohne Extras')
+      if (body.toggles.hasWindow) {
+        if (body.toggles.windowSplit) {
+          params.set('window_split', '1')
+          params.set('window_split_num', '2')
+          params.set('window_split_offset', String(TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM))
+          if (body.window.splitLeftWidthCm) params.set('window_width_one', body.window.splitLeftWidthCm)
+          if (body.window.splitRightWidthCm) params.set('window_width_two', body.window.splitRightWidthCm)
+          if (body.window.splitLeftHeightCm) params.set('window_height_one', body.window.splitLeftHeightCm)
+          if (body.window.splitRightHeightCm) params.set('window_height_two', body.window.splitRightHeightCm)
+          if (body.window.splitDistanceLeftCm) params.set('window_left_margin', body.window.splitDistanceLeftCm)
+          if (body.window.splitDistanceRightCm) params.set('window_right_margin', body.window.splitDistanceRightCm)
+          if (body.window.splitLeftBottomCm) {
+            params.set('window_left_bottom_margin', body.window.splitLeftBottomCm)
+          }
+          if (body.window.splitRightBottomCm) {
+            params.set('window_right_bottom_margin', body.window.splitRightBottomCm)
+          }
+        } else {
+          if (body.window.widthCm) params.set('window_width', body.window.widthCm)
+          if (body.window.heightCm) params.set('window_height', body.window.heightCm)
+          if (body.window.distanceSideCm) params.set('window_offset_left', body.window.distanceSideCm)
+          if (body.window.distanceBottomCm) params.set('window_offset_bottom', body.window.distanceBottomCm)
+        }
+      }
+      if (body.toggles.hasDoor) {
+        if (body.door.widthCm) params.set('door_width', body.door.widthCm)
+        if (body.door.heightCm) params.set('door_height', body.door.heightCm)
+        if (body.door.distanceLeftCm) params.set('door_offset_left', body.door.distanceLeftCm)
+        for (const extra of body.selections.doorExtras) {
+          params.set(selectionKey('Door_Extra_', extra), extra)
+        }
+      }
+      break
+  }
+  if (body.toggles.hasExtras) {
+    for (const extra of body.selections.extrasSelected) {
+      params.set(selectionKey('Extra_', extra), extra)
+    }
+  }
+  return params
+}
+function addSummaryEntry(
+  entries: ConfigurationSummaryEntry[],
+  label: string,
+  value: string | string[] | undefined,
+) {
+  if (Array.isArray(value)) {
+    const normalized = value.map((entry) => entry.trim()).filter((entry) => entry.length > 0)
+    if (normalized.length === 0) return
+    entries.push({ label, value: normalized.join(', ') })
+    return
+  }
+  if (!value) return
+  const normalized = value.trim()
+  if (!normalized) return
+  entries.push({ label, value: normalized })
+}
+export function buildConfigurationSummary(
+  body: PriceCalculationRequestBody,
+  sketchFileName?: string,
+): ConfigurationSummaryEntry[] {
+  const entries: ConfigurationSummaryEntry[] = []
+  addSummaryEntry(entries, 'Material', body.material)
+  addSummaryEntry(entries, 'Farbe', body.color)
+  switch (body.productType) {
+    case 'lounge':
+      addSummaryEntry(entries, 'Seite A', body.dimensions.sideACm ? `${body.dimensions.sideACm} cm` : undefined)
+      addSummaryEntry(entries, 'Seite B', body.dimensions.sideBCm ? `${body.dimensions.sideBCm} cm` : undefined)
+      addSummaryEntry(entries, 'Seite C', body.dimensions.sideCCm ? `${body.dimensions.sideCCm} cm` : undefined)
+      addSummaryEntry(entries, 'Seite F', body.dimensions.sideFCm ? `${body.dimensions.sideFCm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe H', body.dimensions.sideHCm ? `${body.dimensions.sideHCm} cm` : undefined)
+      break
+    case 'trailer':
+      addSummaryEntry(entries, 'Anhaengerbreite A', body.dimensions.trailerWidthCm ? `${body.dimensions.trailerWidthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Anhaengerlaenge B', body.dimensions.trailerLengthCm ? `${body.dimensions.trailerLengthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Planenhoehe C', body.dimensions.trailerHeightCm ? `${body.dimensions.trailerHeightCm} cm` : undefined)
+      break
+    case 'rectangular':
+      addSummaryEntry(entries, 'Laenge A', body.dimensions.rectangularLengthCm ? `${body.dimensions.rectangularLengthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Breite B', body.dimensions.rectangularWidthCm ? `${body.dimensions.rectangularWidthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe C', body.dimensions.rectangularHeightCm ? `${body.dimensions.rectangularHeightCm} cm` : undefined)
+      break
+    case 'tarpaulins':
+    default:
+      addSummaryEntry(entries, 'Laenge A', body.dimensions.lengthACm ? `${body.dimensions.lengthACm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe rechts B', body.dimensions.heightRightBCm ? `${body.dimensions.heightRightBCm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe links C', body.dimensions.heightLeftCCm ? `${body.dimensions.heightLeftCCm} cm` : undefined)
+      break
+  }
+  addSummaryEntry(entries, 'Obere Seite', body.selections.topSide)
+  addSummaryEntry(entries, 'Linke Seite', body.selections.leftSide)
+  addSummaryEntry(entries, 'Rechte Seite', body.selections.rightSide)
+  addSummaryEntry(entries, 'Untere Seite', body.selections.bottomSide)
+  addSummaryEntry(entries, 'Oesen', body.selections.eyeletEdge)
+  addSummaryEntry(entries, 'Verschlussart', body.selections.closureType)
+  addSummaryEntry(entries, 'Frontverschluss', body.selections.frontClosure)
+  addSummaryEntry(entries, 'Rueckenverschluss', body.selections.backClosure)
+  if (body.toggles.hasWindow) {
+    addSummaryEntry(entries, 'Fenster', 'Ja')
+    if (body.toggles.windowSplit) {
+      addSummaryEntry(entries, 'Fenster geteilt', 'Ja')
+      addSummaryEntry(
+        entries,
+        'Fensterabstand zueinander',
+        `${TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM} cm`,
+      )
+      addSummaryEntry(entries, 'Fensterbreite links', body.window.splitLeftWidthCm ? `${body.window.splitLeftWidthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fensterbreite rechts', body.window.splitRightWidthCm ? `${body.window.splitRightWidthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fensterhoehe links', body.window.splitLeftHeightCm ? `${body.window.splitLeftHeightCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fensterhoehe rechts', body.window.splitRightHeightCm ? `${body.window.splitRightHeightCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster Rand links', body.window.splitDistanceLeftCm ? `${body.window.splitDistanceLeftCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster Rand rechts', body.window.splitDistanceRightCm ? `${body.window.splitDistanceRightCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster unten links', body.window.splitLeftBottomCm ? `${body.window.splitLeftBottomCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster unten rechts', body.window.splitRightBottomCm ? `${body.window.splitRightBottomCm} cm` : undefined)
+    } else {
+      addSummaryEntry(entries, 'Fensterbreite', body.window.widthCm ? `${body.window.widthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fensterhoehe', body.window.heightCm ? `${body.window.heightCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster Abstand Seite', body.window.distanceSideCm ? `${body.window.distanceSideCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster Abstand unten', body.window.distanceBottomCm ? `${body.window.distanceBottomCm} cm` : undefined)
+    }
+  }
+  if (body.toggles.hasDoor) {
+    addSummaryEntry(entries, 'Tuer', 'Ja')
+    addSummaryEntry(entries, 'Tuerbreite', body.door.widthCm ? `${body.door.widthCm} cm` : undefined)
+    addSummaryEntry(entries, 'Tuerhoehe', body.door.heightCm ? `${body.door.heightCm} cm` : undefined)
+    addSummaryEntry(entries, 'Tuerabstand links', body.door.distanceLeftCm ? `${body.door.distanceLeftCm} cm` : undefined)
+    addSummaryEntry(entries, 'Tuer-Extras', body.selections.doorExtras)
+  }
+  if (body.toggles.hasExtras) {
+    addSummaryEntry(entries, 'Extras', body.selections.extrasSelected)
+  }
+  addSummaryEntry(entries, 'Frontverschluss-Zubehoer', body.selections.frontClosureExtras)
+  addSummaryEntry(entries, 'Rueckenverschluss-Zubehoer', body.selections.backClosureExtras)
+  addSummaryEntry(entries, 'Skizze', sketchFileName)
+  return entries
+}
+export function buildConfiguredCartPayload(
+  body: PriceCalculationRequestBody,
+  uniqueKey: string,
+  sketchFileName?: string,
+): ConfiguredCartPayload {
+  const extraData = Object.fromEntries(buildWordPressPriceFormData(body).entries())
+  delete extraData.action
+  delete extraData.product_id
+  extraData.custom_option = 'configured'
+  extraData.unique_key = uniqueKey
+  extraData.planenadler_configuration_id = uniqueKey
+  const summary = buildConfigurationSummary(body, sketchFileName)
+  extraData.planenadler_configuration_summary = JSON.stringify(summary)
+  if (sketchFileName?.trim()) {
+    extraData.planenadler_sketch_file_name = sketchFileName.trim()
+  }
+  return {
+    extraData,
+    summary,
+  }
+}
+export function parsePriceCalculationResponse(rawPrice: unknown): PriceCalculationResult {
+  const total =
+    readNumericPrice(rawPrice) ??
+    (typeof rawPrice === 'object' && rawPrice !== null
+      ? readNumericPrice(
+          'price' in rawPrice
+            ? (rawPrice as { price?: unknown }).price
+            : 'total' in rawPrice
+              ? (rawPrice as { total?: unknown }).total
+              : 'data' in rawPrice
+                ? (rawPrice as { data?: unknown }).data
+                : undefined,
+        )
+      : null)
+  if (total === null || !Number.isFinite(total)) {
+    throw new Error('WordPress hat keinen gueltigen Preis zurueckgegeben.')
+  }
+  const formatted = `${total.toFixed(2).replace('.', ',')} €`
+  return {
+    total,
+    formatted,
+    price: formatted,
+  }
+}
+````
+
+## File: src/lib/customizer-runtime.ts
+````typescript
+export type ToggleState = '' | 'yes' | 'no'
+export type SupportedProductType =
+  | 'tarpaulins'
+  | 'trailer'
+  | 'rectangular'
+  | 'lounge'
+  | 'unknown'
+export type SupportedUnitSelector = 'squaremeter' | 'cubicmeter' | 'unknown'
+export type StepId =
+  | 'color'
+  | 'size'
+  | 'topSide'
+  | 'leftSide'
+  | 'rightSide'
+  | 'bottomSide'
+  | 'window'
+  | 'door'
+  | 'eyelets'
+  | 'closureType'
+  | 'frontClosure'
+  | 'backClosure'
+  | 'extras'
+  | 'sketch'
+export type ConfigFormField =
+  | 'material'
+  | 'color'
+  | 'lengthACm'
+  | 'heightRightBCm'
+  | 'heightLeftCCm'
+  | 'trailerWidthCm'
+  | 'trailerLengthCm'
+  | 'trailerHeightCm'
+  | 'rectangularLengthCm'
+  | 'rectangularWidthCm'
+  | 'rectangularHeightCm'
+  | 'sideACm'
+  | 'sideBCm'
+  | 'sideCCm'
+  | 'sideFCm'
+  | 'sideHCm'
+  | 'topSide'
+  | 'leftSide'
+  | 'rightSide'
+  | 'bottomSide'
+  | 'hasWindow'
+  | 'windowWidthCm'
+  | 'windowHeightCm'
+  | 'windowDistanceSideCm'
+  | 'windowDistanceBottomCm'
+  | 'windowSplit'
+  | 'windowSplitLeftWidthCm'
+  | 'windowSplitLeftHeightCm'
+  | 'windowSplitRightWidthCm'
+  | 'windowSplitRightHeightCm'
+  | 'windowSplitRightDistanceRightCm'
+  | 'windowSplitLeftDistanceLeftCm'
+  | 'windowSplitLeftDistanceBottomCm'
+  | 'windowSplitRightDistanceBottomCm'
+  | 'hasDoor'
+  | 'doorWidthCm'
+  | 'doorHeightCm'
+  | 'doorDistanceLeftCm'
+  | 'eyeletEdge'
+  | 'closureType'
+  | 'frontClosure'
+  | 'backClosure'
+  /** Mehrfachauswahl main extras (Pflicht z. B. Poolplane / Hohlsaum) */
+  | 'extrasSelected'
+export interface ConfigFormState {
+  material: string
+  color: string
+  lengthACm: string
+  heightRightBCm: string
+  heightLeftCCm: string
+  trailerWidthCm: string
+  trailerLengthCm: string
+  trailerHeightCm: string
+  rectangularLengthCm: string
+  rectangularWidthCm: string
+  rectangularHeightCm: string
+  sideACm: string
+  sideBCm: string
+  sideCCm: string
+  sideFCm: string
+  sideHCm: string
+  topSide: string
+  leftSide: string
+  rightSide: string
+  bottomSide: string
+  hasWindow: ToggleState
+  windowWidthCm: string
+  windowHeightCm: string
+  windowDistanceSideCm: string
+  windowDistanceBottomCm: string
+  windowSplit: ToggleState
+  windowSplitLeftWidthCm: string
+  windowSplitLeftHeightCm: string
+  windowSplitRightWidthCm: string
+  windowSplitRightHeightCm: string
+  windowSplitRightDistanceRightCm: string
+  windowSplitLeftDistanceLeftCm: string
+  windowSplitLeftDistanceBottomCm: string
+  windowSplitRightDistanceBottomCm: string
+  hasDoor: ToggleState
+  doorWidthCm: string
+  doorHeightCm: string
+  doorDistanceLeftCm: string
+  doorExtras: string[]
+  hasExtras: ToggleState
+  extrasSelected: string[]
+  eyeletEdge: string
+  closureType: string
+  frontClosure: string
+  frontClosureExtras: string[]
+  backClosure: string
+  backClosureExtras: string[]
+}
+export const emptyConfigFormState: ConfigFormState = {
+  material: '',
+  color: '',
+  lengthACm: '',
+  heightRightBCm: '',
+  heightLeftCCm: '',
+  trailerWidthCm: '',
+  trailerLengthCm: '',
+  trailerHeightCm: '',
+  rectangularLengthCm: '',
+  rectangularWidthCm: '',
+  rectangularHeightCm: '',
+  sideACm: '',
+  sideBCm: '',
+  sideCCm: '',
+  sideFCm: '',
+  sideHCm: '',
+  topSide: '',
+  leftSide: '',
+  rightSide: '',
+  bottomSide: '',
+  hasWindow: '',
+  windowWidthCm: '',
+  windowHeightCm: '',
+  windowDistanceSideCm: '',
+  windowDistanceBottomCm: '',
+  windowSplit: '',
+  windowSplitLeftWidthCm: '',
+  windowSplitLeftHeightCm: '',
+  windowSplitRightWidthCm: '',
+  windowSplitRightHeightCm: '',
+  windowSplitRightDistanceRightCm: '',
+  windowSplitLeftDistanceLeftCm: '',
+  windowSplitLeftDistanceBottomCm: '',
+  windowSplitRightDistanceBottomCm: '',
+  hasDoor: '',
+  doorWidthCm: '',
+  doorHeightCm: '',
+  doorDistanceLeftCm: '',
+  doorExtras: [],
+  hasExtras: 'no',
+  extrasSelected: [],
+  eyeletEdge: '',
+  closureType: '',
+  frontClosure: '',
+  frontClosureExtras: [],
+  backClosure: '',
+  backClosureExtras: [],
+}
+export interface ResolvedChoice {
+  id: string
+  label: string
+  imageSrc?: string
+  price?: number | null
+  meta?: Record<string, string | number | boolean | null | undefined>
+}
+export interface ResolvedDimensionField {
+  key: ConfigFormField
+  label: string
+  min: number
+  required: boolean
+}
+export interface ResolvedDimensionConfig {
+  title: string
+  description?: string
+  imageSrc?: string
+  /** Skizze wenn Hoehe rechts B > Hoehe links C (Customizer: „Image if B greater“) */
+  imageSrcWhenBGreater?: string
+  /** Skizze wenn Hoehe links C > Hoehe rechts B (Customizer: „Image if C greater“) */
+  imageSrcWhenCGreater?: string
+  fields: ResolvedDimensionField[]
+  minimumValue?: number
+}
+export interface ResolvedConfiguratorHints {
+  color: string
+  size: string
+  topSide: string
+  leftSide: string
+  rightSide: string
+  bottomSide: string
+  window: string
+  door: string
+  eyelets: string
+  closureType: string
+  frontClosure: string
+  backClosure: string
+  extras: string
+  sketch: string
+}
+export interface ResolvedCustomizerConfig {
+  configId: number
+  productId: string
+  productTitle: string
+  productType: SupportedProductType
+  unitSelector: SupportedUnitSelector
+  /** true wenn Shop-Slug der Poolplane entspricht (Hohlsaum-UI, Reihenfolge, Hinweis) */
+  isPoolPlaneProduct: boolean
+  steps: StepId[]
+  dimensions: ResolvedDimensionConfig
+  options: {
+    colors: ResolvedChoice[]
+    materials: ResolvedChoice[]
+    topSide: ResolvedChoice[]
+    leftSide: ResolvedChoice[]
+    rightSide: ResolvedChoice[]
+    bottomSide: ResolvedChoice[]
+    doorExtras: ResolvedChoice[]
+    extras: ResolvedChoice[]
+    eyelets: ResolvedChoice[]
+    closureTypes: ResolvedChoice[]
+    frontClosures: ResolvedChoice[]
+    frontClosureExtras: ResolvedChoice[]
+    backClosures: ResolvedChoice[]
+    backClosureExtras: ResolvedChoice[]
+  }
+  pricingCapabilities: {
+    livePrice: boolean
+    allowsEdges: boolean
+    allowsWindow: boolean
+    allowsDoor: boolean
+    supportsEyelets: boolean
+    supportsClosureType: boolean
+    supportsFrontBackClosure: boolean
+  }
+  validationRules: {
+    requiredFields: ConfigFormField[]
+    minimumForPrice: ConfigFormField[]
+  }
+  hints: ResolvedConfiguratorHints
+  issues: string[]
+}
+export type ConfiguratorStatus =
+  | 'ready'
+  | 'partial'
+  | 'missing'
+  | 'error'
+  | 'unsupported'
+export interface ConfiguratorState {
+  status: ConfiguratorStatus
+  message?: string
+  warnings?: string[]
+}
 ````
 
 ## File: src/shared/components/TopBar/TopBar.component.tsx
@@ -29039,6 +29275,74 @@ export default async function BlogSlugPage({ params }: BlogSlugPageProps) {
 }
 ````
 
+## File: package.json
+````json
+{
+  "name": "people4europe-nextjs",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3002 -H 127.0.0.1",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "format": "prettier --write \"**/*.{js,ts,tsx,json}\"",
+    "playwright": "npx playwright test",
+    "playwright:ui": "npx playwright test --ui",
+    "playwright:debug": "npx playwright test --debug",
+    "playwright:codegen": "playwright codegen"
+  },
+  "dependencies": {
+    "@apollo/client": "~3.13.0",
+    "@hookform/resolvers": "^5.2.2",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-popover": "^1.1.15",
+    "@serwist/next": "^9.5.6",
+    "@stripe/react-stripe-js": "^5.6.1",
+    "@stripe/stripe-js": "^8.9.0",
+    "@types/react": "^19.2.14",
+    "algoliasearch": "^4.26.0",
+    "autoprefixer": "^10.4.24",
+    "graphql": "^16.12.0",
+    "idb": "^8.0.3",
+    "lodash": "^4.17.23",
+    "lucide-react": "^0.577.0",
+    "motion": "^12.34.3",
+    "next": "16.1.6",
+    "nprogress": "^0.2.0",
+    "postcss": "^8.5.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-hook-form": "^7.71.1",
+    "react-instantsearch-dom": "^6.40.4",
+    "serwist": "^9.5.6",
+    "uuid": "^13.0.0",
+    "web-push": "^3.6.7",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@lhci/cli": "^0.15.1",
+    "@playwright/test": "^1.58.2",
+    "@types/lodash": "^4.17.23",
+    "@types/node": "24.10.13",
+    "@types/nprogress": "^0.2.3",
+    "@types/react-instantsearch-dom": "^6.12.9",
+    "@types/uuid": "^11.0.0",
+    "@types/web-push": "^3.6.4",
+    "@typescript-eslint/eslint-plugin": "^8.56.0",
+    "@typescript-eslint/parser": "^8.56.0",
+    "babel-plugin-styled-components": "^2.1.4",
+    "eslint-config-next": "^16.1.6",
+    "postcss-preset-env": "^11.1.3",
+    "prettier": "^3.8.1",
+    "react-doctor": "^0.0.28",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3"
+  }
+}
+````
+
 ## File: src/pages/index.tsx
 ````typescript
 import Head from 'next/head'
@@ -29240,74 +29544,6 @@ function Index({
   )
 }
 export default Index
-````
-
-## File: package.json
-````json
-{
-  "name": "people4europe-nextjs",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev -p 3002 -H 127.0.0.1",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "format": "prettier --write \"**/*.{js,ts,tsx,json}\"",
-    "playwright": "npx playwright test",
-    "playwright:ui": "npx playwright test --ui",
-    "playwright:debug": "npx playwright test --debug",
-    "playwright:codegen": "playwright codegen"
-  },
-  "dependencies": {
-    "@apollo/client": "~3.13.0",
-    "@hookform/resolvers": "^5.2.2",
-    "@radix-ui/react-dialog": "^1.1.15",
-    "@radix-ui/react-popover": "^1.1.15",
-    "@serwist/next": "^9.5.6",
-    "@stripe/react-stripe-js": "^5.6.1",
-    "@stripe/stripe-js": "^8.9.0",
-    "@types/react": "^19.2.14",
-    "algoliasearch": "^4.26.0",
-    "autoprefixer": "^10.4.24",
-    "graphql": "^16.12.0",
-    "idb": "^8.0.3",
-    "lodash": "^4.17.23",
-    "lucide-react": "^0.577.0",
-    "motion": "^12.34.3",
-    "next": "16.1.6",
-    "nprogress": "^0.2.0",
-    "postcss": "^8.5.6",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "react-hook-form": "^7.71.1",
-    "react-instantsearch-dom": "^6.40.4",
-    "serwist": "^9.5.6",
-    "uuid": "^13.0.0",
-    "web-push": "^3.6.7",
-    "zod": "^4.3.6",
-    "zustand": "^5.0.11"
-  },
-  "devDependencies": {
-    "@lhci/cli": "^0.15.1",
-    "@playwright/test": "^1.58.2",
-    "@types/lodash": "^4.17.23",
-    "@types/node": "24.10.13",
-    "@types/nprogress": "^0.2.3",
-    "@types/react-instantsearch-dom": "^6.12.9",
-    "@types/uuid": "^11.0.0",
-    "@types/web-push": "^3.6.4",
-    "@typescript-eslint/eslint-plugin": "^8.56.0",
-    "@typescript-eslint/parser": "^8.56.0",
-    "babel-plugin-styled-components": "^2.1.4",
-    "eslint-config-next": "^16.1.6",
-    "postcss-preset-env": "^11.1.3",
-    "prettier": "^3.8.1",
-    "react-doctor": "^0.0.28",
-    "tailwindcss": "^3.4.19",
-    "typescript": "^5.9.3"
-  }
-}
 ````
 
 ## File: src/app/(shop)/product/[slug]/page.tsx
@@ -30170,7 +30406,7 @@ const DEFAULT_HINTS: ResolvedConfiguratorHints = {
   closureType: 'Waehlen Sie den gewuenschten Verschlusstyp passend zur Konstruktion.',
   frontClosure: 'Waehlen Sie den Frontverschluss und optionales Zubehoer.',
   backClosure: 'Waehlen Sie den Rueckenverschluss und optionales Zubehoer.',
-  extras: 'Hohlsaumgröße Auswählen',
+  extras: 'Hier koennen Sie zusaetzliche Ausstattungen und Sonderwuensche definieren.',
   sketch: 'Laden Sie optional eine Skizze hoch, damit Positionen und Masse eindeutig zugeordnet werden koennen.',
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -30696,6 +30932,7 @@ export function resolveCustomizerConfig(
   const sizeFields = dimensions.fields.filter((field) => field.required).map((field) => field.key)
   const hasWindowStep = hasWindowConfig(config.window_data)
   const hasDoorStep = hasDoorConfig(config.door_data)
+  const isPoolPlaneProduct = isPoolPlaneProductSlug(context?.productSlug)
   const steps = buildStepOrder(
     productType,
     {
@@ -30717,7 +30954,8 @@ export function resolveCustomizerConfig(
       doorData: config.door_data,
     },
     {
-      extrasBeforeEyeletsForPoolRectangular: isPoolProductConfig(config, context),
+      extrasBeforeEyeletsForPoolRectangular:
+        isPoolPlaneProduct && (productType === 'rectangular' || productType === 'lounge'),
     },
   )
   const validationRules = buildValidationRules(productType, steps, sizeFields, colors, materials)
@@ -30725,12 +30963,21 @@ export function resolveCustomizerConfig(
   if (!livePrice) {
     issues.push('Die Live-Preisberechnung ist nur eingeschraenkt verfuegbar, weil Material- oder Massdaten fehlen.')
   }
+  const hints: ResolvedConfiguratorHints = {
+    ...DEFAULT_HINTS,
+    ...(isPoolPlaneProduct
+      ? {
+          extras: 'Bitte waehlen Sie die gewuenschte Hohlsaumgroesse (Pflichtfeld).',
+        }
+      : {}),
+  }
   return {
     configId: config.id,
     productId: config.product_id,
     productTitle: config.product_title,
     productType,
     unitSelector,
+    isPoolPlaneProduct,
     steps,
     dimensions,
     options: {
@@ -30761,7 +31008,7 @@ export function resolveCustomizerConfig(
       supportsFrontBackClosure: productType === 'trailer',
     },
     validationRules,
-    hints: DEFAULT_HINTS,
+    hints,
     issues: uniqueIssues(issues),
   }
 }
@@ -30836,7 +31083,11 @@ import type {
   StepId,
 } from '@/lib/customizer-runtime'
 import { emptyConfigFormState } from '@/lib/customizer-runtime'
-import { isPoolPlaneProductSlug } from '@/lib/customizer-resolver'
+import {
+  getTarpaulinOpeningValidationIssues,
+  isTerraceTarpaulinLayout,
+  TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM,
+} from '@/lib/tarpaulin-opening-rules'
 import { cn } from '@/lib/utils'
 interface ProductConfiguratorProps {
   productId: number
@@ -31017,21 +31268,37 @@ function resolveDimensionDiagramSrc(
   if (isValidImageUrl(defaultSrc)) return defaultSrc
   return undefined
 }
-function normalizeChoiceSelector(value: string | null | undefined): string {
-  return (value ?? '').trim().toLowerCase()
+/** Vergleich Label (ChoiceGrid) ↔ WP-Selektor: Umlaute/ß, Whitespace, Teilstring-Fallback */
+function normalizeClosureExtraSelector(value: string | null | undefined): string {
+  return (value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/ß/g, 'ss')
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+}
+function isTrailerEckenSenkrechtVerschweisstClosure(label: string): boolean {
+  const n = normalizeClosureExtraSelector(label)
+  if (!n) return false
+  return n.includes('ecken') && n.includes('senkrecht') && n.includes('versch')
 }
 function filterClosureExtrasBySelection(
   choices: ResolvedChoice[],
   selectedClosure: string,
 ): ResolvedChoice[] {
-  const normalizedSelection = normalizeChoiceSelector(selectedClosure)
+  const nSel = normalizeClosureExtraSelector(selectedClosure)
   return choices.filter((choice) => {
-    const selector = typeof choice.meta?.selector === 'string'
-      ? normalizeChoiceSelector(choice.meta.selector)
-      : ''
-    if (!selector) return true
-    if (!normalizedSelection) return false
-    return selector === normalizedSelection
+    const raw = typeof choice.meta?.selector === 'string' ? choice.meta.selector.trim() : ''
+    if (!raw) return true
+    if (!nSel) return false
+    const nChoice = normalizeClosureExtraSelector(raw)
+    if (nChoice === nSel) return true
+    const shorter = nChoice.length <= nSel.length ? nChoice : nSel
+    const longer = nChoice.length > nSel.length ? nChoice : nSel
+    if (shorter.length >= 10 && longer.includes(shorter)) return true
+    return false
   })
 }
 function hasConditionalClosureExtras(choices: ResolvedChoice[]): boolean {
@@ -31040,21 +31307,36 @@ function hasConditionalClosureExtras(choices: ResolvedChoice[]): boolean {
 function getDynamicRequiredFields(
   form: ConfigFormState,
   resolvedConfig: ResolvedCustomizerConfig,
-  productSlug?: string,
 ): ConfigFormField[] {
   const dynamic: ConfigFormField[] = []
+  const terraceTarp = isTerraceTarpaulinLayout(resolvedConfig)
   if (resolvedConfig.steps.includes('window') && form.hasWindow === 'yes') {
     if (form.windowSplit === 'yes') {
-      dynamic.push('windowSplitLeftWidthCm', 'windowSplitRightWidthCm')
+      dynamic.push(
+        'windowSplitLeftWidthCm',
+        'windowSplitRightWidthCm',
+        'windowSplitLeftHeightCm',
+        'windowSplitRightHeightCm',
+        'windowSplitLeftDistanceLeftCm',
+        'windowSplitRightDistanceRightCm',
+        'windowSplitLeftDistanceBottomCm',
+        'windowSplitRightDistanceBottomCm',
+      )
     } else {
       dynamic.push('windowWidthCm', 'windowHeightCm')
+      if (terraceTarp) {
+        dynamic.push('windowDistanceSideCm', 'windowDistanceBottomCm')
+      }
     }
   }
   if (resolvedConfig.steps.includes('door') && form.hasDoor === 'yes') {
     dynamic.push('doorWidthCm', 'doorHeightCm')
+    if (terraceTarp) {
+      dynamic.push('doorDistanceLeftCm')
+    }
   }
   if (
-    isPoolPlaneProductSlug(productSlug) &&
+    resolvedConfig.isPoolPlaneProduct &&
     resolvedConfig.steps.includes('extras') &&
     resolvedConfig.options.extras.length > 0
   ) {
@@ -31074,6 +31356,15 @@ const REQUIRED_FIELD_LABELS: Partial<Record<ConfigFormField, string>> = {
   windowHeightCm: 'Fensterhoehe',
   windowSplitLeftWidthCm: 'Fensterbreite links',
   windowSplitRightWidthCm: 'Fensterbreite rechts',
+  windowSplitLeftHeightCm: 'Fensterhoehe links',
+  windowSplitRightHeightCm: 'Fensterhoehe rechts',
+  windowSplitLeftDistanceLeftCm: 'Abstand linkes Fenster zum linken Rand',
+  windowSplitRightDistanceRightCm: 'Abstand rechtes Fenster zum rechten Rand',
+  windowSplitLeftDistanceBottomCm: 'Abstand linkes Fenster zum unteren Rand',
+  windowSplitRightDistanceBottomCm: 'Abstand rechtes Fenster zum unteren Rand',
+  windowDistanceSideCm: 'Fenster: Abstand zum Seitenrand',
+  windowDistanceBottomCm: 'Fenster: Abstand zur unteren Seite',
+  doorDistanceLeftCm: 'Tuer: Abstand zur linken Seite',
   hasDoor: 'Tür: Bitte Ja oder Nein waehlen',
   doorWidthCm: 'Türbreite',
   doorHeightCm: 'Türhöhe',
@@ -31086,9 +31377,8 @@ const REQUIRED_FIELD_LABELS: Partial<Record<ConfigFormField, string>> = {
 function getRequiredFieldLabel(
   field: ConfigFormField,
   resolvedConfig: ResolvedCustomizerConfig,
-  productSlug?: string,
 ): string {
-  if (field === 'extrasSelected' && isPoolPlaneProductSlug(productSlug)) {
+  if (field === 'extrasSelected' && resolvedConfig.isPoolPlaneProduct) {
     return 'Hohlsaum'
   }
   const dimensionField = resolvedConfig.dimensions.fields.find((entry) => entry.key === field)
@@ -31605,37 +31895,36 @@ export default function ProductConfigurator({
   const [desktopPricePanelOpen, setDesktopPricePanelOpen] = useState(true)
   const priceAbortRef = useRef<AbortController | null>(null)
   const configuratorCardRef = useRef<HTMLDivElement | null>(null)
-  const poolPlaneUi = isPoolPlaneProductSlug(productSlug)
-  const effectiveHints = useMemo(() => {
-    const merged = mergeHints(
-      resolvedConfig?.hints ?? {
-        color: 'Waehlen Sie Material und Farbe passend zum Einsatzzweck.',
-        size: 'Tragen Sie die benoetigten Masse in Zentimetern ein.',
-        topSide: 'Waehlen Sie die Verarbeitung fuer die obere Seite der Plane.',
-        leftSide: 'Waehlen Sie die Verarbeitung fuer die linke Seite der Plane.',
-        rightSide: 'Waehlen Sie die Verarbeitung fuer die rechte Seite der Plane.',
-        bottomSide: 'Waehlen Sie die Verarbeitung fuer die untere Seite der Plane.',
-        window: 'Wünschen Sie ein Fenster in Ihrer Plane?',
-        door: 'Wünschen Sie eine Tür in Ihrer Plane?',
-        eyelets: 'Waehlen Sie die Oesenkonfiguration.',
-        closureType: 'Waehlen Sie die Verschlussart.',
-        frontClosure: 'Waehlen Sie den Frontverschluss.',
-        backClosure: 'Waehlen Sie den Rueckenverschluss.',
-        extras: 'Definieren Sie zusaetzliche Ausstattungen und Sonderwuensche.',
-        sketch: 'Laden Sie optional eine Skizze hoch.',
-      },
-      hints,
-    )
-    if (poolPlaneUi && !(hints?.extras && hints.extras.trim())) {
-      return {
-        ...merged,
-        extras: 'Bitte waehlen Sie eine Hohlsaum-Variante (Pflichtfeld).',
-      }
-    }
-    return merged
-  }, [hints, poolPlaneUi, resolvedConfig])
+  const poolPlaneUi = resolvedConfig?.isPoolPlaneProduct === true
+  const effectiveHints = useMemo(
+    () =>
+      mergeHints(
+        resolvedConfig?.hints ?? {
+          color: 'Waehlen Sie Material und Farbe passend zum Einsatzzweck.',
+          size: 'Tragen Sie die benoetigten Masse in Zentimetern ein.',
+          topSide: 'Waehlen Sie die Verarbeitung fuer die obere Seite der Plane.',
+          leftSide: 'Waehlen Sie die Verarbeitung fuer die linke Seite der Plane.',
+          rightSide: 'Waehlen Sie die Verarbeitung fuer die rechte Seite der Plane.',
+          bottomSide: 'Waehlen Sie die Verarbeitung fuer die untere Seite der Plane.',
+          window: 'Wünschen Sie ein Fenster in Ihrer Plane?',
+          door: 'Wünschen Sie eine Tür in Ihrer Plane?',
+          eyelets: 'Waehlen Sie die Oesenkonfiguration.',
+          closureType: 'Waehlen Sie die Verschlussart.',
+          frontClosure: 'Waehlen Sie den Frontverschluss.',
+          backClosure: 'Waehlen Sie den Rueckenverschluss.',
+          extras: 'Definieren Sie zusaetzliche Ausstattungen und Sonderwuensche.',
+          sketch: 'Laden Sie optional eine Skizze hoch.',
+        },
+        hints,
+      ),
+    [hints, resolvedConfig?.hints],
+  )
   const steps = resolvedConfig?.steps ?? []
   const stateMessage = describeStateMessage(configuratorState?.message, configuratorState?.warnings)
+  const terraceTarpaulin = useMemo(
+    () => (resolvedConfig ? isTerraceTarpaulinLayout(resolvedConfig) : false),
+    [resolvedConfig],
+  )
   useEffect(() => {
     setForm(initialFormState)
     setOpenStep(resolvedConfig?.steps[0] ?? null)
@@ -31648,9 +31937,9 @@ export default function ProductConfigurator({
     if (!resolvedConfig) return []
     return [
       ...resolvedConfig.validationRules.requiredFields,
-      ...getDynamicRequiredFields(form, resolvedConfig, productSlug),
+      ...getDynamicRequiredFields(form, resolvedConfig),
     ]
-  }, [form, productSlug, resolvedConfig])
+  }, [form, resolvedConfig])
   const hasMinimumForPrice = useMemo(() => {
     if (!resolvedConfig) return false
     return resolvedConfig.validationRules.minimumForPrice.every((field) => isFilled(field, form))
@@ -31668,6 +31957,10 @@ export default function ProductConfigurator({
     form.rectangularWidthCm,
     form.rectangularHeightCm,
   ])
+  const openingValidationIssues = useMemo(() => {
+    if (!resolvedConfig) return []
+    return getTarpaulinOpeningValidationIssues(resolvedConfig, form)
+  }, [form, resolvedConfig])
   const canSubmit = useMemo(() => {
     if (!resolvedConfig) return false
     if (
@@ -31677,8 +31970,9 @@ export default function ProductConfigurator({
     ) {
       return false
     }
+    if (openingValidationIssues.length > 0) return false
     return requiredFields.every((field) => isFilled(field, form))
-  }, [configuratorState?.status, requiredFields, resolvedConfig, form])
+  }, [configuratorState?.status, requiredFields, resolvedConfig, form, openingValidationIssues.length])
   const missingRequiredFields = useMemo(() => {
     if (!resolvedConfig) return []
     return requiredFields.filter((field) => !isFilled(field, form))
@@ -31687,7 +31981,7 @@ export default function ProductConfigurator({
     if (!resolvedConfig || canSubmit || missingRequiredFields.length === 0) return null
     const labels = Array.from(
       new Set(
-        missingRequiredFields.map((field) => getRequiredFieldLabel(field, resolvedConfig, productSlug)),
+        missingRequiredFields.map((field) => getRequiredFieldLabel(field, resolvedConfig)),
       ),
     )
     const visibleLabels = labels.slice(0, 4)
@@ -31695,7 +31989,7 @@ export default function ProductConfigurator({
     const suffix =
       remainingCount > 0 ? ` und ${remainingCount} weitere Angaben` : ''
     return `Bitte vervollstaendigen Sie zuerst: ${visibleLabels.join(', ')}${suffix}.`
-  }, [canSubmit, missingRequiredFields, productSlug, resolvedConfig])
+  }, [canSubmit, missingRequiredFields, resolvedConfig])
   const stepsWithMissingFields = useMemo(() => {
     if (!resolvedConfig) return new Set<StepId>()
     return new Set(
@@ -31704,6 +31998,19 @@ export default function ProductConfigurator({
         .filter((stepId): stepId is StepId => stepId !== null),
     )
   }, [missingRequiredFields, resolvedConfig])
+  const stepsWithOpeningErrors = useMemo(() => {
+    const next = new Set<StepId>()
+    if (!resolvedConfig || openingValidationIssues.length === 0 || !terraceTarpaulin) return next
+    if (form.hasWindow === 'yes' && resolvedConfig.steps.includes('window')) next.add('window')
+    if (form.hasDoor === 'yes' && resolvedConfig.steps.includes('door')) next.add('door')
+    return next
+  }, [
+    form.hasDoor,
+    form.hasWindow,
+    openingValidationIssues.length,
+    resolvedConfig,
+    terraceTarpaulin,
+  ])
   const filteredFrontClosureExtras = useMemo(
     () =>
       resolvedConfig
@@ -32098,6 +32405,13 @@ export default function ProductConfigurator({
           {!canSubmit && missingFieldsMessage ? (
             <p className="mt-2 text-xs font-medium text-amber-700">{missingFieldsMessage}</p>
           ) : null}
+          {!canSubmit && openingValidationIssues.length > 0 && terraceTarpaulin ? (
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-xs font-medium text-red-700">
+              {openingValidationIssues.map((msg, idx) => (
+                <li key={`sticky-opening-${idx}`}>{msg}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </div>
       <div
@@ -32224,7 +32538,13 @@ export default function ProductConfigurator({
               </StepAccordionItem>
             ) : null}
             {steps.includes('window') ? (
-              <StepAccordionItem id="window" title={STEP_TITLES.window} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('window')}>
+              <StepAccordionItem
+                id="window"
+                title={STEP_TITLES.window}
+                openStep={openStep}
+                onToggle={toggleStep}
+                showWarning={stepsWithMissingFields.has('window') || stepsWithOpeningErrors.has('window')}
+              >
                 <HintPanel text={effectiveHints.window} />
                 <div className="space-y-3">
                   <YesNoToggle value={form.hasWindow} onChange={setWindowEnabled} />
@@ -32235,15 +32555,94 @@ export default function ProductConfigurator({
                         <YesNoToggle value={form.windowSplit} onChange={setWindowSplitMode} />
                       </div>
                       {form.windowSplit === 'yes' ? (
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <label className="space-y-1">
-                            <span className="text-xs font-semibold text-[#1F5CAB]">Fensterbreite links (a) cm</span>
-                            <input type="number" min="0" value={form.windowSplitLeftWidthCm} onChange={(event) => setField('windowSplitLeftWidthCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
-                          </label>
-                          <label className="space-y-1">
-                            <span className="text-xs font-semibold text-[#1F5CAB]">Fensterbreite rechts (b) cm</span>
-                            <input type="number" min="0" value={form.windowSplitRightWidthCm} onChange={(event) => setField('windowSplitRightWidthCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
-                          </label>
+                        <div className="space-y-3">
+                          <p className="text-xs text-[#1F5CAB]/85">
+                            Zwischen den beiden Fenstern werden {TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM} cm Abstand angenommen (fester Wert).
+                          </p>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Fensterbreite links (a) cm</span>
+                              <input
+                                type="number"
+                                min="1"
+                                value={form.windowSplitLeftWidthCm}
+                                onChange={(event) => setField('windowSplitLeftWidthCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Fensterbreite rechts (c) cm</span>
+                              <input
+                                type="number"
+                                min="1"
+                                value={form.windowSplitRightWidthCm}
+                                onChange={(event) => setField('windowSplitRightWidthCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Fensterhoehe links (b) cm</span>
+                              <input
+                                type="number"
+                                min="1"
+                                max={130}
+                                value={form.windowSplitLeftHeightCm}
+                                onChange={(event) => setField('windowSplitLeftHeightCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Fensterhoehe rechts (d) cm</span>
+                              <input
+                                type="number"
+                                min="1"
+                                max={130}
+                                value={form.windowSplitRightHeightCm}
+                                onChange={(event) => setField('windowSplitRightHeightCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Abstand linkes Fenster zum linken Rand (x) cm</span>
+                              <input
+                                type="number"
+                                min={terraceTarpaulin ? 10 : 0}
+                                value={form.windowSplitLeftDistanceLeftCm}
+                                onChange={(event) => setField('windowSplitLeftDistanceLeftCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Abstand rechtes Fenster zum rechten Rand (z) cm</span>
+                              <input
+                                type="number"
+                                min={terraceTarpaulin ? 10 : 0}
+                                value={form.windowSplitRightDistanceRightCm}
+                                onChange={(event) => setField('windowSplitRightDistanceRightCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Abstand linkes Fenster zum unteren Rand (w) cm</span>
+                              <input
+                                type="number"
+                                min={terraceTarpaulin ? 10 : 0}
+                                value={form.windowSplitLeftDistanceBottomCm}
+                                onChange={(event) => setField('windowSplitLeftDistanceBottomCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Abstand rechtes Fenster zum unteren Rand (y) cm</span>
+                              <input
+                                type="number"
+                                min={terraceTarpaulin ? 10 : 0}
+                                value={form.windowSplitRightDistanceBottomCm}
+                                onChange={(event) => setField('windowSplitRightDistanceBottomCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                          </div>
                         </div>
                       ) : (
                         <div className="grid gap-3 sm:grid-cols-2">
@@ -32253,25 +32652,50 @@ export default function ProductConfigurator({
                           </label>
                           <label className="space-y-1">
                             <span className="text-xs font-semibold text-[#1F5CAB]">Fensterhoehe (b) in cm</span>
-                            <input type="number" min="1" value={form.windowHeightCm} onChange={(event) => setField('windowHeightCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
+                            <input type="number" min="1" max={130} value={form.windowHeightCm} onChange={(event) => setField('windowHeightCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
                           </label>
                           <label className="space-y-1">
                             <span className="text-xs font-semibold text-[#1F5CAB]">Entfernung zum Seitenrand (c) in cm</span>
-                            <input type="number" min="0" value={form.windowDistanceSideCm} onChange={(event) => setField('windowDistanceSideCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
+                            <input
+                              type="number"
+                              min={terraceTarpaulin ? 10 : 0}
+                              value={form.windowDistanceSideCm}
+                              onChange={(event) => setField('windowDistanceSideCm', event.target.value)}
+                              className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                            />
                           </label>
                           <label className="space-y-1">
                             <span className="text-xs font-semibold text-[#1F5CAB]">Entfernung zur unteren Seite (d) in cm</span>
-                            <input type="number" min="0" value={form.windowDistanceBottomCm} onChange={(event) => setField('windowDistanceBottomCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
+                            <input
+                              type="number"
+                              min={terraceTarpaulin ? 10 : 0}
+                              value={form.windowDistanceBottomCm}
+                              onChange={(event) => setField('windowDistanceBottomCm', event.target.value)}
+                              className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                            />
                           </label>
                         </div>
                       )}
                     </>
                   ) : null}
+                  {openingValidationIssues.length > 0 && terraceTarpaulin && form.hasWindow === 'yes' ? (
+                    <ul className="list-disc space-y-1.5 rounded-lg border border-red-200 bg-red-50/90 px-3 py-2 pl-8 text-sm text-red-800">
+                      {openingValidationIssues.map((msg, idx) => (
+                        <li key={`win-opening-${idx}`}>{msg}</li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
               </StepAccordionItem>
             ) : null}
             {steps.includes('door') ? (
-              <StepAccordionItem id="door" title={STEP_TITLES.door} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('door')}>
+              <StepAccordionItem
+                id="door"
+                title={STEP_TITLES.door}
+                openStep={openStep}
+                onToggle={toggleStep}
+                showWarning={stepsWithMissingFields.has('door') || stepsWithOpeningErrors.has('door')}
+              >
                 <HintPanel text={effectiveHints.door} />
                 <div className="space-y-3">
                   <YesNoToggle value={form.hasDoor} onChange={(value) => setField('hasDoor', value)} />
@@ -32288,9 +32712,22 @@ export default function ProductConfigurator({
                         </label>
                         <label className="space-y-1 sm:col-span-2">
                           <span className="text-xs font-semibold text-[#1F5CAB]">Entfernung der Tuer zur linken Seite (c) in cm</span>
-                          <input type="number" min="0" value={form.doorDistanceLeftCm} onChange={(event) => setField('doorDistanceLeftCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
+                          <input
+                            type="number"
+                            min={terraceTarpaulin ? 10 : 0}
+                            value={form.doorDistanceLeftCm}
+                            onChange={(event) => setField('doorDistanceLeftCm', event.target.value)}
+                            className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                          />
                         </label>
                       </div>
+                      {openingValidationIssues.length > 0 && terraceTarpaulin && form.hasDoor === 'yes' ? (
+                        <ul className="list-disc space-y-1.5 rounded-lg border border-red-200 bg-red-50/90 px-3 py-2 pl-8 text-sm text-red-800">
+                          {openingValidationIssues.map((msg, idx) => (
+                            <li key={`door-opening-${idx}`}>{msg}</li>
+                          ))}
+                        </ul>
+                      ) : null}
                       {resolvedConfig.options.doorExtras.length > 0 ? (
                         <NestedAccordion title="Extras zur Tuer" isOpen={doorExtrasAccordionOpen} onToggle={() => preserveConfiguratorScroll(() => setDoorExtrasAccordionOpen((prev) => !prev))}>
                           <p className="mb-3 text-xs font-medium text-[#1F5CAB]/80">Mehrfachauswahl moeglich.</p>
@@ -32302,7 +32739,8 @@ export default function ProductConfigurator({
                 </div>
               </StepAccordionItem>
             ) : null}
-            {resolvedConfig.productType === 'lounge' || resolvedConfig.productType === 'rectangular' ? (
+            {resolvedConfig.isPoolPlaneProduct &&
+            (resolvedConfig.productType === 'lounge' || resolvedConfig.productType === 'rectangular') ? (
               <>
                 {steps
                   .filter((id) => id === 'extras' || id === 'eyelets' || id === 'closureType')
@@ -32325,7 +32763,9 @@ export default function ProductConfigurator({
             )}
             {steps.includes('frontClosure') ? (
               <StepAccordionItem id="frontClosure" title={STEP_TITLES.frontClosure} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('frontClosure')}>
-                <HintPanel text={effectiveHints.frontClosure} />
+                {resolvedConfig.productType === 'trailer' && isTrailerEckenSenkrechtVerschweisstClosure(form.frontClosure) ? null : (
+                  <HintPanel text={effectiveHints.frontClosure} />
+                )}
                 {resolvedConfig.options.frontClosures.length > 0 ? (
                   <ChoiceGrid choices={resolvedConfig.options.frontClosures} value={form.frontClosure} onChange={(value) => setField('frontClosure', value)} onPreview={setPreviewChoice} />
                 ) : (
@@ -32340,7 +32780,7 @@ export default function ProductConfigurator({
                         </p>
                       ) : filteredFrontClosureExtras.length > 0 ? (
                         <MultiChoiceGrid choices={filteredFrontClosureExtras} selectedIds={form.frontClosureExtras} onToggle={(value) => toggleMultiValue('frontClosureExtras', value)} onPreview={setPreviewChoice} />
-                      ) : (
+                      ) : resolvedConfig.productType === 'trailer' && isTrailerEckenSenkrechtVerschweisstClosure(form.frontClosure) ? null : (
                         <p className="text-sm text-[#1F5CAB]">
                           Fuer den gewaehlten Frontverschluss ist kein Zubehoer hinterlegt.
                         </p>
@@ -32352,7 +32792,9 @@ export default function ProductConfigurator({
             ) : null}
             {steps.includes('backClosure') ? (
               <StepAccordionItem id="backClosure" title={STEP_TITLES.backClosure} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('backClosure')}>
-                <HintPanel text={effectiveHints.backClosure} />
+                {resolvedConfig.productType === 'trailer' && isTrailerEckenSenkrechtVerschweisstClosure(form.backClosure) ? null : (
+                  <HintPanel text={effectiveHints.backClosure} />
+                )}
                 {resolvedConfig.options.backClosures.length > 0 ? (
                   <ChoiceGrid choices={resolvedConfig.options.backClosures} value={form.backClosure} onChange={(value) => setField('backClosure', value)} onPreview={setPreviewChoice} />
                 ) : (
@@ -32367,7 +32809,7 @@ export default function ProductConfigurator({
                         </p>
                       ) : filteredBackClosureExtras.length > 0 ? (
                         <MultiChoiceGrid choices={filteredBackClosureExtras} selectedIds={form.backClosureExtras} onToggle={(value) => toggleMultiValue('backClosureExtras', value)} onPreview={setPreviewChoice} />
-                      ) : (
+                      ) : resolvedConfig.productType === 'trailer' && isTrailerEckenSenkrechtVerschweisstClosure(form.backClosure) ? null : (
                         <p className="text-sm text-[#1F5CAB]">
                           Fuer den gewaehlten Rueckenverschluss ist kein Zubehoer hinterlegt.
                         </p>
@@ -32421,6 +32863,16 @@ export default function ProductConfigurator({
             {!canSubmit && missingFieldsMessage ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
                 {missingFieldsMessage}
+              </div>
+            ) : null}
+            {!canSubmit && openingValidationIssues.length > 0 && terraceTarpaulin ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900">
+                <p className="font-semibold">Massen / Oeffnungen</p>
+                <ul className="mt-2 list-disc space-y-1 pl-4">
+                  {openingValidationIssues.map((msg, idx) => (
+                    <li key={`form-opening-${idx}`}>{msg}</li>
+                  ))}
+                </ul>
               </div>
             ) : null}
             {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
