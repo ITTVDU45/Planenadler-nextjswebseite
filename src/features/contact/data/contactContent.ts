@@ -39,7 +39,7 @@ export const CONTACT_INFO_ITEMS: ContactInfoItem[] = [
     id: 'address',
     type: 'address',
     title: 'Adresse & Oeffnungszeiten',
-    value: 'Duesseldorfer Str. 387, 47055 Duisburg - Mo-Fr 08:00-18:00, Sa 10:00-14:00',
+    value: 'Duesseldorfer Str. 387, 47055 Duisburg - Mo-Fr 08:00-17:00',
     href: MAPS_HREF,
     primaryAction: { label: 'Route planen', href: MAPS_HREF },
     secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },

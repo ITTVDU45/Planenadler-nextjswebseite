@@ -7,7 +7,7 @@ export const INFO_WITH_COUNTERS: InfoWithCountersContent = {
   counters: [
     { id: 'customers', value: '500+', label: 'Zufriedene Kunden' },
     { id: 'products', value: '1.000+', label: 'Gefertigte Planen' },
-    { id: 'experience', value: '10+', label: 'Jahre Erfahrung' },
+    { id: 'experience', value: '20+', label: 'Jahre Erfahrung' },
     { id: 'rating', value: '4,8', label: 'Ø Kundenbewertung' },
   ],
 }

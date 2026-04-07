@@ -5,7 +5,7 @@ import { POSTS_LIST_QUERY, POST_BY_SLUG_QUERY } from './queries'
 import { PLACEHOLDER_IMAGE_DATA_URL } from '@/shared/lib/functions'
 
 const DEFAULT_COVER_ALT = 'Blog-Bild'
-const BLOG_AUTHOR_NAME = 'Ahmet Karadag'
+const BLOG_AUTHOR_NAME = 'Adler Planen'
 
 function stripHtml(html: string | null | undefined): string {
   if (!html || typeof html !== 'string') return ''
