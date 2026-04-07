@@ -23,7 +23,6 @@ import type {
   StepId,
 } from '@/lib/customizer-runtime'
 import { emptyConfigFormState } from '@/lib/customizer-runtime'
-import { isPoolPlaneProductSlug } from '@/lib/customizer-resolver'
 import { cn } from '@/lib/utils'
 
 interface ProductConfiguratorProps {
@@ -233,25 +232,43 @@ function resolveDimensionDiagramSrc(
   return undefined
 }
 
-function normalizeChoiceSelector(value: string | null | undefined): string {
-  return (value ?? '').trim().toLowerCase()
+/** Vergleich Label (ChoiceGrid) ↔ WP-Selektor: Umlaute/ß, Whitespace, Teilstring-Fallback */
+function normalizeClosureExtraSelector(value: string | null | undefined): string {
+  return (value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/ß/g, 'ss')
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+}
+
+function isTrailerEckenSenkrechtVerschweisstClosure(label: string): boolean {
+  const n = normalizeClosureExtraSelector(label)
+  if (!n) return false
+  return n.includes('ecken') && n.includes('senkrecht') && n.includes('versch')
 }
 
 function filterClosureExtrasBySelection(
   choices: ResolvedChoice[],
   selectedClosure: string,
 ): ResolvedChoice[] {
-  const normalizedSelection = normalizeChoiceSelector(selectedClosure)
+  const nSel = normalizeClosureExtraSelector(selectedClosure)
 
   return choices.filter((choice) => {
-    const selector = typeof choice.meta?.selector === 'string'
-      ? normalizeChoiceSelector(choice.meta.selector)
-      : ''
+    const raw = typeof choice.meta?.selector === 'string' ? choice.meta.selector.trim() : ''
+    if (!raw) return true
+    if (!nSel) return false
 
-    if (!selector) return true
-    if (!normalizedSelection) return false
+    const nChoice = normalizeClosureExtraSelector(raw)
+    if (nChoice === nSel) return true
 
-    return selector === normalizedSelection
+    const shorter = nChoice.length <= nSel.length ? nChoice : nSel
+    const longer = nChoice.length > nSel.length ? nChoice : nSel
+    if (shorter.length >= 10 && longer.includes(shorter)) return true
+
+    return false
   })
 }
 
@@ -262,7 +279,6 @@ function hasConditionalClosureExtras(choices: ResolvedChoice[]): boolean {
 function getDynamicRequiredFields(
   form: ConfigFormState,
   resolvedConfig: ResolvedCustomizerConfig,
-  productSlug?: string,
 ): ConfigFormField[] {
   const dynamic: ConfigFormField[] = []
 
@@ -279,7 +295,7 @@ function getDynamicRequiredFields(
   }
 
   if (
-    isPoolPlaneProductSlug(productSlug) &&
+    resolvedConfig.isPoolPlaneProduct &&
     resolvedConfig.steps.includes('extras') &&
     resolvedConfig.options.extras.length > 0
   ) {
@@ -314,9 +330,8 @@ const REQUIRED_FIELD_LABELS: Partial<Record<ConfigFormField, string>> = {
 function getRequiredFieldLabel(
   field: ConfigFormField,
   resolvedConfig: ResolvedCustomizerConfig,
-  productSlug?: string,
 ): string {
-  if (field === 'extrasSelected' && isPoolPlaneProductSlug(productSlug)) {
+  if (field === 'extrasSelected' && resolvedConfig.isPoolPlaneProduct) {
     return 'Hohlsaum'
   }
   const dimensionField = resolvedConfig.dimensions.fields.find((entry) => entry.key === field)
@@ -865,36 +880,31 @@ export default function ProductConfigurator({
   const priceAbortRef = useRef<AbortController | null>(null)
   const configuratorCardRef = useRef<HTMLDivElement | null>(null)
 
-  const poolPlaneUi = isPoolPlaneProductSlug(productSlug)
+  const poolPlaneUi = resolvedConfig?.isPoolPlaneProduct === true
 
-  const effectiveHints = useMemo(() => {
-    const merged = mergeHints(
-      resolvedConfig?.hints ?? {
-        color: 'Waehlen Sie Material und Farbe passend zum Einsatzzweck.',
-        size: 'Tragen Sie die benoetigten Masse in Zentimetern ein.',
-        topSide: 'Waehlen Sie die Verarbeitung fuer die obere Seite der Plane.',
-        leftSide: 'Waehlen Sie die Verarbeitung fuer die linke Seite der Plane.',
-        rightSide: 'Waehlen Sie die Verarbeitung fuer die rechte Seite der Plane.',
-        bottomSide: 'Waehlen Sie die Verarbeitung fuer die untere Seite der Plane.',
-        window: 'Wünschen Sie ein Fenster in Ihrer Plane?',
-        door: 'Wünschen Sie eine Tür in Ihrer Plane?',
-        eyelets: 'Waehlen Sie die Oesenkonfiguration.',
-        closureType: 'Waehlen Sie die Verschlussart.',
-        frontClosure: 'Waehlen Sie den Frontverschluss.',
-        backClosure: 'Waehlen Sie den Rueckenverschluss.',
-        extras: 'Definieren Sie zusaetzliche Ausstattungen und Sonderwuensche.',
-        sketch: 'Laden Sie optional eine Skizze hoch.',
-      },
-      hints,
-    )
-    if (poolPlaneUi && !(hints?.extras && hints.extras.trim())) {
-      return {
-        ...merged,
-        extras: 'Bitte waehlen Sie eine Hohlsaum-Variante (Pflichtfeld).',
-      }
-    }
-    return merged
-  }, [hints, poolPlaneUi, resolvedConfig])
+  const effectiveHints = useMemo(
+    () =>
+      mergeHints(
+        resolvedConfig?.hints ?? {
+          color: 'Waehlen Sie Material und Farbe passend zum Einsatzzweck.',
+          size: 'Tragen Sie die benoetigten Masse in Zentimetern ein.',
+          topSide: 'Waehlen Sie die Verarbeitung fuer die obere Seite der Plane.',
+          leftSide: 'Waehlen Sie die Verarbeitung fuer die linke Seite der Plane.',
+          rightSide: 'Waehlen Sie die Verarbeitung fuer die rechte Seite der Plane.',
+          bottomSide: 'Waehlen Sie die Verarbeitung fuer die untere Seite der Plane.',
+          window: 'Wünschen Sie ein Fenster in Ihrer Plane?',
+          door: 'Wünschen Sie eine Tür in Ihrer Plane?',
+          eyelets: 'Waehlen Sie die Oesenkonfiguration.',
+          closureType: 'Waehlen Sie die Verschlussart.',
+          frontClosure: 'Waehlen Sie den Frontverschluss.',
+          backClosure: 'Waehlen Sie den Rueckenverschluss.',
+          extras: 'Definieren Sie zusaetzliche Ausstattungen und Sonderwuensche.',
+          sketch: 'Laden Sie optional eine Skizze hoch.',
+        },
+        hints,
+      ),
+    [hints, resolvedConfig?.hints],
+  )
 
   const steps = resolvedConfig?.steps ?? []
   const stateMessage = describeStateMessage(configuratorState?.message, configuratorState?.warnings)
@@ -913,9 +923,9 @@ export default function ProductConfigurator({
     if (!resolvedConfig) return []
     return [
       ...resolvedConfig.validationRules.requiredFields,
-      ...getDynamicRequiredFields(form, resolvedConfig, productSlug),
+      ...getDynamicRequiredFields(form, resolvedConfig),
     ]
-  }, [form, productSlug, resolvedConfig])
+  }, [form, resolvedConfig])
 
   const hasMinimumForPrice = useMemo(() => {
     if (!resolvedConfig) return false
@@ -958,7 +968,7 @@ export default function ProductConfigurator({
 
     const labels = Array.from(
       new Set(
-        missingRequiredFields.map((field) => getRequiredFieldLabel(field, resolvedConfig, productSlug)),
+        missingRequiredFields.map((field) => getRequiredFieldLabel(field, resolvedConfig)),
       ),
     )
 
@@ -968,7 +978,7 @@ export default function ProductConfigurator({
       remainingCount > 0 ? ` und ${remainingCount} weitere Angaben` : ''
 
     return `Bitte vervollstaendigen Sie zuerst: ${visibleLabels.join(', ')}${suffix}.`
-  }, [canSubmit, missingRequiredFields, productSlug, resolvedConfig])
+  }, [canSubmit, missingRequiredFields, resolvedConfig])
 
   const stepsWithMissingFields = useMemo(() => {
     if (!resolvedConfig) return new Set<StepId>()
@@ -1630,7 +1640,8 @@ export default function ProductConfigurator({
               </StepAccordionItem>
             ) : null}
 
-            {resolvedConfig.productType === 'lounge' || resolvedConfig.productType === 'rectangular' ? (
+            {resolvedConfig.isPoolPlaneProduct &&
+            (resolvedConfig.productType === 'lounge' || resolvedConfig.productType === 'rectangular') ? (
               <>
                 {steps
                   .filter((id) => id === 'extras' || id === 'eyelets' || id === 'closureType')
@@ -1654,7 +1665,9 @@ export default function ProductConfigurator({
 
             {steps.includes('frontClosure') ? (
               <StepAccordionItem id="frontClosure" title={STEP_TITLES.frontClosure} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('frontClosure')}>
-                <HintPanel text={effectiveHints.frontClosure} />
+                {resolvedConfig.productType === 'trailer' && isTrailerEckenSenkrechtVerschweisstClosure(form.frontClosure) ? null : (
+                  <HintPanel text={effectiveHints.frontClosure} />
+                )}
                 {resolvedConfig.options.frontClosures.length > 0 ? (
                   <ChoiceGrid choices={resolvedConfig.options.frontClosures} value={form.frontClosure} onChange={(value) => setField('frontClosure', value)} onPreview={setPreviewChoice} />
                 ) : (
@@ -1669,7 +1682,7 @@ export default function ProductConfigurator({
                         </p>
                       ) : filteredFrontClosureExtras.length > 0 ? (
                         <MultiChoiceGrid choices={filteredFrontClosureExtras} selectedIds={form.frontClosureExtras} onToggle={(value) => toggleMultiValue('frontClosureExtras', value)} onPreview={setPreviewChoice} />
-                      ) : (
+                      ) : resolvedConfig.productType === 'trailer' && isTrailerEckenSenkrechtVerschweisstClosure(form.frontClosure) ? null : (
                         <p className="text-sm text-[#1F5CAB]">
                           Fuer den gewaehlten Frontverschluss ist kein Zubehoer hinterlegt.
                         </p>
@@ -1682,7 +1695,9 @@ export default function ProductConfigurator({
 
             {steps.includes('backClosure') ? (
               <StepAccordionItem id="backClosure" title={STEP_TITLES.backClosure} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('backClosure')}>
-                <HintPanel text={effectiveHints.backClosure} />
+                {resolvedConfig.productType === 'trailer' && isTrailerEckenSenkrechtVerschweisstClosure(form.backClosure) ? null : (
+                  <HintPanel text={effectiveHints.backClosure} />
+                )}
                 {resolvedConfig.options.backClosures.length > 0 ? (
                   <ChoiceGrid choices={resolvedConfig.options.backClosures} value={form.backClosure} onChange={(value) => setField('backClosure', value)} onPreview={setPreviewChoice} />
                 ) : (
@@ -1697,7 +1712,7 @@ export default function ProductConfigurator({
                         </p>
                       ) : filteredBackClosureExtras.length > 0 ? (
                         <MultiChoiceGrid choices={filteredBackClosureExtras} selectedIds={form.backClosureExtras} onToggle={(value) => toggleMultiValue('backClosureExtras', value)} onPreview={setPreviewChoice} />
-                      ) : (
+                      ) : resolvedConfig.productType === 'trailer' && isTrailerEckenSenkrechtVerschweisstClosure(form.backClosure) ? null : (
                         <p className="text-sm text-[#1F5CAB]">
                           Fuer den gewaehlten Rueckenverschluss ist kein Zubehoer hinterlegt.
                         </p>

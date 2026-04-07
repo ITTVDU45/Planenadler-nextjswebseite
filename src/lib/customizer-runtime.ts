@@ -221,6 +221,8 @@ export interface ResolvedCustomizerConfig {
   productTitle: string
   productType: SupportedProductType
   unitSelector: SupportedUnitSelector
+  /** true wenn Shop-Slug der Poolplane entspricht (Hohlsaum-UI, Reihenfolge, Hinweis) */
+  isPoolPlaneProduct: boolean
   steps: StepId[]
   dimensions: ResolvedDimensionConfig
   options: {

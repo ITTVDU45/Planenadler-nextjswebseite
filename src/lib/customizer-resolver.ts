@@ -44,7 +44,7 @@ const DEFAULT_HINTS: ResolvedConfiguratorHints = {
   closureType: 'Waehlen Sie den gewuenschten Verschlusstyp passend zur Konstruktion.',
   frontClosure: 'Waehlen Sie den Frontverschluss und optionales Zubehoer.',
   backClosure: 'Waehlen Sie den Rueckenverschluss und optionales Zubehoer.',
-  extras: 'Hohlsaumgröße Auswählen',
+  extras: 'Hier koennen Sie zusaetzliche Ausstattungen und Sonderwuensche definieren.',
   sketch: 'Laden Sie optional eine Skizze hoch, damit Positionen und Masse eindeutig zugeordnet werden koennen.',
 }
 
@@ -629,6 +629,7 @@ export function resolveCustomizerConfig(
   const sizeFields = dimensions.fields.filter((field) => field.required).map((field) => field.key)
   const hasWindowStep = hasWindowConfig(config.window_data)
   const hasDoorStep = hasDoorConfig(config.door_data)
+  const isPoolPlaneProduct = isPoolPlaneProductSlug(context?.productSlug)
   const steps = buildStepOrder(
     productType,
     {
@@ -650,7 +651,8 @@ export function resolveCustomizerConfig(
       doorData: config.door_data,
     },
     {
-      extrasBeforeEyeletsForPoolRectangular: isPoolProductConfig(config, context),
+      extrasBeforeEyeletsForPoolRectangular:
+        isPoolPlaneProduct && (productType === 'rectangular' || productType === 'lounge'),
     },
   )
 
@@ -660,12 +662,22 @@ export function resolveCustomizerConfig(
     issues.push('Die Live-Preisberechnung ist nur eingeschraenkt verfuegbar, weil Material- oder Massdaten fehlen.')
   }
 
+  const hints: ResolvedConfiguratorHints = {
+    ...DEFAULT_HINTS,
+    ...(isPoolPlaneProduct
+      ? {
+          extras: 'Bitte waehlen Sie die gewuenschte Hohlsaumgroesse (Pflichtfeld).',
+        }
+      : {}),
+  }
+
   return {
     configId: config.id,
     productId: config.product_id,
     productTitle: config.product_title,
     productType,
     unitSelector,
+    isPoolPlaneProduct,
     steps,
     dimensions,
     options: {
@@ -696,7 +708,7 @@ export function resolveCustomizerConfig(
       supportsFrontBackClosure: productType === 'trailer',
     },
     validationRules,
-    hints: DEFAULT_HINTS,
+    hints,
     issues: uniqueIssues(issues),
   }
 }
