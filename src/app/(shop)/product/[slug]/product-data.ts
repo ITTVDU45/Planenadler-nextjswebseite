@@ -542,7 +542,10 @@ function buildRecommendations(
   return result
 }
 
-async function fetchCustomizerConfig(productId: number): Promise<{
+async function fetchCustomizerConfig(
+  productId: number,
+  productSlug?: string,
+): Promise<{
   rawConfig: CustomizerConfig | null
   state: ConfiguratorState
   resolvedConfig: ReturnType<typeof resolveCustomizerState>['resolvedConfig']
@@ -598,7 +601,9 @@ async function fetchCustomizerConfig(productId: number): Promise<{
             data: appendCustomizerAssetVersion(json.data, assetVersion),
           }
         : json
-    const { state, resolvedConfig } = resolveCustomizerState(versionedJson)
+    const { state, resolvedConfig } = resolveCustomizerState(versionedJson, {
+      productSlug: productSlug?.trim(),
+    })
     return {
       rawConfig: versionedJson.success && versionedJson.data ? versionedJson.data : null,
       resolvedConfig,
@@ -680,7 +685,7 @@ export async function getProductPageData(slug: string): Promise<TruckTarpProduct
 
     const allProducts = data.products?.nodes ?? []
 
-    const customizerData = await fetchCustomizerConfig(data.product.databaseId)
+    const customizerData = await fetchCustomizerConfig(data.product.databaseId, slug)
 
     return mapToTruckTarpProduct(data.product, allProducts, customizerData)
   } catch (error) {

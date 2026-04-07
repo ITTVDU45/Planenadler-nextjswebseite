@@ -167,31 +167,55 @@ function resolveDimensionDiagramSrc(
   form: ConfigFormState,
 ): string | undefined {
   const fieldKeys = new Set(dim.fields.map((f) => f.key))
-  const hasTerraceHeightsBc =
-    fieldKeys.has('heightRightBCm') && fieldKeys.has('heightLeftCCm')
-
   const defaultSrc = dim.imageSrc
   const bGreaterSrc = dim.imageSrcWhenBGreater
   const cGreaterSrc = dim.imageSrcWhenCGreater
 
-  if (!hasTerraceHeightsBc) {
-    return isValidImageUrl(defaultSrc) ? defaultSrc : undefined
+  const hasTerraceHeightsBc =
+    fieldKeys.has('heightRightBCm') && fieldKeys.has('heightLeftCCm')
+  if (hasTerraceHeightsBc) {
+    const bCm = parseCmFromForm(form.heightRightBCm)
+    const cCm = parseCmFromForm(form.heightLeftCCm)
+
+    if (bCm !== null && cCm !== null) {
+      if (bCm > cCm) {
+        if (isValidImageUrl(bGreaterSrc)) return bGreaterSrc
+        if (isValidImageUrl(defaultSrc)) return defaultSrc
+        return undefined
+      }
+      if (cCm > bCm) {
+        if (isValidImageUrl(cGreaterSrc)) return cGreaterSrc
+        if (isValidImageUrl(defaultSrc)) return defaultSrc
+        return undefined
+      }
+    }
+
+    if (isValidImageUrl(defaultSrc)) return defaultSrc
+    return undefined
   }
 
-  const bCm = parseCmFromForm(form.heightRightBCm)
-  const cCm = parseCmFromForm(form.heightLeftCCm)
+  // Rechteck-/Pool-Typ: Breite B vs. Hoehe C (Customizer: „B greater“ / „C greater“)
+  const hasRectangularWidthHeight =
+    fieldKeys.has('rectangularWidthCm') && fieldKeys.has('rectangularHeightCm')
+  if (hasRectangularWidthHeight) {
+    const wCm = parseCmFromForm(form.rectangularWidthCm)
+    const hCm = parseCmFromForm(form.rectangularHeightCm)
 
-  if (bCm !== null && cCm !== null) {
-    if (bCm > cCm) {
-      if (isValidImageUrl(bGreaterSrc)) return bGreaterSrc
-      if (isValidImageUrl(defaultSrc)) return defaultSrc
-      return undefined
+    if (wCm !== null && hCm !== null) {
+      if (wCm > hCm) {
+        if (isValidImageUrl(bGreaterSrc)) return bGreaterSrc
+        if (isValidImageUrl(defaultSrc)) return defaultSrc
+        return undefined
+      }
+      if (hCm > wCm) {
+        if (isValidImageUrl(cGreaterSrc)) return cGreaterSrc
+        if (isValidImageUrl(defaultSrc)) return defaultSrc
+        return undefined
+      }
     }
-    if (cCm > bCm) {
-      if (isValidImageUrl(cGreaterSrc)) return cGreaterSrc
-      if (isValidImageUrl(defaultSrc)) return defaultSrc
-      return undefined
-    }
+
+    if (isValidImageUrl(defaultSrc)) return defaultSrc
+    return undefined
   }
 
   if (isValidImageUrl(defaultSrc)) return defaultSrc
@@ -864,6 +888,8 @@ export default function ProductConfigurator({
     (resolvedConfig?.dimensions.fields ?? []).map((f) => f.key).join(','),
     form.heightRightBCm,
     form.heightLeftCCm,
+    form.rectangularWidthCm,
+    form.rectangularHeightCm,
   ])
 
   const canSubmit = useMemo(() => {
@@ -1374,7 +1400,7 @@ export default function ProductConfigurator({
                     <img
                       key={dimensionDiagramSrc}
                       src={dimensionDiagramSrc}
-                      alt="Massenskizze zur Orientierung bei den Angaben A, B und C"
+                      alt="Massenskizze zur Orientierung bei Ihren Angaben im Konfigurator"
                       className="mx-auto max-h-72 w-full max-w-lg object-contain"
                       width={800}
                       height={600}

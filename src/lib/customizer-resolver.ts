@@ -132,9 +132,25 @@ function normalizeProductType(value: string | undefined): SupportedProductType {
   return 'unknown'
 }
 
-function isPoolProductConfig(config: Pick<CustomizerConfig, 'product_title'>): boolean {
+export interface CustomizerResolveContext {
+  /** WooCommerce-/Seiten-Slug (z. B. poolplane), unabhaengig vom Customizer-Produkttitel */
+  productSlug?: string
+}
+
+function isPoolProductConfig(
+  config: Pick<CustomizerConfig, 'product_title'>,
+  context?: CustomizerResolveContext,
+): boolean {
   const title = (config.product_title ?? '').trim().toLowerCase()
-  return title.includes('pool')
+  if (title.includes('pool')) return true
+  const slug = (context?.productSlug ?? '').trim().toLowerCase()
+  if (!slug) return false
+  return (
+    slug.includes('poolplane') ||
+    slug.includes('poolabdeckung') ||
+    slug.includes('pool-abdeckung') ||
+    slug.includes('pool-plan')
+  )
 }
 
 function normalizeUnitSelector(value: string | undefined): SupportedUnitSelector {
@@ -288,6 +304,7 @@ function resolveDimensionConfig(
   productType: SupportedProductType,
   dimensions: CustomizerDimensions | null,
   config?: Pick<CustomizerConfig, 'product_title'>,
+  context?: CustomizerResolveContext,
 ): ResolvedDimensionConfig {
   const minValue = toNumber(dimensions?.minimum_value) ?? 1
   const dimensionDescription = isNonEmptyString(dimensions?.dimension_description)
@@ -336,7 +353,7 @@ function resolveDimensionConfig(
         ],
       }
     case 'rectangular':
-      if (config && isPoolProductConfig(config)) {
+      if (config && isPoolProductConfig(config, context)) {
         return {
           title: 'Masse waehlen',
           description: dimensionDescription,
@@ -364,7 +381,7 @@ function resolveDimensionConfig(
       }
     case 'tarpaulins':
     default:
-      if (config && isPoolProductConfig(config)) {
+      if (config && isPoolProductConfig(config, context)) {
         return {
           title: 'Masse waehlen',
           description: dimensionDescription,
@@ -489,7 +506,10 @@ function toMaybeConfig(response: CustomizerApiResponse | null | undefined): Cust
   return response.data
 }
 
-export function resolveCustomizerConfig(config: CustomizerConfig): ResolvedCustomizerConfig {
+export function resolveCustomizerConfig(
+  config: CustomizerConfig,
+  context?: CustomizerResolveContext,
+): ResolvedCustomizerConfig {
   const issues: string[] = []
 
   const calculationUnit = (config.calculation_unit ?? {}) as CustomizerCalculationUnit
@@ -523,7 +543,7 @@ export function resolveCustomizerConfig(config: CustomizerConfig): ResolvedCusto
     issues.push('Die Berechnungseinheit aus WordPress ist unvollstaendig.')
   }
 
-  const dimensions = resolveDimensionConfig(productType, config.dimentions, config)
+  const dimensions = resolveDimensionConfig(productType, config.dimentions, config, context)
   const sizeFields = dimensions.fields.filter((field) => field.required).map((field) => field.key)
   const hasWindowStep = hasWindowConfig(config.window_data)
   const hasDoorStep = hasDoorConfig(config.door_data)
@@ -595,6 +615,7 @@ export function resolveCustomizerConfig(config: CustomizerConfig): ResolvedCusto
 
 export function resolveCustomizerState(
   response: CustomizerApiResponse | null | undefined,
+  context?: CustomizerResolveContext,
 ): { state: ConfiguratorState; resolvedConfig: ResolvedCustomizerConfig | null } {
   const rawConfig = toMaybeConfig(response)
 
@@ -608,7 +629,7 @@ export function resolveCustomizerState(
     }
   }
 
-  const resolvedConfig = resolveCustomizerConfig(rawConfig)
+  const resolvedConfig = resolveCustomizerConfig(rawConfig, context)
   if (resolvedConfig.productType === 'unknown') {
     return {
       state: {
