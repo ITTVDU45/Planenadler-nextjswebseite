@@ -68,30 +68,89 @@ function asArray<T>(value: unknown): T[] {
 }
 
 function cleanImageUrl(value: unknown): string | undefined {
+  if (Array.isArray(value) && value.length > 0) return cleanImageUrl(value[0])
   if (!isNonEmptyString(value)) return undefined
   const url = value.trim()
   if (url === 'http://null' || url === 'http://null/' || url.endsWith('/null')) return undefined
   return url
 }
 
-/** URLs aus dimentions-Map; optional alternative Schluessel (Legacy/Tippfehler im Backend). */
+function getRecordValueIgnoreCase(
+  record: Record<string, unknown>,
+  candidateKeys: string[],
+): unknown {
+  const lowerToActual = new Map<string, string>()
+  for (const k of Object.keys(record)) {
+    lowerToActual.set(k.toLowerCase(), k)
+  }
+  for (const want of candidateKeys) {
+    const actual = lowerToActual.get(want.toLowerCase())
+    if (actual !== undefined) return record[actual]
+  }
+  return undefined
+}
+
+/** JSON-String, verschachtelte Arrays oder normale Objekte aus der REST-API. */
+function coerceDimentionsMap(value: unknown): Record<string, unknown> | null {
+  if (value === null || value === undefined) return null
+  let v: unknown = value
+  if (typeof v === 'string') {
+    const s = v.trim()
+    if (!s) return null
+    try {
+      v = JSON.parse(s) as unknown
+    } catch {
+      return null
+    }
+  }
+  if (Array.isArray(v) && v.length > 0 && isRecord(v[0])) {
+    v = v[0]
+  }
+  if (!isRecord(v)) return null
+  return v
+}
+
+function normalizeDimentionsInput(
+  dimensions: CustomizerDimensions | null,
+): CustomizerDimensions | null {
+  if (dimensions === null || dimensions === undefined) return null
+  const coerced = coerceDimentionsMap(dimensions as unknown)
+  if (coerced !== null) return coerced as CustomizerDimensions
+  return dimensions
+}
+
+/** URLs aus dimentions-Map; case-insensitive Keys, Legacy-Schreibweisen. */
 function pickDimensionDiagramUrls(dimensions: CustomizerDimensions | null): {
   defaultUrl: string | undefined
   whenBGreaterUrl: string | undefined
   whenCGreaterUrl: string | undefined
 } {
-  const raw = dimensions as Record<string, unknown> | null
+  const raw = coerceDimentionsMap(dimensions as unknown)
   if (!raw) {
     return { defaultUrl: undefined, whenBGreaterUrl: undefined, whenCGreaterUrl: undefined }
   }
 
   return {
-    defaultUrl: cleanImageUrl(raw.dimension_image_url ?? raw.dimention_image_url),
+    defaultUrl: cleanImageUrl(
+      getRecordValueIgnoreCase(raw, [
+        'dimension_image_url',
+        'dimention_image_url',
+        'dimension_image',
+      ]),
+    ),
     whenBGreaterUrl: cleanImageUrl(
-      raw.dimension_b_image_url ?? raw.dimention_b_image_url,
+      getRecordValueIgnoreCase(raw, [
+        'dimension_b_image_url',
+        'dimention_b_image_url',
+        'dimension_b_image',
+      ]),
     ),
     whenCGreaterUrl: cleanImageUrl(
-      raw.dimension_c_image_url ?? raw.dimention_c_image_url,
+      getRecordValueIgnoreCase(raw, [
+        'dimension_c_image_url',
+        'dimention_c_image_url',
+        'dimension_c_image',
+      ]),
     ),
   }
 }
@@ -306,12 +365,13 @@ function resolveDimensionConfig(
   config?: Pick<CustomizerConfig, 'product_title'>,
   context?: CustomizerResolveContext,
 ): ResolvedDimensionConfig {
-  const minValue = toNumber(dimensions?.minimum_value) ?? 1
-  const dimensionDescription = isNonEmptyString(dimensions?.dimension_description)
-    ? dimensions.dimension_description
+  const dim = normalizeDimentionsInput(dimensions)
+  const minValue = toNumber(dim?.minimum_value) ?? 1
+  const dimensionDescription = isNonEmptyString(dim?.dimension_description)
+    ? dim.dimension_description
     : DEFAULT_HINTS.size
 
-  const diagramUrls = pickDimensionDiagramUrls(dimensions)
+  const diagramUrls = pickDimensionDiagramUrls(dim)
   const dimensionDiagramVariants = {
     imageSrcWhenBGreater: diagramUrls.whenBGreaterUrl,
     imageSrcWhenCGreater: diagramUrls.whenCGreaterUrl,

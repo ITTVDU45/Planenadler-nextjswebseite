@@ -150,7 +150,15 @@ function isFilled(field: ConfigFormField, form: ConfigFormState): boolean {
 }
 
 function isValidImageUrl(url?: string | null): boolean {
-  return Boolean(url && url !== 'http://null' && url !== 'http://null/' && !url.endsWith('/null'))
+  if (url === null || url === undefined) return false
+  if (typeof url !== 'string') return false
+  const t = url.trim()
+  if (!t) return false
+  if (t === 'http://null' || t === 'http://null/' || t.endsWith('/null')) return false
+  if (/^https?:\/\//i.test(t)) return true
+  // Relative Upload-Pfade (z. B. /wp-content/uploads/...)
+  if (t.startsWith('/') && t.length > 2 && !t.includes('..')) return true
+  return false
 }
 
 function parseCmFromForm(value: string | number | undefined): number | null {
@@ -1378,37 +1386,43 @@ export default function ProductConfigurator({
             ) : null}
 
             {steps.includes('size') ? (
-              <StepAccordionItem id="size" title={STEP_TITLES.size} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('size')}>
-                <HintPanel text={resolvedConfig.dimensions.description || effectiveHints.size} />
-                <div className={`grid gap-3 ${resolvedConfig.dimensions.fields.length >= 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
-                  {resolvedConfig.dimensions.fields.map((field) => (
-                    <label key={field.key} className="space-y-1">
-                      <span className="text-xs font-semibold text-[#1F5CAB]">{field.label}</span>
-                      <input
-                        type="number"
-                        min={field.min}
-                        value={form[field.key] as string}
-                        onChange={(event) => setField(field.key, event.target.value)}
-                        className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm font-medium text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
-                        required={field.required}
-                      />
-                    </label>
-                  ))}
-                </div>
+              <div className="space-y-3">
+                <StepAccordionItem id="size" title={STEP_TITLES.size} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('size')}>
+                  <HintPanel text={resolvedConfig.dimensions.description || effectiveHints.size} />
+                  <div className={`grid gap-3 ${resolvedConfig.dimensions.fields.length >= 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+                    {resolvedConfig.dimensions.fields.map((field) => (
+                      <label key={field.key} className="space-y-1">
+                        <span className="text-xs font-semibold text-[#1F5CAB]">{field.label}</span>
+                        <input
+                          type="number"
+                          min={field.min}
+                          value={form[field.key] as string}
+                          onChange={(event) => setField(field.key, event.target.value)}
+                          className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm font-medium text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                          required={field.required}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </StepAccordionItem>
                 {isValidImageUrl(dimensionDiagramSrc) ? (
-                  <div className="mt-4 overflow-hidden rounded-xl border border-[#CFE0F5] bg-[#F8FBFF] p-3">
-                    <img
-                      key={dimensionDiagramSrc}
-                      src={dimensionDiagramSrc}
-                      alt="Massenskizze zur Orientierung bei Ihren Angaben im Konfigurator"
-                      className="mx-auto max-h-72 w-full max-w-lg object-contain"
-                      width={800}
-                      height={600}
-                      decoding="async"
-                    />
+                  <div className="overflow-hidden rounded-2xl border border-[#D7E6F8] bg-white p-4 shadow-[0_8px_24px_rgba(15,43,82,0.05)]">
+                    <p className="mb-2 text-xs font-semibold text-[#1F5CAB]">Massenskizze</p>
+                    <div className="overflow-hidden rounded-xl border border-[#CFE0F5] bg-[#F8FBFF] p-3">
+                      <img
+                        key={dimensionDiagramSrc}
+                        src={dimensionDiagramSrc}
+                        alt="Massenskizze zur Orientierung bei Ihren Angaben im Konfigurator"
+                        className="mx-auto max-h-72 w-full max-w-lg object-contain"
+                        width={800}
+                        height={600}
+                        decoding="async"
+                        loading="lazy"
+                      />
+                    </div>
                   </div>
                 ) : null}
-              </StepAccordionItem>
+              </div>
             ) : null}
 
             {steps.includes('topSide') ? (
