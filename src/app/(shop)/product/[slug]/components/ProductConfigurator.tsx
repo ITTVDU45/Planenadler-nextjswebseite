@@ -153,9 +153,10 @@ function isValidImageUrl(url?: string | null): boolean {
   return Boolean(url && url !== 'http://null' && url !== 'http://null/' && !url.endsWith('/null'))
 }
 
-function parseCmFromForm(value: string | undefined): number | null {
-  if (typeof value !== 'string') return null
-  const trimmed = value.trim()
+function parseCmFromForm(value: string | number | undefined): number | null {
+  if (value === undefined || value === null) return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  const trimmed = String(value).trim()
   if (!trimmed) return null
   const parsed = Number(trimmed.replace(',', '.'))
   return Number.isFinite(parsed) ? parsed : null
@@ -857,7 +858,10 @@ export default function ProductConfigurator({
     if (!resolvedConfig) return undefined
     return resolveDimensionDiagramSrc(resolvedConfig.dimensions, form)
   }, [
-    resolvedConfig,
+    resolvedConfig?.dimensions.imageSrc,
+    resolvedConfig?.dimensions.imageSrcWhenBGreater,
+    resolvedConfig?.dimensions.imageSrcWhenCGreater,
+    (resolvedConfig?.dimensions.fields ?? []).map((f) => f.key).join(','),
     form.heightRightBCm,
     form.heightLeftCCm,
   ])
@@ -1368,6 +1372,7 @@ export default function ProductConfigurator({
                 {isValidImageUrl(dimensionDiagramSrc) ? (
                   <div className="mt-4 overflow-hidden rounded-xl border border-[#CFE0F5] bg-[#F8FBFF] p-3">
                     <img
+                      key={dimensionDiagramSrc}
                       src={dimensionDiagramSrc}
                       alt="Massenskizze zur Orientierung bei den Angaben A, B und C"
                       className="mx-auto max-h-72 w-full max-w-lg object-contain"

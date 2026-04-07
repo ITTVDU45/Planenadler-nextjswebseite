@@ -74,6 +74,28 @@ function cleanImageUrl(value: unknown): string | undefined {
   return url
 }
 
+/** URLs aus dimentions-Map; optional alternative Schluessel (Legacy/Tippfehler im Backend). */
+function pickDimensionDiagramUrls(dimensions: CustomizerDimensions | null): {
+  defaultUrl: string | undefined
+  whenBGreaterUrl: string | undefined
+  whenCGreaterUrl: string | undefined
+} {
+  const raw = dimensions as Record<string, unknown> | null
+  if (!raw) {
+    return { defaultUrl: undefined, whenBGreaterUrl: undefined, whenCGreaterUrl: undefined }
+  }
+
+  return {
+    defaultUrl: cleanImageUrl(raw.dimension_image_url ?? raw.dimention_image_url),
+    whenBGreaterUrl: cleanImageUrl(
+      raw.dimension_b_image_url ?? raw.dimention_b_image_url,
+    ),
+    whenCGreaterUrl: cleanImageUrl(
+      raw.dimension_c_image_url ?? raw.dimention_c_image_url,
+    ),
+  }
+}
+
 function toNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim()) {
@@ -272,9 +294,10 @@ function resolveDimensionConfig(
     ? dimensions.dimension_description
     : DEFAULT_HINTS.size
 
+  const diagramUrls = pickDimensionDiagramUrls(dimensions)
   const dimensionDiagramVariants = {
-    imageSrcWhenBGreater: cleanImageUrl(dimensions?.dimension_b_image_url),
-    imageSrcWhenCGreater: cleanImageUrl(dimensions?.dimension_c_image_url),
+    imageSrcWhenBGreater: diagramUrls.whenBGreaterUrl,
+    imageSrcWhenCGreater: diagramUrls.whenCGreaterUrl,
   }
 
   const makeField = (
@@ -288,7 +311,7 @@ function resolveDimensionConfig(
       return {
         title: 'Masse waehlen',
         description: dimensionDescription,
-        imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
+        imageSrc: diagramUrls.defaultUrl,
         ...dimensionDiagramVariants,
         minimumValue: minValue,
         fields: [
@@ -303,7 +326,7 @@ function resolveDimensionConfig(
       return {
         title: 'Masse waehlen',
         description: dimensionDescription,
-        imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
+        imageSrc: diagramUrls.defaultUrl,
         ...dimensionDiagramVariants,
         minimumValue: minValue,
         fields: [
@@ -317,7 +340,7 @@ function resolveDimensionConfig(
         return {
           title: 'Masse waehlen',
           description: dimensionDescription,
-          imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
+          imageSrc: diagramUrls.defaultUrl,
           ...dimensionDiagramVariants,
           minimumValue: minValue,
           fields: [
@@ -330,7 +353,7 @@ function resolveDimensionConfig(
       return {
         title: 'Masse waehlen',
         description: dimensionDescription,
-        imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
+        imageSrc: diagramUrls.defaultUrl,
         ...dimensionDiagramVariants,
         minimumValue: minValue,
         fields: [
@@ -345,7 +368,7 @@ function resolveDimensionConfig(
         return {
           title: 'Masse waehlen',
           description: dimensionDescription,
-          imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
+          imageSrc: diagramUrls.defaultUrl,
           ...dimensionDiagramVariants,
           minimumValue: minValue,
           fields: [
@@ -358,7 +381,7 @@ function resolveDimensionConfig(
       return {
         title: 'Masse waehlen',
         description: dimensionDescription,
-        imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
+        imageSrc: diagramUrls.defaultUrl,
         ...dimensionDiagramVariants,
         minimumValue: minValue,
         fields: [
