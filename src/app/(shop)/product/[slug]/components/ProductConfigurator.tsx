@@ -1584,15 +1584,6 @@ export default function ProductConfigurator({
                       {resolvedConfig.options.extras.length > 0 ? (
                         <MultiChoiceGrid choices={resolvedConfig.options.extras} selectedIds={form.extrasSelected} onToggle={(value) => toggleMultiValue('extrasSelected', value)} onPreview={setPreviewChoice} />
                       ) : null}
-                      <label className="space-y-1">
-                        <span className="text-xs font-semibold text-[#1F5CAB]">Hinweise zu den Extras (optional)</span>
-                        <textarea
-                          value={form.extras}
-                          onChange={(event) => setField('extras', event.target.value)}
-                          placeholder="Weitere Anforderungen, Hinweise oder Sonderwuensche"
-                          className="min-h-20 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] p-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
-                        />
-                      </label>
                     </>
                   ) : null}
                 </div>

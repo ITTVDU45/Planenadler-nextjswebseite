@@ -62,9 +62,6 @@ export interface PriceCalculationRequestBody {
     heightCm?: string
     distanceLeftCm?: string
   }
-  notes: {
-    extras?: string
-  }
 }
 
 export interface PriceCalculationResult {
@@ -165,9 +162,6 @@ export function buildPriceCalculationRequest(
       widthCm: form.doorWidthCm || undefined,
       heightCm: form.doorHeightCm || undefined,
       distanceLeftCm: form.doorDistanceLeftCm || undefined,
-    },
-    notes: {
-      extras: form.extras || undefined,
     },
   }
 }
@@ -333,7 +327,6 @@ export function buildConfigurationSummary(
 
   addSummaryEntry(entries, 'Frontverschluss-Zubehoer', body.selections.frontClosureExtras)
   addSummaryEntry(entries, 'Rueckenverschluss-Zubehoer', body.selections.backClosureExtras)
-  addSummaryEntry(entries, 'Hinweise', body.notes.extras)
   addSummaryEntry(entries, 'Skizze', sketchFileName)
 
   return entries

@@ -68,7 +68,6 @@ export type ConfigFormField =
   | 'closureType'
   | 'frontClosure'
   | 'backClosure'
-  | 'extras'
 
 export interface ConfigFormState {
   material: string
@@ -112,7 +111,6 @@ export interface ConfigFormState {
   doorExtras: string[]
   hasExtras: ToggleState
   extrasSelected: string[]
-  extras: string
   eyeletEdge: string
   closureType: string
   frontClosure: string
@@ -163,7 +161,6 @@ export const emptyConfigFormState: ConfigFormState = {
   doorExtras: [],
   hasExtras: 'no',
   extrasSelected: [],
-  extras: '',
   eyeletEdge: '',
   closureType: '',
   frontClosure: '',
