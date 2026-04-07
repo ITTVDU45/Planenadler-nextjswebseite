@@ -23,11 +23,8 @@ import type {
   StepId,
 } from '@/lib/customizer-runtime'
 import { emptyConfigFormState } from '@/lib/customizer-runtime'
-import {
-  getTarpaulinOpeningValidationIssues,
-  isTerraceTarpaulinLayout,
-  TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM,
-} from '@/lib/tarpaulin-opening-rules'
+import { TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM } from '@/lib/tarpaulin-constants'
+import { getTarpaulinOpeningValidationIssues, isTerraceTarpaulinLayout } from '@/lib/tarpaulin-opening-rules'
 import { cn } from '@/lib/utils'
 
 interface ProductConfiguratorProps {
@@ -44,6 +41,8 @@ interface ProductConfiguratorProps {
 interface GraphQLResponse<T> {
   data?: T
   errors?: Array<{ message?: string }>
+  /** Next-Proxy bei Konfigurationsfehler */
+  error?: string
 }
 
 const STEP_TITLES: Record<StepId, string> = {
@@ -122,9 +121,21 @@ async function postGraphQL<T>(
     body: JSON.stringify({ query, variables }),
   })
 
-  const json = (await response.json()) as GraphQLResponse<T>
+  const rawText = await response.text()
+  let json: GraphQLResponse<T> | null = null
+  try {
+    json = JSON.parse(rawText) as GraphQLResponse<T>
+  } catch {
+    const hint = rawText.slice(0, 200).replace(/\s+/g, ' ')
+    throw new Error(
+      `GraphQL HTTP ${response.status}: keine JSON-Antwort (WordPress/Upstream pruefen). ${hint}`,
+    )
+  }
+
   if (!response.ok || json.errors?.length) {
-    throw new Error(json.errors?.[0]?.message || 'GraphQL Anfrage fehlgeschlagen')
+    const topError = json.errors?.[0]?.message
+    const proxyError = typeof json.error === 'string' ? json.error : undefined
+    throw new Error(topError || proxyError || `GraphQL Anfrage fehlgeschlagen (HTTP ${response.status})`)
   }
   if (!json.data) {
     throw new Error('Leere GraphQL Antwort')

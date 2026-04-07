@@ -1,8 +1,15 @@
 import type { ConfigFormState, ResolvedCustomizerConfig } from '@/lib/customizer-runtime'
+import {
+  TARPAULIN_MAX_WINDOW_HEIGHT_CM,
+  TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM,
+  TARPAULIN_OPENING_MARGIN_CM,
+} from '@/lib/tarpaulin-constants'
 
-export const TARPAULIN_OPENING_MARGIN_CM = 10
-export const TARPAULIN_MAX_WINDOW_HEIGHT_CM = 130
-export const TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM = 10
+export {
+  TARPAULIN_MAX_WINDOW_HEIGHT_CM,
+  TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM,
+  TARPAULIN_OPENING_MARGIN_CM,
+} from '@/lib/tarpaulin-constants'
 
 function parseCm(value: string | undefined | null): number | null {
   if (value === undefined || value === null) return null
@@ -10,6 +17,10 @@ function parseCm(value: string | undefined | null): number | null {
   if (!trimmed) return null
   const parsed = Number(trimmed.replace(',', '.'))
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+}
+
+function pushUnique(issues: string[], msg: string): void {
+  if (!issues.includes(msg)) issues.push(msg)
 }
 
 /** Terrassen-Tarp (3 Massfelder A/B/C), kein 2-Feld-Pool-Tarp. */
@@ -61,12 +72,18 @@ export function getTarpaulinOpeningValidationIssues(
   if (!needsWindow && !needsDoor) return []
 
   if (lengthA === null || lengthA <= 0) {
-    issues.push('Bitte zuerst eine gueltige Laenge A (cm) eintragen, damit Fenster- und Tuer-Masse geprueft werden koennen.')
+    pushUnique(
+      issues,
+      'Bitte zuerst eine gueltige Laenge A (cm) eintragen, damit Fenster- und Tuer-Masse geprueft werden koennen.',
+    )
     return issues
   }
 
   if (usableH === null || usableH <= 0) {
-    issues.push('Bitte zuerst gueltige Hoehen B/C (cm) eintragen, damit Fenster- und Tuer-Masse geprueft werden koennen.')
+    pushUnique(
+      issues,
+      'Bitte zuerst gueltige Hoehen B/C (cm) eintragen, damit Fenster- und Tuer-Masse geprueft werden koennen.',
+    )
     return issues
   }
 
@@ -84,30 +101,35 @@ export function getTarpaulinOpeningValidationIssues(
     const w = parseCm(form.windowWidthCm)
     const h = parseCm(form.windowHeightCm)
 
-    if (side !== null && bottom !== null && w !== null && h !== null) {
-      if (side < m) {
-        issues.push(`Abstand Fenster zum Seitenrand (c) muss mindestens ${m} cm betragen.`)
-      }
-      if (bottom < m) {
-        issues.push(`Abstand Fenster zur unteren Seite (d) muss mindestens ${m} cm betragen.`)
-      }
-      if (h > maxWinH) {
-        issues.push(`Fensterhoehe (b) darf hoechstens ${maxWinH} cm betragen.`)
-      }
-      if (w > lengthA - 2 * m) {
-        issues.push(`Fensterbreite (a) darf hoechstens ${lengthA - 2 * m} cm betragen (je ${m} cm Rand links/rechts).`)
-      }
-      if (side + w > lengthA - m) {
-        issues.push(
-          'Fenster ragt ueber die rechte Kante: Abstand (c) plus Breite (a) muss so gewaehlt sein, dass rechts mindestens 10 cm Rand bleiben.',
-        )
-      }
-      if (bottom + h > usableH - m) {
-        issues.push(
-          'Fenster ragt nach oben: Abstand unten (d) plus Hoehe (b) muss so gewaehlt sein, dass oben mindestens 10 cm Rand bleiben.',
-        )
-      }
+    if (side !== null && side < m) {
+      pushUnique(issues, `Abstand Fenster zum Seitenrand (c) muss mindestens ${m} cm betragen.`)
+    }
+    if (bottom !== null && bottom < m) {
+      pushUnique(issues, `Abstand Fenster zur unteren Seite (d) muss mindestens ${m} cm betragen.`)
+    }
+    if (h !== null && h > maxWinH) {
+      pushUnique(issues, `Fensterhoehe (b) darf hoechstens ${maxWinH} cm betragen.`)
+    }
+    if (w !== null && w > lengthA - 2 * m) {
+      pushUnique(
+        issues,
+        `Fensterbreite (a) darf hoechstens ${lengthA - 2 * m} cm betragen (je ${m} cm Rand links/rechts).`,
+      )
+    }
+    if (side !== null && w !== null && side + w > lengthA - m) {
+      pushUnique(
+        issues,
+        'Fenster ragt ueber die rechte Kante: Abstand (c) plus Breite (a) muss so gewaehlt sein, dass rechts mindestens 10 cm Rand bleiben.',
+      )
+    }
+    if (bottom !== null && h !== null && bottom + h > usableH - m) {
+      pushUnique(
+        issues,
+        'Fenster ragt nach oben: Abstand unten (d) plus Hoehe (b) muss so gewaehlt sein, dass oben mindestens 10 cm Rand bleiben.',
+      )
+    }
 
+    if (side !== null && w !== null) {
       windowIntervals.push({ left: side, right: side + w })
     }
   }
@@ -122,47 +144,58 @@ export function getTarpaulinOpeningValidationIssues(
     const b1 = parseCm(form.windowSplitLeftDistanceBottomCm)
     const b2 = parseCm(form.windowSplitRightDistanceBottomCm)
 
+    if (leftM !== null && leftM < m) {
+      pushUnique(issues, `Abstand linkes Fenster zum linken Rand muss mindestens ${m} cm betragen.`)
+    }
+    if (rightM !== null && rightM < m) {
+      pushUnique(issues, `Abstand rechtes Fenster zum rechten Rand muss mindestens ${m} cm betragen.`)
+    }
+    if (w1 !== null && w1 <= 0) {
+      pushUnique(issues, 'Fensterbreite links muss groesser als 0 sein.')
+    }
+    if (w2 !== null && w2 <= 0) {
+      pushUnique(issues, 'Fensterbreite rechts muss groesser als 0 sein.')
+    }
     if (
       leftM !== null &&
       rightM !== null &&
       w1 !== null &&
       w2 !== null &&
-      h1 !== null &&
-      h2 !== null &&
-      b1 !== null &&
-      b2 !== null
+      leftM + w1 + gap + w2 + rightM > lengthA
     ) {
-      if (leftM < m) {
-        issues.push(`Abstand linkes Fenster zum linken Rand muss mindestens ${m} cm betragen.`)
-      }
-      if (rightM < m) {
-        issues.push(`Abstand rechtes Fenster zum rechten Rand muss mindestens ${m} cm betragen.`)
-      }
-      if (w1 <= 0 || w2 <= 0) {
-        issues.push('Fensterbreiten links und rechts muessen groesser als 0 sein.')
-      }
-      if (leftM + w1 + gap + w2 + rightM > lengthA) {
-        issues.push(
-          `Summe aus linkem Rand, beiden Fensterbreiten, ${gap} cm Zwischenraum und rechtem Rand darf die Laenge A (${lengthA} cm) nicht ueberschreiten.`,
-        )
-      }
+      pushUnique(
+        issues,
+        `Summe aus linkem Rand, beiden Fensterbreiten, ${gap} cm Zwischenraum und rechtem Rand darf die Laenge A (${lengthA} cm) nicht ueberschreiten.`,
+      )
+    }
 
-      if (h1 > maxWinH) issues.push(`Fensterhoehe links darf hoechstens ${maxWinH} cm betragen.`)
-      if (h2 > maxWinH) issues.push(`Fensterhoehe rechts darf hoechstens ${maxWinH} cm betragen.`)
+    if (h1 !== null && h1 > maxWinH) {
+      pushUnique(issues, `Fensterhoehe links darf hoechstens ${maxWinH} cm betragen.`)
+    }
+    if (h2 !== null && h2 > maxWinH) {
+      pushUnique(issues, `Fensterhoehe rechts darf hoechstens ${maxWinH} cm betragen.`)
+    }
 
-      if (b1 < m) {
-        issues.push(`Abstand linkes Fenster zum unteren Rand muss mindestens ${m} cm betragen.`)
-      }
-      if (b2 < m) {
-        issues.push(`Abstand rechtes Fenster zum unteren Rand muss mindestens ${m} cm betragen.`)
-      }
-      if (b1 + h1 > usableH - m) {
-        issues.push('Linkes Fenster: Abstand unten plus Hoehe verletzt den oberen Mindestrand (10 cm).')
-      }
-      if (b2 + h2 > usableH - m) {
-        issues.push('Rechtes Fenster: Abstand unten plus Hoehe verletzt den oberen Mindestrand (10 cm).')
-      }
+    if (b1 !== null && b1 < m) {
+      pushUnique(issues, `Abstand linkes Fenster zum unteren Rand muss mindestens ${m} cm betragen.`)
+    }
+    if (b2 !== null && b2 < m) {
+      pushUnique(issues, `Abstand rechtes Fenster zum unteren Rand muss mindestens ${m} cm betragen.`)
+    }
+    if (b1 !== null && h1 !== null && b1 + h1 > usableH - m) {
+      pushUnique(
+        issues,
+        'Linkes Fenster: Abstand unten plus Hoehe verletzt den oberen Mindestrand (10 cm).',
+      )
+    }
+    if (b2 !== null && h2 !== null && b2 + h2 > usableH - m) {
+      pushUnique(
+        issues,
+        'Rechtes Fenster: Abstand unten plus Hoehe verletzt den oberen Mindestrand (10 cm).',
+      )
+    }
 
+    if (leftM !== null && w1 !== null && w2 !== null) {
       const x1 = leftM
       const x2 = leftM + w1 + gap
       windowIntervals.push({ left: x1, right: x1 + w1 }, { left: x2, right: x2 + w2 })
@@ -176,21 +209,23 @@ export function getTarpaulinOpeningValidationIssues(
     const dw = parseCm(form.doorWidthCm)
     const dh = parseCm(form.doorHeightCm)
 
-    if (dLeft !== null && dw !== null && dh !== null) {
-      if (dLeft < m) {
-        issues.push(`Abstand der Tuer zur linken Seite muss mindestens ${m} cm betragen.`)
-      }
-      if (dLeft + dw > lengthA - m) {
-        issues.push(
-          'Tuer ragt ueber die rechte Kante: Abstand plus Tuerbreite muss so sein, dass rechts mindestens 10 cm Rand bleiben.',
-        )
-      }
-      if (dh > usableH - m) {
-        issues.push(
-          'Tuerhoehe ist zu gross fuer die gewaehlte Planenhoehe (unterer Rand 10 cm, oberer Mindestrand 10 cm).',
-        )
-      }
+    if (dLeft !== null && dLeft < m) {
+      pushUnique(issues, `Abstand der Tuer zur linken Seite muss mindestens ${m} cm betragen.`)
+    }
+    if (dLeft !== null && dw !== null && dLeft + dw > lengthA - m) {
+      pushUnique(
+        issues,
+        'Tuer ragt ueber die rechte Kante: Abstand plus Tuerbreite muss so sein, dass rechts mindestens 10 cm Rand bleiben.',
+      )
+    }
+    if (dh !== null && dh > usableH - m) {
+      pushUnique(
+        issues,
+        'Tuerhoehe ist zu gross fuer die gewaehlte Planenhoehe (unterer Rand 10 cm, oberer Mindestrand 10 cm).',
+      )
+    }
 
+    if (dLeft !== null && dw !== null) {
       doorInterval = { left: dLeft, right: dLeft + dw }
     }
   }
@@ -201,7 +236,8 @@ export function getTarpaulinOpeningValidationIssues(
       [doorInterval.left, doorInterval.right],
     ]
     if (!horizontalOpeningsSeparated(pairs, gap)) {
-      issues.push(
+      pushUnique(
+        issues,
         `Fenster und Tuer duerfen sich nicht ueberlappen; zwischen den Oeffnungen muessen mindestens ${gap} cm frei bleiben.`,
       )
     }

@@ -80,21 +80,39 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'GraphQL-Upstream nicht erreichbar.' }, { status: 502 })
   }
 
-  const responseBody = await wpRes.text()
-  const nextRes = new NextResponse(responseBody, {
-    status: wpRes.status,
-    headers: {
-      'Content-Type': wpRes.headers.get('content-type') || 'application/json',
-    },
-  })
-
-  const newSession = normalizeWooSessionToken(wpRes.headers.get('woocommerce-session'))
-  const isHttps = isRequestHttps(request)
-  if (newSession === null && wpRes.headers.get('woocommerce-session') === 'false') {
-    appendWooSessionCookie(nextRes, null, isHttps)
-  } else if (newSession) {
-    appendWooSessionCookie(nextRes, newSession, isHttps)
+  let responseBody: string
+  try {
+    responseBody = await wpRes.text()
+  } catch (readErr) {
+    console.error('[api/graphql] upstream body read failed', readErr)
+    return NextResponse.json(
+      { errors: [{ message: 'GraphQL-Upstream-Antwort konnte nicht gelesen werden.' }] },
+      { status: 502 },
+    )
   }
 
-  return nextRes
+  try {
+    const nextRes = new NextResponse(responseBody, {
+      status: wpRes.status,
+      headers: {
+        'Content-Type': wpRes.headers.get('content-type') || 'application/json',
+      },
+    })
+
+    const newSession = normalizeWooSessionToken(wpRes.headers.get('woocommerce-session'))
+    const isHttps = isRequestHttps(request)
+    if (newSession === null && wpRes.headers.get('woocommerce-session') === 'false') {
+      appendWooSessionCookie(nextRes, null, isHttps)
+    } else if (newSession) {
+      appendWooSessionCookie(nextRes, newSession, isHttps)
+    }
+
+    return nextRes
+  } catch (buildErr) {
+    console.error('[api/graphql] response assembly failed', buildErr)
+    return NextResponse.json(
+      { errors: [{ message: 'GraphQL-Proxy: Antwort konnte nicht aufbereitet werden.' }] },
+      { status: 502 },
+    )
+  }
 }

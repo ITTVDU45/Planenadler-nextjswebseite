@@ -5,7 +5,7 @@ import type {
   SupportedProductType,
   SupportedUnitSelector,
 } from '@/lib/customizer-runtime'
-import { TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM } from '@/lib/tarpaulin-opening-rules'
+import { TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM } from '@/lib/tarpaulin-constants'
 
 export interface PriceCalculationRequestBody {
   productId: string | number
