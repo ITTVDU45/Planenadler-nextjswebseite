@@ -1261,6 +1261,69 @@ export default function ProductConfigurator({
     }
   }
 
+  const eyeletsPanel =
+    resolvedConfig && steps.includes('eyelets') ? (
+      <StepAccordionItem id="eyelets" title={STEP_TITLES.eyelets} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('eyelets')}>
+        <HintPanel text={effectiveHints.eyelets} />
+        <ChoiceGrid choices={resolvedConfig.options.eyelets} value={form.eyeletEdge} onChange={(value) => setField('eyeletEdge', value)} onPreview={setPreviewChoice} />
+      </StepAccordionItem>
+    ) : null
+
+  const closureTypePanel =
+    resolvedConfig && steps.includes('closureType') ? (
+      <StepAccordionItem id="closureType" title={STEP_TITLES.closureType} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('closureType')}>
+        <HintPanel text={effectiveHints.closureType} />
+        <ChoiceGrid choices={resolvedConfig.options.closureTypes} value={form.closureType} onChange={(value) => setField('closureType', value)} onPreview={setPreviewChoice} />
+      </StepAccordionItem>
+    ) : null
+
+  const extrasPanel =
+    resolvedConfig && steps.includes('extras') ? (
+      <StepAccordionItem
+        id="extras"
+        title={poolPlaneUi ? 'Hohlsaum' : STEP_TITLES.extras}
+        openStep={openStep}
+        onToggle={toggleStep}
+        showWarning={stepsWithMissingFields.has('extras')}
+      >
+        <HintPanel text={effectiveHints.extras} />
+        <div className="space-y-4">
+          {!poolPlaneUi ? (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-[#0F2B52]">Extras hinzufuegen</p>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.hasExtras === 'yes'}
+                onClick={() => setField('hasExtras', form.hasExtras === 'yes' ? 'no' : 'yes')}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${form.hasExtras === 'yes' ? 'border-emerald-500 bg-emerald-500' : 'border-[#CFE0F5] bg-white'}`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${form.hasExtras === 'yes' ? 'translate-x-6' : 'translate-x-1'}`}
+                />
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm font-semibold text-[#0F2B52]">
+              Hohlsaum <span className="font-normal text-red-600">*</span>
+            </p>
+          )}
+          {poolPlaneUi || form.hasExtras === 'yes' ? (
+            <>
+              {resolvedConfig.options.extras.length > 0 ? (
+                <MultiChoiceGrid
+                  choices={resolvedConfig.options.extras}
+                  selectedIds={form.extrasSelected}
+                  onToggle={(value) => toggleMultiValue('extrasSelected', value)}
+                  onPreview={setPreviewChoice}
+                />
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      </StepAccordionItem>
+    ) : null
+
   return (
     <>
       <AddToCartSuccessModal
@@ -1567,19 +1630,19 @@ export default function ProductConfigurator({
               </StepAccordionItem>
             ) : null}
 
-            {steps.includes('eyelets') ? (
-              <StepAccordionItem id="eyelets" title={STEP_TITLES.eyelets} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('eyelets')}>
-                <HintPanel text={effectiveHints.eyelets} />
-                <ChoiceGrid choices={resolvedConfig.options.eyelets} value={form.eyeletEdge} onChange={(value) => setField('eyeletEdge', value)} onPreview={setPreviewChoice} />
-              </StepAccordionItem>
-            ) : null}
-
-            {steps.includes('closureType') ? (
-              <StepAccordionItem id="closureType" title={STEP_TITLES.closureType} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('closureType')}>
-                <HintPanel text={effectiveHints.closureType} />
-                <ChoiceGrid choices={resolvedConfig.options.closureTypes} value={form.closureType} onChange={(value) => setField('closureType', value)} onPreview={setPreviewChoice} />
-              </StepAccordionItem>
-            ) : null}
+            {poolPlaneUi ? (
+              <>
+                {extrasPanel}
+                {eyeletsPanel}
+                {closureTypePanel}
+              </>
+            ) : (
+              <>
+                {eyeletsPanel}
+                {closureTypePanel}
+                {extrasPanel}
+              </>
+            )}
 
             {steps.includes('frontClosure') ? (
               <StepAccordionItem id="frontClosure" title={STEP_TITLES.frontClosure} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('frontClosure')}>
@@ -1634,52 +1697,6 @@ export default function ProductConfigurator({
                     </NestedAccordion>
                   </div>
                 ) : null}
-              </StepAccordionItem>
-            ) : null}
-
-            {steps.includes('extras') ? (
-              <StepAccordionItem
-                id="extras"
-                title={poolPlaneUi ? 'Hohlsaum' : STEP_TITLES.extras}
-                openStep={openStep}
-                onToggle={toggleStep}
-                showWarning={stepsWithMissingFields.has('extras')}
-              >
-                <HintPanel text={effectiveHints.extras} />
-                <div className="space-y-4">
-                  {!poolPlaneUi ? (
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-[#0F2B52]">Extras hinzufuegen</p>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={form.hasExtras === 'yes'}
-                        onClick={() => setField('hasExtras', form.hasExtras === 'yes' ? 'no' : 'yes')}
-                        className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${form.hasExtras === 'yes' ? 'border-emerald-500 bg-emerald-500' : 'border-[#CFE0F5] bg-white'}`}
-                      >
-                        <span
-                          className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${form.hasExtras === 'yes' ? 'translate-x-6' : 'translate-x-1'}`}
-                        />
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="text-sm font-semibold text-[#0F2B52]">
-                      Hohlsaum <span className="font-normal text-red-600">*</span>
-                    </p>
-                  )}
-                  {poolPlaneUi || form.hasExtras === 'yes' ? (
-                    <>
-                      {resolvedConfig.options.extras.length > 0 ? (
-                        <MultiChoiceGrid
-                          choices={resolvedConfig.options.extras}
-                          selectedIds={form.extrasSelected}
-                          onToggle={(value) => toggleMultiValue('extrasSelected', value)}
-                          onPreview={setPreviewChoice}
-                        />
-                      ) : null}
-                    </>
-                  ) : null}
-                </div>
               </StepAccordionItem>
             ) : null}
 
