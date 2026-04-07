@@ -1,7 +1,7 @@
 'use client'
 
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useApolloClient } from '@apollo/client'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -1630,11 +1630,19 @@ export default function ProductConfigurator({
               </StepAccordionItem>
             ) : null}
 
-            {poolPlaneUi ? (
+            {resolvedConfig.productType === 'lounge' || resolvedConfig.productType === 'rectangular' ? (
               <>
-                {extrasPanel}
-                {eyeletsPanel}
-                {closureTypePanel}
+                {steps
+                  .filter((id) => id === 'extras' || id === 'eyelets' || id === 'closureType')
+                  .map((stepId) => {
+                    if (stepId === 'extras') {
+                      return <Fragment key={stepId}>{extrasPanel}</Fragment>
+                    }
+                    if (stepId === 'eyelets') {
+                      return <Fragment key={stepId}>{eyeletsPanel}</Fragment>
+                    }
+                    return <Fragment key={stepId}>{closureTypePanel}</Fragment>
+                  })}
               </>
             ) : (
               <>
