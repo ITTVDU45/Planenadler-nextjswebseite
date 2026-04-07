@@ -495,6 +495,7 @@ function buildStepOrder(
     windowData: CustomizerWindowData | null
     doorData: CustomizerDoorData | null
   },
+  layout?: { extrasBeforeEyeletsForPoolRectangular?: boolean },
 ): StepId[] {
   if (productType === 'unknown') return []
 
@@ -513,8 +514,21 @@ function buildStepOrder(
   }
 
   if (productType === 'lounge' || productType === 'rectangular') {
+    const extrasEarly =
+      Boolean(layout?.extrasBeforeEyeletsForPoolRectangular) &&
+      productType === 'rectangular' &&
+      config.extras.length > 0
+    if (extrasEarly) {
+      steps.push('extras')
+    }
     if (config.eyelets.length) steps.push('eyelets')
     if (config.closureTypes.length) steps.push('closureType')
+    if (productType === 'lounge' && config.extras.length > 0) {
+      steps.push('extras')
+    }
+    if (productType === 'rectangular' && config.extras.length > 0 && !extrasEarly) {
+      steps.push('extras')
+    }
   }
 
   if (productType === 'trailer') {
@@ -523,7 +537,10 @@ function buildStepOrder(
     if (config.eyelets.length) steps.push('eyelets')
   }
 
-  if (config.extras.length) steps.push('extras')
+  const extrasHandledInLoungeOrRectangular = productType === 'lounge' || productType === 'rectangular'
+  if (config.extras.length > 0 && !extrasHandledInLoungeOrRectangular) {
+    steps.push('extras')
+  }
   steps.push('sketch')
 
   return steps
@@ -612,24 +629,30 @@ export function resolveCustomizerConfig(
   const sizeFields = dimensions.fields.filter((field) => field.required).map((field) => field.key)
   const hasWindowStep = hasWindowConfig(config.window_data)
   const hasDoorStep = hasDoorConfig(config.door_data)
-  const steps = buildStepOrder(productType, {
-    colors,
-    materials,
-    top,
-    left,
-    right,
-    bottom,
-    doorExtras,
-    extras,
-    eyelets,
-    closureTypes,
-    frontClosures,
-    frontClosureExtras,
-    backClosures,
-    backClosureExtras,
-    windowData: config.window_data,
-    doorData: config.door_data,
-  })
+  const steps = buildStepOrder(
+    productType,
+    {
+      colors,
+      materials,
+      top,
+      left,
+      right,
+      bottom,
+      doorExtras,
+      extras,
+      eyelets,
+      closureTypes,
+      frontClosures,
+      frontClosureExtras,
+      backClosures,
+      backClosureExtras,
+      windowData: config.window_data,
+      doorData: config.door_data,
+    },
+    {
+      extrasBeforeEyeletsForPoolRectangular: isPoolProductConfig(config, context),
+    },
+  )
 
   const validationRules = buildValidationRules(productType, steps, sizeFields, colors, materials)
   const livePrice = unitSelector !== 'unknown' && materials.length > 0 && sizeFields.length > 0
