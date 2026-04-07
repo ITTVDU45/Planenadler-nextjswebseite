@@ -971,6 +971,183 @@ jobs:
           fi
 ````
 
+## File: DOCS/INTERVIEW_READINESS_REVIEW.md
+````markdown
+# Interview Readiness Review: nextjs-woocommerce
+
+## Post-Fix Assessment: 🟢 Solid — Ready with Minor Polish
+
+After addressing the 6 critical issues, the codebase is in significantly better shape. The remaining items are quality improvements rather than interview red flags.
+
+---
+
+## ✅ Previously Critical — Now Fixed
+
+| # | Issue | Status |
+|---|-------|--------|
+| 1 | Shared object reference bug in [`getFormattedCart()`](src/utils/functions/functions.tsx:145) | ✅ Fixed — each product is now a new object per iteration |
+| 2 | Deprecated `process.browser` in 3 files | ✅ Fixed — all use `typeof window !== 'undefined'` |
+| 3 | [`ApolloClient.js`](src/utils/apollo/ApolloClient.ts) was untyped JS with misleading naming | ✅ Converted to TypeScript with `SessionData` interface, `isServerSide` naming |
+| 4 | Hardcoded `transactionId: 'fhggdfjgfi'` | ✅ Fixed — now uses `uuidv4()` |
+| 5 | `setTimeout` refetch calls | ✅ Kept with explanatory comments — required by WooCommerce backend latency; added `refetchQueries` to AddToCart mutation |
+| 6 | README version mismatch | ✅ Updated to Next.js 16.1.6 / React 19.2.4 |
+
+---
+
+## 🟡 Remaining Improvements (Phase 2 — Code Quality)
+
+### 1. Stale Closure in `onCompleted` Callbacks
+
+**Files:** [`AddToCart.component.tsx:112`](src/components/Product/AddToCart.component.tsx:112), [`CartContents.component.tsx:29`](src/components/Cart/CartContents.component.tsx:29), [`CheckoutForm.component.tsx:62`](src/components/Checkout/CheckoutForm.component.tsx:62)
+
+The `onCompleted` callback references `data` from the outer scope instead of using the callback parameter:
+
+```typescript
+// Current — data may be stale
+onCompleted: () => {
+  const updatedCart = getFormattedCart(data);
+}
+
+// Better — use the fresh data from the callback
+onCompleted: (freshData) => {
+  const updatedCart = getFormattedCart(freshData);
+}
+```
+
+**Risk:** Low-to-medium. Works in practice because `notifyOnNetworkStatusChange: true` forces re-renders, but it's technically incorrect and an interviewer who knows Apollo well could question it.
+
+### 2. Duplicate Type Definitions
+
+Types are defined multiple times instead of being shared from a central location:
+- `IImage` defined in [`functions.tsx:18`](src/utils/functions/functions.tsx:18), [`AddToCart.component.tsx:19`](src/components/Product/AddToCart.component.tsx:19), and [`DisplayProducts.component.tsx:7`](src/components/Product/DisplayProducts.component.tsx:7)
+- `Product` interface exists in both [`cartStore.ts:4`](src/stores/cartStore.ts:4) and [`product.ts:32`](src/types/product.ts:32) with different shapes
+- Multiple `IProductRootObject` interfaces with different shapes
+
+**Interview concern:** Shows this hasn't been refactored yet. Consolidating to `src/types/` would demonstrate attention to DRY principles.
+
+### 3. `uuidv4()` Used as React Key
+
+**File:** [`DisplayProducts.component.tsx:78`](src/components/Product/DisplayProducts.component.tsx:78)
+
+```tsx
+<div key={uuidv4()} className="group">
+```
+
+This generates a **new key every render**, defeating React's reconciliation algorithm and causing unnecessary DOM re-creation. Should use `slug` or `databaseId`.
+
+### 4. Deprecated `next/image` Props
+
+**File:** [`CartContents.component.tsx:105`](src/components/Cart/CartContents.component.tsx:105)
+
+```tsx
+<Image layout="fill" objectFit="cover" />
+```
+
+The `layout` and `objectFit` props were deprecated in Next.js 13+. With Next.js 16, these should use the `fill` prop and CSS/className for styling instead.
+
+### 5. Inconsistent Image Component Usage
+
+- [`ProductCard.component.tsx`](src/components/Product/ProductCard.component.tsx) — uses `next/image` ✅
+- [`DisplayProducts.component.tsx`](src/components/Product/DisplayProducts.component.tsx) — uses raw `<img>` ❌
+- [`SingleProduct.component.tsx`](src/components/Product/SingleProduct.component.tsx) — uses raw `<img>` ❌
+- ESLint rule `@next/next/no-img-element` is disabled in [`.eslintrc.json:7`](.eslintrc.json:7)
+
+### 6. Missing Error Boundary
+
+No React Error Boundary exists. If any component throws during render, the entire application crashes with no fallback UI.
+
+### 7. Incomplete Authentication Implementation
+
+**File:** [`auth.ts`](src/utils/auth.ts)
+
+- [`hasCredentials()`](src/utils/auth.ts:5) always returns `false`
+- [`getAuthToken()`](src/utils/auth.ts:15) always returns `null`
+- [`logout()`](src/utils/auth.ts:85) only redirects without calling a logout mutation
+- `REFRESH_AUTH_TOKEN` mutation in [`GQL_MUTATIONS.ts:40`](src/utils/gql/GQL_MUTATIONS.ts:40) is defined but never used
+- `.env.example` has unused JWT-related keys
+
+**Interview concern:** If asked about the auth flow, be prepared to explain this is cookie-based auth and these functions are stubs/placeholders.
+
+### 8. Unused DevDependency
+
+[`package.json:56`](package.json:56) includes `babel-plugin-styled-components` but styled-components isn't used anywhere in the project. The project uses Tailwind CSS for styling.
+
+---
+
+## 🔵 Phase 3 — Interview Polish (Nice-to-have)
+
+### 9. Limited Test Coverage
+
+Only 2 Playwright test files with 3 total tests:
+- [`Index.spec.ts`](src/tests/Index/Index.spec.ts) — 1 test checking for h1 element
+- [`Categories.spec.ts`](src/tests/Categories/Categories.spec.ts) — 2 tests for navigation
+
+No unit tests exist for:
+- Utility functions ([`getFormattedCart`](src/utils/functions/functions.tsx:145), [`filteredVariantPrice`](src/utils/functions/functions.tsx:132), [`paddedPrice`](src/utils/functions/functions.tsx:111))
+- Custom hooks ([`useProductFilters`](src/hooks/useProductFilters.ts))
+- Zustand store logic
+
+Adding even 3-5 unit tests for the utility functions would significantly strengthen the testing story.
+
+### 10. Import Organization in `functions.tsx`
+
+**File:** [`functions.tsx:13`](src/utils/functions/functions.tsx:13)
+
+The `ChangeEvent` import from React is placed between an interface declaration and a comment, instead of being grouped with other imports at the top.
+
+### 11. `getUpdatedItems` Could Be Simplified
+
+**File:** [`functions.tsx:237`](src/utils/functions/functions.tsx:237)
+
+The current implementation uses `.forEach` + push. Could be simplified with `.map`:
+
+```typescript
+export const getUpdatedItems = (products, newQty, cartKey) =>
+  products.map((item) => ({
+    key: item.key,
+    quantity: item.key === cartKey ? newQty : item.quantity,
+  }));
+```
+
+---
+
+## 🟢 Strengths (Good Interview Talking Points)
+
+| Area | Assessment |
+|------|-----------|
+| **Project Structure** | Well-organized component directory with clear `.component.tsx` naming convention |
+| **Zustand Store** | Clean implementation with `persist` middleware, `partialize`, and proper typing |
+| **TypeScript** | Strict mode enabled, path aliases configured, now fully TypeScript |
+| **Apollo Client** | Properly typed with `SessionData` interface, clear middleware/afterware separation |
+| **GraphQL Architecture** | Separate query/mutation files, good separation of concerns |
+| **CI/CD Pipeline** | Lighthouse CI, Playwright CI, CodeQL, 5 code quality badges |
+| **Custom Hook** | [`useProductFilters`](src/hooks/useProductFilters.ts) demonstrates clean hook extraction |
+| **Product Filtering** | Full-featured with sizes, colors, price range, sorting, and product type filters |
+| **Form Handling** | React Hook Form with `FormProvider` pattern for checkout billing |
+| **Protected Routes** | HOC pattern with [`withAuth`](src/components/User/withAuth.component.tsx) for authenticated pages |
+| **Accessibility** | `lang="nb-NO"` on HTML, ARIA labels on filters, semantic HTML structure |
+| **Code Quality Tooling** | ESLint, Prettier, CodeClimate, Codacy, SonarCloud, CodeFactor |
+| **SEO** | Meta tags, Open Graph, proper `<title>` per page |
+| **Cart Architecture** | Zustand + WooCommerce session sync with persist middleware |
+
+---
+
+## Remaining Fix Priority
+
+### Should Fix Before Interview
+- [ ] Fix `uuidv4()` React keys in [`DisplayProducts.component.tsx:78`](src/components/Product/DisplayProducts.component.tsx:78)
+- [ ] Use `onCompleted` parameter instead of outer `data` scope in `useQuery` callbacks
+- [ ] Fix deprecated `layout`/`objectFit` Image props in [`CartContents.component.tsx:105`](src/components/Cart/CartContents.component.tsx:105)
+
+### Good to Fix if Time Allows
+- [ ] Add an Error Boundary component wrapping Layout
+- [ ] Consolidate duplicate type definitions into `src/types/`
+- [ ] Add unit tests for utility functions
+- [ ] Replace raw `<img>` with `next/image` in `DisplayProducts` and `SingleProduct`
+- [ ] Clean up unused auth stubs and `babel-plugin-styled-components` dependency
+- [ ] Add `data-testid` attributes to key interactive elements
+````
+
 ## File: DOCS/PROJECT_REVIEW.md
 ````markdown
 # Project Review & Recommendations
@@ -7152,61 +7329,6 @@ export const CONFIGURATOR_CONTENT: ConfiguratorContent = {
     alt: 'Konfigurator – Plane konfigurieren',
   },
 }
-````
-
-## File: src/features/about/data/productGroups.ts
-````typescript
-import type { ProductGroupCard } from '../types'
-export const PRODUCT_GROUPS: ProductGroupCard[] = [
-  {
-    id: 'terrassenplanen',
-    name: 'Terrassenplanen',
-    description: 'Schutz und Komfort für Ihre Terrasse – transparent oder blickdicht, nach Maß.',
-    image: { src: '/images/Terrassenplane_adlerplanen.png', alt: 'Terrassenplanen' },
-    hrefMore: '/shop?category=terrassenplanen',
-    hrefConfig: '/konfigurator',
-  },
-  {
-    id: 'anhaengerplanen',
-    name: 'Anhängerplanen',
-    description: 'Robuste Planen für Anhänger und Transport – maßgefertigt und langlebig.',
-    image: { src: '/images/AnhängerplaneAdlerplanen.png', alt: 'Anhängerplanen' },
-    hrefMore: '/shop?category=anhaengerplanen',
-    hrefConfig: '/konfigurator',
-  },
-  {
-    id: 'abdeckhauben',
-    name: 'Abdeckhauben',
-    description: 'Schutz für Maschinen, Fahrzeuge und Lager – passgenau und witterungsbeständig.',
-    image: { src: '/images/Abdeckhaube_adlerPlanen.png', alt: 'Abdeckhauben' },
-    hrefMore: '/shop?category=abdeckhauben',
-    hrefConfig: '/konfigurator',
-  },
-  {
-    id: 'abdeckplanen',
-    name: 'Abdeckplanen',
-    description: 'Vielseitige Abdeckungen für Industrie, Garten und Transport.',
-    image: { src: '/images/Abdeckplane Adler Planen.png', alt: 'Abdeckplanen' },
-    hrefMore: '/shop?category=abdeckplanen',
-    hrefConfig: '/konfigurator',
-  },
-  {
-    id: 'poolplanen',
-    name: 'Poolplanen',
-    description: 'Poolabdeckungen nach Maß – für Sauberkeit und Wärmeschutz.',
-    image: { src: '/images/Poolplane Adlerplanen.png', alt: 'Poolplanen' },
-    hrefMore: '/shop?category=poolplanen',
-    hrefConfig: '/konfigurator',
-  },
-  {
-    id: 'gitterboxen',
-    name: 'Gitterboxen',
-    description: 'Planen für Gitterboxen und Paletten – sicher und maßgenau.',
-    image: { src: '/images/Gitterboxplanenadler.png', alt: 'Gitterboxen' },
-    hrefMore: '/shop?category=gitterboxen',
-    hrefConfig: '/konfigurator',
-  },
-]
 ````
 
 ## File: src/features/about/lib/mergeProductGroupsWithApi.ts
@@ -14189,37 +14311,6 @@ export * from './components/AddToCart.component';
 export * from './components/DisplayProducts.component';
 ````
 
-## File: src/features/shop/data/faq.ts
-````typescript
-import type { FaqItem } from '../types'
-export const SHOP_FAQ_ITEMS: FaqItem[] = [
-  {
-    id: 'lieferzeit',
-    question: 'Wie lange dauert die Lieferung?',
-    answer:
-      'Die Lieferzeit beträgt in der Regel 14–30 Tage ab Auftragsbestätigung, abhängig von der Konfektion und dem aktuellen Auftragsvolumen. Expresslieferung ist auf Anfrage möglich.',
-  },
-  {
-    id: 'massanfertigung',
-    question: 'Sind Maßanfertigungen möglich?',
-    answer:
-      'Ja. Wir fertigen ausschließlich nach Maß. Geben Sie Ihre Wunschmaße im Konfigurator ein oder senden Sie uns eine Skizze – wir setzen Ihre Anforderungen passgenau um.',
-  },
-  {
-    id: 'materialien',
-    question: 'Welche Materialien werden verwendet?',
-    answer:
-      'Wir setzen auf hochwertiges PVC und PE-Material, je nach Einsatzbereich. Die Planen sind UV- und witterungsbeständig, reißfest und langlebig. Gern beraten wir Sie zur passenden Stärke und Oberfläche.',
-  },
-  {
-    id: 'garantie',
-    question: 'Gibt es Garantie?',
-    answer:
-      'Wir stehen für unsere Qualität ein. Die genauen Garantiebedingungen besprechen wir individuell je nach Produkt und Einsatz. Bei Material- oder Verarbeitungsfehlern greifen unsere Kulanzregelungen.',
-  },
-]
-````
-
 ## File: src/features/shop/data/heroContent.ts
 ````typescript
 import type { ShopHeroContent } from '../types'
@@ -14656,264 +14747,6 @@ export function getClientIp(request: NextRequest): string {
   const realIp = request.headers.get('x-real-ip')?.trim()
   if (realIp) return realIp
   return request.headers.get('cf-connecting-ip')?.trim() || 'unknown'
-}
-````
-
-## File: src/lib/customizer-runtime.ts
-````typescript
-export type ToggleState = '' | 'yes' | 'no'
-export type SupportedProductType =
-  | 'tarpaulins'
-  | 'trailer'
-  | 'rectangular'
-  | 'lounge'
-  | 'unknown'
-export type SupportedUnitSelector = 'squaremeter' | 'cubicmeter' | 'unknown'
-export type StepId =
-  | 'color'
-  | 'size'
-  | 'topSide'
-  | 'leftSide'
-  | 'rightSide'
-  | 'bottomSide'
-  | 'window'
-  | 'door'
-  | 'eyelets'
-  | 'closureType'
-  | 'frontClosure'
-  | 'backClosure'
-  | 'extras'
-  | 'sketch'
-export type ConfigFormField =
-  | 'material'
-  | 'color'
-  | 'lengthACm'
-  | 'heightRightBCm'
-  | 'heightLeftCCm'
-  | 'trailerWidthCm'
-  | 'trailerLengthCm'
-  | 'trailerHeightCm'
-  | 'rectangularLengthCm'
-  | 'rectangularWidthCm'
-  | 'rectangularHeightCm'
-  | 'sideACm'
-  | 'sideBCm'
-  | 'sideCCm'
-  | 'sideFCm'
-  | 'sideHCm'
-  | 'topSide'
-  | 'leftSide'
-  | 'rightSide'
-  | 'bottomSide'
-  | 'hasWindow'
-  | 'windowWidthCm'
-  | 'windowHeightCm'
-  | 'windowDistanceSideCm'
-  | 'windowDistanceBottomCm'
-  | 'windowSplit'
-  | 'windowSplitLeftWidthCm'
-  | 'windowSplitLeftHeightCm'
-  | 'windowSplitRightWidthCm'
-  | 'windowSplitRightHeightCm'
-  | 'windowSplitRightDistanceRightCm'
-  | 'windowSplitLeftDistanceLeftCm'
-  | 'windowSplitLeftDistanceBottomCm'
-  | 'windowSplitRightDistanceBottomCm'
-  | 'hasDoor'
-  | 'doorWidthCm'
-  | 'doorHeightCm'
-  | 'doorDistanceLeftCm'
-  | 'eyeletEdge'
-  | 'closureType'
-  | 'frontClosure'
-  | 'backClosure'
-  | 'extras'
-export interface ConfigFormState {
-  material: string
-  color: string
-  lengthACm: string
-  heightRightBCm: string
-  heightLeftCCm: string
-  trailerWidthCm: string
-  trailerLengthCm: string
-  trailerHeightCm: string
-  rectangularLengthCm: string
-  rectangularWidthCm: string
-  rectangularHeightCm: string
-  sideACm: string
-  sideBCm: string
-  sideCCm: string
-  sideFCm: string
-  sideHCm: string
-  topSide: string
-  leftSide: string
-  rightSide: string
-  bottomSide: string
-  hasWindow: ToggleState
-  windowWidthCm: string
-  windowHeightCm: string
-  windowDistanceSideCm: string
-  windowDistanceBottomCm: string
-  windowSplit: ToggleState
-  windowSplitLeftWidthCm: string
-  windowSplitLeftHeightCm: string
-  windowSplitRightWidthCm: string
-  windowSplitRightHeightCm: string
-  windowSplitRightDistanceRightCm: string
-  windowSplitLeftDistanceLeftCm: string
-  windowSplitLeftDistanceBottomCm: string
-  windowSplitRightDistanceBottomCm: string
-  hasDoor: ToggleState
-  doorWidthCm: string
-  doorHeightCm: string
-  doorDistanceLeftCm: string
-  doorExtras: string[]
-  hasExtras: ToggleState
-  extrasSelected: string[]
-  extras: string
-  eyeletEdge: string
-  closureType: string
-  frontClosure: string
-  frontClosureExtras: string[]
-  backClosure: string
-  backClosureExtras: string[]
-}
-export const emptyConfigFormState: ConfigFormState = {
-  material: '',
-  color: '',
-  lengthACm: '',
-  heightRightBCm: '',
-  heightLeftCCm: '',
-  trailerWidthCm: '',
-  trailerLengthCm: '',
-  trailerHeightCm: '',
-  rectangularLengthCm: '',
-  rectangularWidthCm: '',
-  rectangularHeightCm: '',
-  sideACm: '',
-  sideBCm: '',
-  sideCCm: '',
-  sideFCm: '',
-  sideHCm: '',
-  topSide: '',
-  leftSide: '',
-  rightSide: '',
-  bottomSide: '',
-  hasWindow: '',
-  windowWidthCm: '',
-  windowHeightCm: '',
-  windowDistanceSideCm: '',
-  windowDistanceBottomCm: '',
-  windowSplit: '',
-  windowSplitLeftWidthCm: '',
-  windowSplitLeftHeightCm: '',
-  windowSplitRightWidthCm: '',
-  windowSplitRightHeightCm: '',
-  windowSplitRightDistanceRightCm: '',
-  windowSplitLeftDistanceLeftCm: '',
-  windowSplitLeftDistanceBottomCm: '',
-  windowSplitRightDistanceBottomCm: '',
-  hasDoor: '',
-  doorWidthCm: '',
-  doorHeightCm: '',
-  doorDistanceLeftCm: '',
-  doorExtras: [],
-  hasExtras: 'no',
-  extrasSelected: [],
-  extras: '',
-  eyeletEdge: '',
-  closureType: '',
-  frontClosure: '',
-  frontClosureExtras: [],
-  backClosure: '',
-  backClosureExtras: [],
-}
-export interface ResolvedChoice {
-  id: string
-  label: string
-  imageSrc?: string
-  price?: number | null
-  meta?: Record<string, string | number | boolean | null | undefined>
-}
-export interface ResolvedDimensionField {
-  key: ConfigFormField
-  label: string
-  min: number
-  required: boolean
-}
-export interface ResolvedDimensionConfig {
-  title: string
-  description?: string
-  imageSrc?: string
-  fields: ResolvedDimensionField[]
-  minimumValue?: number
-}
-export interface ResolvedConfiguratorHints {
-  color: string
-  size: string
-  topSide: string
-  leftSide: string
-  rightSide: string
-  bottomSide: string
-  window: string
-  door: string
-  eyelets: string
-  closureType: string
-  frontClosure: string
-  backClosure: string
-  extras: string
-  sketch: string
-}
-export interface ResolvedCustomizerConfig {
-  configId: number
-  productId: string
-  productTitle: string
-  productType: SupportedProductType
-  unitSelector: SupportedUnitSelector
-  steps: StepId[]
-  dimensions: ResolvedDimensionConfig
-  options: {
-    colors: ResolvedChoice[]
-    materials: ResolvedChoice[]
-    topSide: ResolvedChoice[]
-    leftSide: ResolvedChoice[]
-    rightSide: ResolvedChoice[]
-    bottomSide: ResolvedChoice[]
-    doorExtras: ResolvedChoice[]
-    extras: ResolvedChoice[]
-    eyelets: ResolvedChoice[]
-    closureTypes: ResolvedChoice[]
-    frontClosures: ResolvedChoice[]
-    frontClosureExtras: ResolvedChoice[]
-    backClosures: ResolvedChoice[]
-    backClosureExtras: ResolvedChoice[]
-  }
-  pricingCapabilities: {
-    livePrice: boolean
-    allowsEdges: boolean
-    allowsWindow: boolean
-    allowsDoor: boolean
-    supportsEyelets: boolean
-    supportsClosureType: boolean
-    supportsFrontBackClosure: boolean
-  }
-  validationRules: {
-    requiredFields: ConfigFormField[]
-    minimumForPrice: ConfigFormField[]
-  }
-  hints: ResolvedConfiguratorHints
-  issues: string[]
-}
-export type ConfiguratorStatus =
-  | 'ready'
-  | 'partial'
-  | 'missing'
-  | 'error'
-  | 'unsupported'
-export interface ConfiguratorState {
-  status: ConfiguratorStatus
-  message?: string
-  warnings?: string[]
 }
 ````
 
@@ -15529,30 +15362,6 @@ function MyApp({ Component, pageProps }: AppProps) {
   );
 }
 export default MyApp
-````
-
-## File: src/pages/_document.tsx
-````typescript
-import { Html, Head, Main, NextScript } from 'next/document';
-export default function Document() {
-  return (
-    <Html lang="de">
-      <Head>
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="manifest" href="/manifest.webmanifest" />
-        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-        <meta name="theme-color" content="#1F5CAB" />
-        <meta name="application-name" content="Planenadler" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-      </Head>
-      <body>
-        <Main />
-        <NextScript />
-      </body>
-    </Html>
-  );
-}
 ````
 
 ## File: src/pages/~offline.tsx
@@ -17770,183 +17579,6 @@ google-site-verification: google747544f916afa841.html
 }
 ````
 
-## File: DOCS/INTERVIEW_READINESS_REVIEW.md
-````markdown
-# Interview Readiness Review: nextjs-woocommerce
-
-## Post-Fix Assessment: 🟢 Solid — Ready with Minor Polish
-
-After addressing the 6 critical issues, the codebase is in significantly better shape. The remaining items are quality improvements rather than interview red flags.
-
----
-
-## ✅ Previously Critical — Now Fixed
-
-| # | Issue | Status |
-|---|-------|--------|
-| 1 | Shared object reference bug in [`getFormattedCart()`](src/utils/functions/functions.tsx:145) | ✅ Fixed — each product is now a new object per iteration |
-| 2 | Deprecated `process.browser` in 3 files | ✅ Fixed — all use `typeof window !== 'undefined'` |
-| 3 | [`ApolloClient.js`](src/utils/apollo/ApolloClient.ts) was untyped JS with misleading naming | ✅ Converted to TypeScript with `SessionData` interface, `isServerSide` naming |
-| 4 | Hardcoded `transactionId: 'fhggdfjgfi'` | ✅ Fixed — now uses `uuidv4()` |
-| 5 | `setTimeout` refetch calls | ✅ Kept with explanatory comments — required by WooCommerce backend latency; added `refetchQueries` to AddToCart mutation |
-| 6 | README version mismatch | ✅ Updated to Next.js 16.1.6 / React 19.2.4 |
-
----
-
-## 🟡 Remaining Improvements (Phase 2 — Code Quality)
-
-### 1. Stale Closure in `onCompleted` Callbacks
-
-**Files:** [`AddToCart.component.tsx:112`](src/components/Product/AddToCart.component.tsx:112), [`CartContents.component.tsx:29`](src/components/Cart/CartContents.component.tsx:29), [`CheckoutForm.component.tsx:62`](src/components/Checkout/CheckoutForm.component.tsx:62)
-
-The `onCompleted` callback references `data` from the outer scope instead of using the callback parameter:
-
-```typescript
-// Current — data may be stale
-onCompleted: () => {
-  const updatedCart = getFormattedCart(data);
-}
-
-// Better — use the fresh data from the callback
-onCompleted: (freshData) => {
-  const updatedCart = getFormattedCart(freshData);
-}
-```
-
-**Risk:** Low-to-medium. Works in practice because `notifyOnNetworkStatusChange: true` forces re-renders, but it's technically incorrect and an interviewer who knows Apollo well could question it.
-
-### 2. Duplicate Type Definitions
-
-Types are defined multiple times instead of being shared from a central location:
-- `IImage` defined in [`functions.tsx:18`](src/utils/functions/functions.tsx:18), [`AddToCart.component.tsx:19`](src/components/Product/AddToCart.component.tsx:19), and [`DisplayProducts.component.tsx:7`](src/components/Product/DisplayProducts.component.tsx:7)
-- `Product` interface exists in both [`cartStore.ts:4`](src/stores/cartStore.ts:4) and [`product.ts:32`](src/types/product.ts:32) with different shapes
-- Multiple `IProductRootObject` interfaces with different shapes
-
-**Interview concern:** Shows this hasn't been refactored yet. Consolidating to `src/types/` would demonstrate attention to DRY principles.
-
-### 3. `uuidv4()` Used as React Key
-
-**File:** [`DisplayProducts.component.tsx:78`](src/components/Product/DisplayProducts.component.tsx:78)
-
-```tsx
-<div key={uuidv4()} className="group">
-```
-
-This generates a **new key every render**, defeating React's reconciliation algorithm and causing unnecessary DOM re-creation. Should use `slug` or `databaseId`.
-
-### 4. Deprecated `next/image` Props
-
-**File:** [`CartContents.component.tsx:105`](src/components/Cart/CartContents.component.tsx:105)
-
-```tsx
-<Image layout="fill" objectFit="cover" />
-```
-
-The `layout` and `objectFit` props were deprecated in Next.js 13+. With Next.js 16, these should use the `fill` prop and CSS/className for styling instead.
-
-### 5. Inconsistent Image Component Usage
-
-- [`ProductCard.component.tsx`](src/components/Product/ProductCard.component.tsx) — uses `next/image` ✅
-- [`DisplayProducts.component.tsx`](src/components/Product/DisplayProducts.component.tsx) — uses raw `<img>` ❌
-- [`SingleProduct.component.tsx`](src/components/Product/SingleProduct.component.tsx) — uses raw `<img>` ❌
-- ESLint rule `@next/next/no-img-element` is disabled in [`.eslintrc.json:7`](.eslintrc.json:7)
-
-### 6. Missing Error Boundary
-
-No React Error Boundary exists. If any component throws during render, the entire application crashes with no fallback UI.
-
-### 7. Incomplete Authentication Implementation
-
-**File:** [`auth.ts`](src/utils/auth.ts)
-
-- [`hasCredentials()`](src/utils/auth.ts:5) always returns `false`
-- [`getAuthToken()`](src/utils/auth.ts:15) always returns `null`
-- [`logout()`](src/utils/auth.ts:85) only redirects without calling a logout mutation
-- `REFRESH_AUTH_TOKEN` mutation in [`GQL_MUTATIONS.ts:40`](src/utils/gql/GQL_MUTATIONS.ts:40) is defined but never used
-- `.env.example` has unused JWT-related keys
-
-**Interview concern:** If asked about the auth flow, be prepared to explain this is cookie-based auth and these functions are stubs/placeholders.
-
-### 8. Unused DevDependency
-
-[`package.json:56`](package.json:56) includes `babel-plugin-styled-components` but styled-components isn't used anywhere in the project. The project uses Tailwind CSS for styling.
-
----
-
-## 🔵 Phase 3 — Interview Polish (Nice-to-have)
-
-### 9. Limited Test Coverage
-
-Only 2 Playwright test files with 3 total tests:
-- [`Index.spec.ts`](src/tests/Index/Index.spec.ts) — 1 test checking for h1 element
-- [`Categories.spec.ts`](src/tests/Categories/Categories.spec.ts) — 2 tests for navigation
-
-No unit tests exist for:
-- Utility functions ([`getFormattedCart`](src/utils/functions/functions.tsx:145), [`filteredVariantPrice`](src/utils/functions/functions.tsx:132), [`paddedPrice`](src/utils/functions/functions.tsx:111))
-- Custom hooks ([`useProductFilters`](src/hooks/useProductFilters.ts))
-- Zustand store logic
-
-Adding even 3-5 unit tests for the utility functions would significantly strengthen the testing story.
-
-### 10. Import Organization in `functions.tsx`
-
-**File:** [`functions.tsx:13`](src/utils/functions/functions.tsx:13)
-
-The `ChangeEvent` import from React is placed between an interface declaration and a comment, instead of being grouped with other imports at the top.
-
-### 11. `getUpdatedItems` Could Be Simplified
-
-**File:** [`functions.tsx:237`](src/utils/functions/functions.tsx:237)
-
-The current implementation uses `.forEach` + push. Could be simplified with `.map`:
-
-```typescript
-export const getUpdatedItems = (products, newQty, cartKey) =>
-  products.map((item) => ({
-    key: item.key,
-    quantity: item.key === cartKey ? newQty : item.quantity,
-  }));
-```
-
----
-
-## 🟢 Strengths (Good Interview Talking Points)
-
-| Area | Assessment |
-|------|-----------|
-| **Project Structure** | Well-organized component directory with clear `.component.tsx` naming convention |
-| **Zustand Store** | Clean implementation with `persist` middleware, `partialize`, and proper typing |
-| **TypeScript** | Strict mode enabled, path aliases configured, now fully TypeScript |
-| **Apollo Client** | Properly typed with `SessionData` interface, clear middleware/afterware separation |
-| **GraphQL Architecture** | Separate query/mutation files, good separation of concerns |
-| **CI/CD Pipeline** | Lighthouse CI, Playwright CI, CodeQL, 5 code quality badges |
-| **Custom Hook** | [`useProductFilters`](src/hooks/useProductFilters.ts) demonstrates clean hook extraction |
-| **Product Filtering** | Full-featured with sizes, colors, price range, sorting, and product type filters |
-| **Form Handling** | React Hook Form with `FormProvider` pattern for checkout billing |
-| **Protected Routes** | HOC pattern with [`withAuth`](src/components/User/withAuth.component.tsx) for authenticated pages |
-| **Accessibility** | `lang="nb-NO"` on HTML, ARIA labels on filters, semantic HTML structure |
-| **Code Quality Tooling** | ESLint, Prettier, CodeClimate, Codacy, SonarCloud, CodeFactor |
-| **SEO** | Meta tags, Open Graph, proper `<title>` per page |
-| **Cart Architecture** | Zustand + WooCommerce session sync with persist middleware |
-
----
-
-## Remaining Fix Priority
-
-### Should Fix Before Interview
-- [ ] Fix `uuidv4()` React keys in [`DisplayProducts.component.tsx:78`](src/components/Product/DisplayProducts.component.tsx:78)
-- [ ] Use `onCompleted` parameter instead of outer `data` scope in `useQuery` callbacks
-- [ ] Fix deprecated `layout`/`objectFit` Image props in [`CartContents.component.tsx:105`](src/components/Cart/CartContents.component.tsx:105)
-
-### Good to Fix if Time Allows
-- [ ] Add an Error Boundary component wrapping Layout
-- [ ] Consolidate duplicate type definitions into `src/types/`
-- [ ] Add unit tests for utility functions
-- [ ] Replace raw `<img>` with `next/image` in `DisplayProducts` and `SingleProduct`
-- [ ] Clean up unused auth stubs and `babel-plugin-styled-components` dependency
-- [ ] Add `data-testid` attributes to key interactive elements
-````
-
 ## File: src/app/(shop)/cart/page.tsx
 ````typescript
 import type { Metadata } from 'next'
@@ -19587,112 +19219,6 @@ export default async function BlogPage() {
 }
 ````
 
-## File: src/app/layout.tsx
-````typescript
-import type { Metadata } from 'next'
-import { Playfair_Display } from 'next/font/google'
-import Image from 'next/image'
-import '@/shared/styles/globals.css'
-import { Providers } from './Providers'
-import { DEFAULT_DESCRIPTION, GOOGLE_SITE_VERIFICATION, SITE_NAME, SITE_URL } from '@/lib/seo'
-import { getLocalBusinessJsonLd, getOrganizationJsonLd, getWebSiteJsonLd } from '@/lib/seo-schema'
-const playfair = Playfair_Display({
-  subsets: ['latin'],
-  variable: '--font-playfair',
-  display: 'swap',
-})
-export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
-  title: {
-    default: SITE_NAME,
-    template: `%s | ${SITE_NAME}`,
-  },
-  description: DEFAULT_DESCRIPTION,
-  applicationName: SITE_NAME,
-  alternates: {
-    canonical: '/',
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-  openGraph: {
-    type: 'website',
-    locale: 'de_DE',
-    url: SITE_URL,
-    siteName: SITE_NAME,
-    title: SITE_NAME,
-    description: DEFAULT_DESCRIPTION,
-    images: [
-      {
-        url: '/Planenadlerlogo.png',
-        alt: 'Planenadler Logo',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: SITE_NAME,
-    description: DEFAULT_DESCRIPTION,
-    images: ['/Planenadlerlogo.png'],
-  },
-  verification: GOOGLE_SITE_VERIFICATION
-    ? {
-        google: GOOGLE_SITE_VERIFICATION,
-      }
-    : undefined,
-  icons: {
-    icon: [
-      { url: '/favicon.ico', sizes: '32x32' },
-      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
-    ],
-    apple: '/icons/apple-touch-icon.png',
-  },
-}
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const whatsappHref = 'https://wa.me/491727436428'
-  const organizationJsonLd = getOrganizationJsonLd()
-  const websiteJsonLd = getWebSiteJsonLd()
-  const localBusinessJsonLd = getLocalBusinessJsonLd()
-  return (
-    <html lang="de">
-      <body className={playfair.variable}>
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }}
-        />
-        <Providers>{children}</Providers>
-        <a
-          href={whatsappHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="WhatsApp Kontakt"
-          className="fixed bottom-32 right-4 z-[520] flex h-14 w-14 items-center justify-center overflow-hidden rounded-full shadow-lg transition hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 md:bottom-6"
-        >
-          <Image
-            src="/images/whatsapp_4008228.png"
-            alt="WhatsApp Kontakt zu Planenadler"
-            width={56}
-            height={56}
-            className="h-full w-full object-cover"
-            sizes="56px"
-          />
-        </a>
-      </body>
-    </html>
-  )
-}
-````
-
 ## File: src/app/sitemap.ts
 ````typescript
 import type { MetadataRoute } from 'next'
@@ -19832,6 +19358,61 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }))
   return [...staticRoutes, ...productRoutes, ...blogRoutes, ...blogPaginationRoutes]
 }
+````
+
+## File: src/features/about/data/productGroups.ts
+````typescript
+import type { ProductGroupCard } from '../types'
+export const PRODUCT_GROUPS: ProductGroupCard[] = [
+  {
+    id: 'terrassenplanen',
+    name: 'Terrassenplanen',
+    description: 'Schutz und Komfort für Ihre Terrasse – transparent oder blickdicht, nach Maß.',
+    image: { src: '/images/Terrassenplane_adlerplanen.png', alt: 'Terrassenplanen' },
+    hrefMore: '/shop?category=terrassenplanen',
+    hrefConfig: '/konfigurator',
+  },
+  {
+    id: 'anhaengerplanen',
+    name: 'Anhängerplanen',
+    description: 'Robuste Planen für Anhänger und Transport – maßgefertigt und langlebig.',
+    image: { src: '/images/AnhängerplaneAdlerplanen.png', alt: 'Anhängerplanen' },
+    hrefMore: '/shop?category=anhaengerplanen',
+    hrefConfig: '/konfigurator',
+  },
+  {
+    id: 'abdeckhauben',
+    name: 'Abdeckhauben',
+    description: 'Schutz für Maschinen, Fahrzeuge und Lager – passgenau und witterungsbeständig.',
+    image: { src: '/images/Abdeckhaube_adlerPlanen.png', alt: 'Abdeckhauben' },
+    hrefMore: '/shop?category=abdeckhauben',
+    hrefConfig: '/konfigurator',
+  },
+  {
+    id: 'abdeckplanen',
+    name: 'Abdeckplanen',
+    description: 'Vielseitige Abdeckungen für Industrie, Garten und Transport.',
+    image: { src: '/images/Abdeckplane Adler Planen.png', alt: 'Abdeckplanen' },
+    hrefMore: '/shop?category=abdeckplanen',
+    hrefConfig: '/konfigurator',
+  },
+  {
+    id: 'poolplanen',
+    name: 'Poolplanen',
+    description: 'Poolabdeckungen nach Maß – für Sauberkeit und Wärmeschutz.',
+    image: { src: '/images/Poolplane Adlerplanen.png', alt: 'Poolplanen' },
+    hrefMore: '/shop?category=poolplanen',
+    hrefConfig: '/konfigurator',
+  },
+  {
+    id: 'gitterboxplanen',
+    name: 'Gitterboxplanen',
+    description: 'Planen für Gitterboxplanen und Paletten – sicher und maßgenau.',
+    image: { src: '/images/Gitterboxplanenadler.png', alt: 'Gitterboxplanen' },
+    hrefMore: '/shop?category=gitterboxen',
+    hrefConfig: '/konfigurator',
+  },
+]
 ````
 
 ## File: src/features/about/sections/AboutStorySection/AboutStorySection.tsx
@@ -20220,98 +19801,6 @@ export interface FaqSection {
   id: string
   title: string
   items: FaqItem[]
-}
-````
-
-## File: src/features/blog/api/fetchPosts.ts
-````typescript
-import type { BlogPost, BlogPostCategory, BlogPostTag } from '../types'
-import type { WPGraphQLPostNode, WPGraphQLPostsResponse, WPGraphQLPostResponse } from './types'
-import { blogGraphQLFetch } from './fetcher'
-import { POSTS_LIST_QUERY, POST_BY_SLUG_QUERY } from './queries'
-import { PLACEHOLDER_IMAGE_DATA_URL } from '@/shared/lib/functions'
-const DEFAULT_COVER_ALT = 'Blog-Bild'
-const BLOG_AUTHOR_NAME = 'Ahmet Karadag'
-function stripHtml(html: string | null | undefined): string {
-  if (!html || typeof html !== 'string') return ''
-  return html
-    .replace(/<[^>]+>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-function toCategories(nodes: WPGraphQLPostNode['categories']): BlogPostCategory[] | undefined {
-  const list = nodes?.nodes?.filter((n) => n?.name && n?.slug) ?? []
-  if (list.length === 0) return undefined
-  return list.map((n) => ({ name: n.name!, slug: n.slug! }))
-}
-function toTags(nodes: WPGraphQLPostNode['tags']): BlogPostTag[] | undefined {
-  const list = nodes?.nodes?.filter((n) => n?.name && n?.slug) ?? []
-  if (list.length === 0) return undefined
-  return list.map((n) => ({ name: n.name!, slug: n.slug! }))
-}
-export function mapWpPostToBlogPost(node: WPGraphQLPostNode): BlogPost {
-  const src =
-    node.featuredImage?.node?.sourceUrl ?? PLACEHOLDER_IMAGE_DATA_URL
-  const alt =
-    node.featuredImage?.node?.altText ?? node.title ?? DEFAULT_COVER_ALT
-  const category = node.categories?.nodes?.[0]?.name ?? undefined
-  const base: BlogPost = {
-    id: String(node.databaseId ?? node.id),
-    slug: node.slug,
-    title: node.title ?? '',
-    excerpt: stripHtml(node.excerpt),
-    coverImage: { src, alt },
-    publishedAt: node.date ?? '',
-    category,
-    author: BLOG_AUTHOR_NAME,
-  }
-  if (node.content != null || (node.categories?.nodes?.length ?? 0) > 0 || (node.tags?.nodes?.length ?? 0) > 0) {
-    const categories = toCategories(node.categories)
-    const tags = toTags(node.tags)
-    return {
-      ...base,
-      content: node.content ?? undefined,
-      categories,
-      tags,
-    }
-  }
-  return base
-}
-const BATCH_SIZE = 50
-/**
- * Fetches all published posts from WordPress (paginates through cursor until done).
- */
-export async function fetchAllBlogPostsFromAPI(): Promise<BlogPost[]> {
-  const results: BlogPost[] = []
-  let after: string | null = null
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const data: WPGraphQLPostsResponse = await blogGraphQLFetch<WPGraphQLPostsResponse>({
-      query: POSTS_LIST_QUERY,
-      variables: { first: BATCH_SIZE, after },
-    })
-    const nodes = data.posts?.nodes ?? []
-    for (const node of nodes) {
-      results.push(mapWpPostToBlogPost(node))
-    }
-    const hasNext = data.posts?.pageInfo?.hasNextPage ?? false
-    const endCursor: string | null = data.posts?.pageInfo?.endCursor ?? null
-    if (!hasNext || !endCursor) break
-    after = endCursor
-  }
-  return results
-}
-/**
- * Fetches a single post by slug from WordPress.
- */
-export async function fetchPostBySlugFromAPI(slug: string): Promise<BlogPost | null> {
-  const data = await blogGraphQLFetch<WPGraphQLPostResponse>({
-    query: POST_BY_SLUG_QUERY,
-    variables: { slug },
-  })
-  const node = data.post
-  if (!node) return null
-  return mapWpPostToBlogPost(node)
 }
 ````
 
@@ -21197,57 +20686,6 @@ export function PaymentMethods({ hideWallet = false, options, loading = false }:
 }
 ````
 
-## File: src/features/contact/data/contactContent.ts
-````typescript
-import type { ContactHeroContent, ContactInfoItem } from '../types'
-export const CONTACT_HERO_CONTENT: ContactHeroContent = {
-  subline: 'Fragen, Anfrage oder Beratung - wir helfen gern.',
-  image: { src: '/images/Planenadler1.jpg', alt: 'Planenadler Kontakt' },
-}
-const TEL_HREF = 'tel:+492037385985'
-const MAIL_HREF = 'mailto:post@planenadler.de'
-const MAPS_HREF =
-  'https://www.google.com/maps/search/?api=1&query=D%C3%BCsseldorfer+Str.+387,+47055+Duisburg'
-export const CONTACT_INFO_ITEMS: ContactInfoItem[] = [
-  {
-    id: 'phone',
-    type: 'tel',
-    title: 'Telefonnummer Buero oder Mobil',
-    value: '0203 73 85 985 - 0172 7436428',
-    href: TEL_HREF,
-    primaryAction: { label: 'Jetzt anrufen', href: TEL_HREF },
-    secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },
-    bgColor: '#1F5CAB',
-    textColor: 'text-white',
-    subTextColor: 'text-white/80',
-  },
-  {
-    id: 'email',
-    type: 'email',
-    title: 'E-Mail Adresse',
-    value: 'post@planenadler.de',
-    href: MAIL_HREF,
-    primaryAction: { label: 'E-Mail senden', href: MAIL_HREF },
-    secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },
-    bgColor: '#FFFFFF',
-    textColor: 'text-[#1F5CAB]',
-    subTextColor: 'text-[#3982DC]/80',
-  },
-  {
-    id: 'address',
-    type: 'address',
-    title: 'Adresse & Oeffnungszeiten',
-    value: 'Duesseldorfer Str. 387, 47055 Duisburg - Mo-Fr 08:00-18:00, Sa 10:00-14:00',
-    href: MAPS_HREF,
-    primaryAction: { label: 'Route planen', href: MAPS_HREF },
-    secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },
-    bgColor: '#3982DC',
-    textColor: 'text-white',
-    subTextColor: 'text-white/80',
-  },
-]
-````
-
 ## File: src/features/contact/sections/ContactHeroSection/ContactHeroSection.tsx
 ````typescript
 import Image from 'next/image'
@@ -21890,102 +21328,6 @@ export function HeroTextBlock({ title, subtitle, description }: HeroTextBlockPro
 export { HeroTextBlock } from './HeroTextBlock.component'
 ````
 
-## File: src/features/home/sections/Hero/data.ts
-````typescript
-import type { HeroSlide } from './types'
-import { PLACEHOLDER_IMAGE_DATA_URL } from '@/shared/lib/functions'
-const placeholderBackground = {
-  src: PLACEHOLDER_IMAGE_DATA_URL,
-  alt: 'Hero Hintergrund',
-}
-const placeholderThumb = {
-  src: PLACEHOLDER_IMAGE_DATA_URL,
-  alt: 'Hero Vorschau',
-}
-export const HERO_SLIDES: HeroSlide[] = [
-  {
-    id: 'cabins',
-    navLabel: 'Terrassenplane Konfigurieren',
-    title: 'Terrassenplane Konfigurieren',
-    description:
-      'Schaffen Sie einen geschützten Rückzugsort im Freien mit unseren Terrassenplanen. Entdecken Sie eine Vielzahl von Optionen, um Ihre Terrasse stilvoll zu gestalten und vor den Elementen zu schützen. Jetzt entdecken und Ihren Außenbereich aufwerten!',
-    cta: {
-      label: 'Jetzt Konfigurieren',
-      href: '/product/terrassenplanen',
-      bgColor: 'bg-[#205297] hover:bg-[#205297]',
-    },
-    background: {
-      src: '/images/Terrassenplane4.png',
-      alt: 'Terrassenplane',
-    },
-    thumbMain: {
-      src: '/images/Terrassenplane4.png',
-      alt: 'Terrassenplane',
-    },
-  },
-  {
-    id: 'gated',
-    navLabel: 'Anhängerplane Konfigurieren',
-    title: 'Anhängerplane Konfigurieren',
-    description:
-      'Schützen Sie Ladung und Anhänger mit einer maßgefertigten Anhängerplane aus reißfestem PVC – wasserdicht, UV-beständig und passgenau für PKW-Anhänger sowie Nutzfahrzeuge. Konfigurieren Sie Maße, Farbe, Ösen und Verschluss online und erhalten Sie eine Plane, die Ihrem Einsatz entspricht. Jetzt Anhängerplane konfigurieren und Transport sicher abdecken!',
-    cta: {
-      label: 'Jetzt Konfigurieren',
-      href: '/product/hochplane',
-      bgColor: 'bg-[#205297] hover:bg-[#205297]',
-    },
-    background: {
-      src: '/images/anhängerflachplane.png',
-      alt: 'Anhängerplane',
-    },
-    thumbMain: {
-      src: '/images/anhängerflachplane.png',
-      alt: 'Anhängerplane',
-    },
-  },
-  {
-    id: 'abdeckplane',
-    navLabel: 'Abdeckplane Konfigurieren',
-    title: 'Abdeckplane Konfigurieren',
-    description:
-      'Schützen Sie Holz, Geräte oder Materialien zuverlässig vor Regen und Witterung mit einer maßgeschneiderten Abdeckplane. Robustes PVC, präzise Verarbeitung und Ihre gewünschten Maße – ideal für Stapel, Maschinen und längere Außenlagerung.',
-    cta: {
-      label: 'Jetzt Konfigurieren',
-      href: '/product/abdeckplane',
-      bgColor: 'bg-[#205297] hover:bg-[#205297]',
-    },
-    background: {
-      src: '/images/Abdeckplane_Holz.png',
-      alt: 'Abdeckplane fuer Holz und Material',
-    },
-    thumbMain: {
-      src: '/images/Abdeckplane_Holz.png',
-      alt: 'Abdeckplane fuer Holz und Material',
-    },
-  },
-  {
-    id: 'poolabdeckung',
-    navLabel: 'Poolabdeckungen Konfigurieren',
-    title: 'Poolabdeckungen Konfigurieren',
-    description:
-      'Schützen Sie Ihr Becken mit einer maßgefertigten Poolabdeckung aus robustem, UV-beständigem PVC: weniger Schmutz, Laub und Verunreinigungen, weniger Reinigungsaufwand und bessere Wasserqualität über die Saison. Geben Sie Ihre Poolmaße und Wünsche im Konfigurator ein – jetzt Poolplane bzw. Poolabdeckung online konfigurieren und die nächste Badesaison sorgenfrei genießen!',
-    cta: {
-      label: 'Jetzt Konfigurieren',
-      href: '/product/poolplane',
-      bgColor: 'bg-[#205297] hover:bg-[#205297]',
-    },
-    background: {
-      src: '/images/Adlerplanen_Poolabdeckung.png',
-      alt: 'Maßgefertigte Poolabdeckung von Planenadler',
-    },
-    thumbMain: {
-      src: '/images/Adlerplanen_Poolabdeckung.png',
-      alt: 'Maßgefertigte Poolabdeckung von Planenadler',
-    },
-  },
-]
-````
-
 ## File: src/features/home/sections/Hero/index.ts
 ````typescript
 export { HeroSlider } from './HeroSlider.component'
@@ -22047,22 +21389,6 @@ export function AvatarCluster() {
 ````typescript
 export function CountersRow() {
   return null
-}
-````
-
-## File: src/features/home/sections/InfoWithCounters/data.ts
-````typescript
-import type { InfoWithCountersContent } from './types'
-export const INFO_WITH_COUNTERS: InfoWithCountersContent = {
-  title: 'Zahlen, die für sich sprechen',
-  description:
-    'Seit Jahren fertigen wir individuelle Planen für Kunden aus ganz Deutschland. Präzision, Qualität und Kundennähe sind unser Antrieb.',
-  counters: [
-    { id: 'customers', value: '500+', label: 'Zufriedene Kunden' },
-    { id: 'products', value: '1.000+', label: 'Gefertigte Planen' },
-    { id: 'experience', value: '10+', label: 'Jahre Erfahrung' },
-    { id: 'rating', value: '4,8', label: 'Ø Kundenbewertung' },
-  ],
 }
 ````
 
@@ -22833,6 +22159,37 @@ export function CategoryCard({ category }: CategoryCardProps) {
 export { CategoryCard } from './CategoryCard'
 ````
 
+## File: src/features/shop/data/faq.ts
+````typescript
+import type { FaqItem } from '../types'
+export const SHOP_FAQ_ITEMS: FaqItem[] = [
+  {
+    id: 'lieferzeit',
+    question: 'Wie lange dauert die Lieferung?',
+    answer:
+      'Die Lieferzeit beträgt in der Regel 14–30 Tage ab Auftragsbestätigung, abhängig von der Konfektion und dem aktuellen Auftragsvolumen. Expresslieferung ist auf Anfrage möglich.',
+  },
+  {
+    id: 'massanfertigung',
+    question: 'Sind Maßanfertigungen möglich?',
+    answer:
+      'Ja. Wir fertigen ausschließlich nach Maß. Geben Sie Ihre Wunschmaße im Konfigurator ein oder senden Sie uns eine Skizze – wir setzen Ihre Anforderungen passgenau um.',
+  },
+  {
+    id: 'materialien',
+    question: 'Welche Materialien werden verwendet?',
+    answer:
+      'Wir setzen auf hochwertiges PVC Material, je nach Einsatzbereich. Die Planen sind UV- und witterungsbeständig, reißfest und langlebig. Gern beraten wir Sie zur passenden Stärke und Oberfläche.',
+  },
+  {
+    id: 'garantie',
+    question: 'Gibt es Garantie?',
+    answer:
+      'Wir stehen für unsere Qualität ein. Die genauen Garantiebedingungen besprechen wir individuell je nach Produkt und Einsatz. Bei Material- oder Verarbeitungsfehlern greifen unsere Kulanzregelungen.',
+  },
+]
+````
+
 ## File: src/lib/customizer-types.ts
 ````typescript
 export interface CustomizerMaterial {
@@ -23253,6 +22610,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         'Die Verbindung zum Maildienst ist aktuell nicht verfuegbar. Bitte versuchen Sie es erneut.',
     })
   }
+}
+````
+
+## File: src/pages/_document.tsx
+````typescript
+import { Html, Head, Main, NextScript } from 'next/document';
+export default function Document() {
+  return (
+    <Html lang="de">
+      <Head>
+        <link rel="icon" href="/Planenadlerlogo.png" type="image/png" />
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <link rel="apple-touch-icon" href="/Planenadlerlogo.png" />
+        <meta name="theme-color" content="#1F5CAB" />
+        <meta name="application-name" content="Planenadler" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+      </Head>
+      <body>
+        <Main />
+        <NextScript />
+      </body>
+    </Html>
+  );
 }
 ````
 
@@ -24731,6 +24112,109 @@ export default async function ShopPage() {
 }
 ````
 
+## File: src/app/layout.tsx
+````typescript
+import type { Metadata } from 'next'
+import { Playfair_Display } from 'next/font/google'
+import Image from 'next/image'
+import '@/shared/styles/globals.css'
+import { Providers } from './Providers'
+import { DEFAULT_DESCRIPTION, GOOGLE_SITE_VERIFICATION, SITE_NAME, SITE_URL } from '@/lib/seo'
+import { getLocalBusinessJsonLd, getOrganizationJsonLd, getWebSiteJsonLd } from '@/lib/seo-schema'
+const playfair = Playfair_Display({
+  subsets: ['latin'],
+  variable: '--font-playfair',
+  display: 'swap',
+})
+export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: SITE_NAME,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: DEFAULT_DESCRIPTION,
+  applicationName: SITE_NAME,
+  alternates: {
+    canonical: '/',
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'de_DE',
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    title: SITE_NAME,
+    description: DEFAULT_DESCRIPTION,
+    images: [
+      {
+        url: '/Planenadlerlogo.png',
+        alt: 'Planenadler Logo',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: SITE_NAME,
+    description: DEFAULT_DESCRIPTION,
+    images: ['/Planenadlerlogo.png'],
+  },
+  verification: GOOGLE_SITE_VERIFICATION
+    ? {
+        google: GOOGLE_SITE_VERIFICATION,
+      }
+    : undefined,
+  icons: {
+    icon: [{ url: '/Planenadlerlogo.png', type: 'image/png' }],
+    shortcut: '/Planenadlerlogo.png',
+    apple: '/Planenadlerlogo.png',
+  },
+}
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const whatsappHref = 'https://wa.me/491727436428'
+  const organizationJsonLd = getOrganizationJsonLd()
+  const websiteJsonLd = getWebSiteJsonLd()
+  const localBusinessJsonLd = getLocalBusinessJsonLd()
+  return (
+    <html lang="de">
+      <body className={playfair.variable}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }}
+        />
+        <Providers>{children}</Providers>
+        <a
+          href={whatsappHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="WhatsApp Kontakt"
+          className="fixed bottom-32 right-4 z-[520] flex h-14 w-14 items-center justify-center overflow-hidden rounded-full shadow-lg transition hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 md:bottom-6"
+        >
+          <Image
+            src="/images/whatsapp_4008228.png"
+            alt="WhatsApp Kontakt zu Planenadler"
+            width={56}
+            height={56}
+            className="h-full w-full object-cover"
+            sizes="56px"
+          />
+        </a>
+      </body>
+    </html>
+  )
+}
+````
+
 ## File: src/config/apollo/ApolloClient.ts
 ````typescript
 import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client'
@@ -24970,6 +24454,98 @@ export const ABOUT_FAQ_SECTIONS: FaqSection[] = [
   ]),
 ]
 export const ABOUT_FAQ_ITEMS: FaqItem[] = ABOUT_FAQ_SECTIONS.flatMap((section) => section.items)
+````
+
+## File: src/features/blog/api/fetchPosts.ts
+````typescript
+import type { BlogPost, BlogPostCategory, BlogPostTag } from '../types'
+import type { WPGraphQLPostNode, WPGraphQLPostsResponse, WPGraphQLPostResponse } from './types'
+import { blogGraphQLFetch } from './fetcher'
+import { POSTS_LIST_QUERY, POST_BY_SLUG_QUERY } from './queries'
+import { PLACEHOLDER_IMAGE_DATA_URL } from '@/shared/lib/functions'
+const DEFAULT_COVER_ALT = 'Blog-Bild'
+const BLOG_AUTHOR_NAME = 'Adler Planen'
+function stripHtml(html: string | null | undefined): string {
+  if (!html || typeof html !== 'string') return ''
+  return html
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+function toCategories(nodes: WPGraphQLPostNode['categories']): BlogPostCategory[] | undefined {
+  const list = nodes?.nodes?.filter((n) => n?.name && n?.slug) ?? []
+  if (list.length === 0) return undefined
+  return list.map((n) => ({ name: n.name!, slug: n.slug! }))
+}
+function toTags(nodes: WPGraphQLPostNode['tags']): BlogPostTag[] | undefined {
+  const list = nodes?.nodes?.filter((n) => n?.name && n?.slug) ?? []
+  if (list.length === 0) return undefined
+  return list.map((n) => ({ name: n.name!, slug: n.slug! }))
+}
+export function mapWpPostToBlogPost(node: WPGraphQLPostNode): BlogPost {
+  const src =
+    node.featuredImage?.node?.sourceUrl ?? PLACEHOLDER_IMAGE_DATA_URL
+  const alt =
+    node.featuredImage?.node?.altText ?? node.title ?? DEFAULT_COVER_ALT
+  const category = node.categories?.nodes?.[0]?.name ?? undefined
+  const base: BlogPost = {
+    id: String(node.databaseId ?? node.id),
+    slug: node.slug,
+    title: node.title ?? '',
+    excerpt: stripHtml(node.excerpt),
+    coverImage: { src, alt },
+    publishedAt: node.date ?? '',
+    category,
+    author: BLOG_AUTHOR_NAME,
+  }
+  if (node.content != null || (node.categories?.nodes?.length ?? 0) > 0 || (node.tags?.nodes?.length ?? 0) > 0) {
+    const categories = toCategories(node.categories)
+    const tags = toTags(node.tags)
+    return {
+      ...base,
+      content: node.content ?? undefined,
+      categories,
+      tags,
+    }
+  }
+  return base
+}
+const BATCH_SIZE = 50
+/**
+ * Fetches all published posts from WordPress (paginates through cursor until done).
+ */
+export async function fetchAllBlogPostsFromAPI(): Promise<BlogPost[]> {
+  const results: BlogPost[] = []
+  let after: string | null = null
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const data: WPGraphQLPostsResponse = await blogGraphQLFetch<WPGraphQLPostsResponse>({
+      query: POSTS_LIST_QUERY,
+      variables: { first: BATCH_SIZE, after },
+    })
+    const nodes = data.posts?.nodes ?? []
+    for (const node of nodes) {
+      results.push(mapWpPostToBlogPost(node))
+    }
+    const hasNext = data.posts?.pageInfo?.hasNextPage ?? false
+    const endCursor: string | null = data.posts?.pageInfo?.endCursor ?? null
+    if (!hasNext || !endCursor) break
+    after = endCursor
+  }
+  return results
+}
+/**
+ * Fetches a single post by slug from WordPress.
+ */
+export async function fetchPostBySlugFromAPI(slug: string): Promise<BlogPost | null> {
+  const data = await blogGraphQLFetch<WPGraphQLPostResponse>({
+    query: POST_BY_SLUG_QUERY,
+    variables: { slug },
+  })
+  const node = data.post
+  if (!node) return null
+  return mapWpPostToBlogPost(node)
+}
 ````
 
 ## File: src/features/blog/components/BlogSidebar/BlogSidebar.tsx
@@ -26096,97 +25672,55 @@ export function ShippingForm({ onValidSubmit, submitLabel, initialData }: Shippi
 }
 ````
 
-## File: src/features/home/sections/BlogShowcase/mapBlogPostToArticle.ts
+## File: src/features/contact/data/contactContent.ts
 ````typescript
-import type { BlogPost } from '@/features/blog/types'
-import type { Article, ArticleCategory } from './types'
-const BLOG_AUTHOR_NAME = 'Ahmet Karadag'
-const BLOG_AUTHOR_AVATAR_SRC = '/images/Planenadler%20bild%20von%20Mitarbeiter.png'
-export interface WordPressBlogPost {
-  id: number
-  slug: string
-  title: { rendered: string }
-  excerpt: { rendered: string }
-  date: string
-  categories: number[]
-  featured_media_url?: string
-  _embedded?: {
-    author?: Array<{ name: string; avatar_urls?: Record<string, string> }>
-    'wp:term'?: Array<Array<{ id: number; slug: string; name: string }>>
-  }
+import type { ContactHeroContent, ContactInfoItem } from '../types'
+export const CONTACT_HERO_CONTENT: ContactHeroContent = {
+  subline: 'Fragen, Anfrage oder Beratung - wir helfen gern.',
+  image: { src: '/images/Planenadler1.jpg', alt: 'Planenadler Kontakt' },
 }
-type BlogShowcaseSourcePost = WordPressBlogPost | BlogPost
-function stripHtml(value: unknown): string {
-  if (typeof value === 'string') return value.replace(/<[^>]+>/g, '').trim()
-  if (value && typeof value === 'object' && 'rendered' in value)
-    return String((value as { rendered: string }).rendered ?? '').replace(/<[^>]+>/g, '').trim()
-  return ''
-}
-function isWordPressBlogPost(post: BlogShowcaseSourcePost): post is WordPressBlogPost {
-  return typeof post.title !== 'string'
-}
-function getPostCategory(post: BlogShowcaseSourcePost): string {
-  if (isWordPressBlogPost(post)) {
-    return post._embedded?.['wp:term']?.[0]?.[0]?.slug ?? 'allgemein'
-  }
-  return post.category ?? post.categories?.[0]?.slug ?? 'allgemein'
-}
-function getPostCategoryLabel(post: BlogShowcaseSourcePost): string | null {
-  if (isWordPressBlogPost(post)) {
-    return post._embedded?.['wp:term']?.[0]?.[0]?.name ?? null
-  }
-  return post.categories?.[0]?.name ?? (post.category ? post.category.replace(/-/g, ' ') : null)
-}
-function formatDate(date: string): string {
-  if (!date) return ''
-  return new Intl.DateTimeFormat('de-DE', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date(date))
-}
-export function mapBlogPostToArticle(post: BlogShowcaseSourcePost): Article {
-  const title = stripHtml(post.title)
-  const excerpt = stripHtml(post.excerpt)
-  const publishedAt = isWordPressBlogPost(post) ? post.date : post.publishedAt
-  return {
-    id: String(post.id),
-    title: title || 'Ohne Titel',
-    excerpt: excerpt || '',
-    category: getPostCategory(post),
-    date: formatDate(publishedAt),
-    readTime: isWordPressBlogPost(post)
-      ? '5 Min. Lesezeit'
-      : `${post.readingTimeMin ?? 5} Min. Lesezeit`,
-    slug: post.slug,
-    image: {
-      src: isWordPressBlogPost(post)
-        ? post.featured_media_url ?? 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&q=80'
-        : post.coverImage.src,
-      alt: title || 'Blog-Artikel',
-    },
-    author: {
-      name: BLOG_AUTHOR_NAME,
-      avatar: {
-        src: BLOG_AUTHOR_AVATAR_SRC,
-        alt: BLOG_AUTHOR_NAME,
-      },
-    },
-  }
-}
-export function getCategoriesFromBlogPosts(posts: BlogShowcaseSourcePost[]): ArticleCategory[] {
-  const seen = new Set<string>()
-  const categories: ArticleCategory[] = [{ slug: 'all', label: 'Alle' }]
-  for (const post of posts) {
-    const slug = getPostCategory(post)
-    const label = getPostCategoryLabel(post)
-    if (slug && label && !seen.has(slug)) {
-      seen.add(slug)
-      categories.push({ slug, label })
-    }
-  }
-  return categories
-}
+const TEL_HREF = 'tel:+492037385985'
+const MAIL_HREF = 'mailto:post@planenadler.de'
+const MAPS_HREF =
+  'https://www.google.com/maps/search/?api=1&query=D%C3%BCsseldorfer+Str.+387,+47055+Duisburg'
+export const CONTACT_INFO_ITEMS: ContactInfoItem[] = [
+  {
+    id: 'phone',
+    type: 'tel',
+    title: 'Telefonnummer Buero oder Mobil',
+    value: '0203 73 85 985 - 0172 7436428',
+    href: TEL_HREF,
+    primaryAction: { label: 'Jetzt anrufen', href: TEL_HREF },
+    secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },
+    bgColor: '#1F5CAB',
+    textColor: 'text-white',
+    subTextColor: 'text-white/80',
+  },
+  {
+    id: 'email',
+    type: 'email',
+    title: 'E-Mail Adresse',
+    value: 'post@planenadler.de',
+    href: MAIL_HREF,
+    primaryAction: { label: 'E-Mail senden', href: MAIL_HREF },
+    secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },
+    bgColor: '#FFFFFF',
+    textColor: 'text-[#1F5CAB]',
+    subTextColor: 'text-[#3982DC]/80',
+  },
+  {
+    id: 'address',
+    type: 'address',
+    title: 'Adresse & Oeffnungszeiten',
+    value: 'Duesseldorfer Str. 387, 47055 Duisburg - Mo-Fr 08:00-17:00',
+    href: MAPS_HREF,
+    primaryAction: { label: 'Route planen', href: MAPS_HREF },
+    secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },
+    bgColor: '#3982DC',
+    textColor: 'text-white',
+    subTextColor: 'text-white/80',
+  },
+]
 ````
 
 ## File: src/features/home/sections/Hero/components/HeroSlideCard/HeroSlideCard.component.tsx
@@ -26237,6 +25771,102 @@ export function HeroSlideCard({ image, variant, onClick, ariaLabel }: HeroSlideC
   }
   return <div aria-label={ariaLabel}>{content}</div>
 }
+````
+
+## File: src/features/home/sections/Hero/data.ts
+````typescript
+import type { HeroSlide } from './types'
+import { PLACEHOLDER_IMAGE_DATA_URL } from '@/shared/lib/functions'
+const placeholderBackground = {
+  src: PLACEHOLDER_IMAGE_DATA_URL,
+  alt: 'Hero Hintergrund',
+}
+const placeholderThumb = {
+  src: PLACEHOLDER_IMAGE_DATA_URL,
+  alt: 'Hero Vorschau',
+}
+export const HERO_SLIDES: HeroSlide[] = [
+  {
+    id: 'cabins',
+    navLabel: 'Terrassenplane konfigurieren',
+    title: 'Terrassenplane konfigurieren',
+    description:
+      'Schaffen Sie einen geschützten Rückzugsort im Freien mit unseren Terrassenplanen. Entdecken Sie eine Vielzahl von Optionen, um Ihre Terrasse stilvoll zu gestalten und vor den Elementen zu schützen. Jetzt entdecken und Ihren Außenbereich aufwerten!',
+    cta: {
+      label: 'Jetzt Konfigurieren',
+      href: '/product/terrassenplanen',
+      bgColor: 'bg-[#205297] hover:bg-[#205297]',
+    },
+    background: {
+      src: '/images/Terrassenplane4.png',
+      alt: 'Terrassenplane',
+    },
+    thumbMain: {
+      src: '/images/Terrassenplane4.png',
+      alt: 'Terrassenplane',
+    },
+  },
+  {
+    id: 'gated',
+    navLabel: 'Anhängerplane konfigurieren',
+    title: 'Anhängerplane konfigurieren',
+    description:
+      'Schützen Sie Ladung und Anhänger mit einer maßgefertigten Anhängerplane aus reißfestem PVC – wasserdicht, UV-beständig und passgenau für PKW-Anhänger sowie Nutzfahrzeuge. Konfigurieren Sie Maße, Farbe, Ösen und Verschluss online und erhalten Sie eine Plane, die Ihrem Einsatz entspricht. Jetzt Anhängerplane konfigurieren und Transport sicher abdecken!',
+    cta: {
+      label: 'Jetzt Konfigurieren',
+      href: '/product/hochplane',
+      bgColor: 'bg-[#205297] hover:bg-[#205297]',
+    },
+    background: {
+      src: '/images/anhängerflachplane.png',
+      alt: 'Anhängerplane',
+    },
+    thumbMain: {
+      src: '/images/anhängerflachplane.png',
+      alt: 'Anhängerplane',
+    },
+  },
+  {
+    id: 'abdeckplane',
+    navLabel: 'Abdeckplane konfigurieren',
+    title: 'Abdeckplane konfigurieren',
+    description:
+      'Schützen Sie Holz, Geräte oder Materialien zuverlässig vor Regen und Witterung mit einer maßgeschneiderten Abdeckplane. Robustes PVC, präzise Verarbeitung und Ihre gewünschten Maße – ideal für Stapel, Maschinen und längere Außenlagerung.',
+    cta: {
+      label: 'Jetzt konfigurieren',
+      href: '/product/abdeckplane',
+      bgColor: 'bg-[#205297] hover:bg-[#205297]',
+    },
+    background: {
+      src: '/images/Abdeckplane_Holz.png',
+      alt: 'Abdeckplane fuer Holz und Material',
+    },
+    thumbMain: {
+      src: '/images/Abdeckplane_Holz.png',
+      alt: 'Abdeckplane fuer Holz und Material',
+    },
+  },
+  {
+    id: 'poolabdeckung',
+    navLabel: 'Poolabdeckungen konfigurieren',
+    title: 'Poolabdeckungen konfigurieren',
+    description:
+      'Schützen Sie Ihr Becken mit einer maßgefertigten Poolabdeckung aus robustem, UV-beständigem PVC: weniger Schmutz, Laub und Verunreinigungen, weniger Reinigungsaufwand und bessere Wasserqualität über die Saison. Geben Sie Ihre Poolmaße und Wünsche im Konfigurator ein – jetzt Poolplane bzw. Poolabdeckung online konfigurieren und die nächste Badesaison sorgenfrei genießen!',
+    cta: {
+      label: 'Jetzt Konfigurieren',
+      href: '/product/poolplane',
+      bgColor: 'bg-[#205297] hover:bg-[#205297]',
+    },
+    background: {
+      src: '/images/Adlerplanen_Poolabdeckung.png',
+      alt: 'Maßgefertigte Poolabdeckung von Planenadler',
+    },
+    thumbMain: {
+      src: '/images/Adlerplanen_Poolabdeckung.png',
+      alt: 'Maßgefertigte Poolabdeckung von Planenadler',
+    },
+  },
+]
 ````
 
 ## File: src/features/home/sections/Hero/HeroSlider.component.tsx
@@ -26352,6 +25982,22 @@ export function HeroSlider({ slides = HERO_SLIDES, autoPlayMs }: HeroSliderProps
       </ContentShell>
     </section>
   )
+}
+````
+
+## File: src/features/home/sections/InfoWithCounters/data.ts
+````typescript
+import type { InfoWithCountersContent } from './types'
+export const INFO_WITH_COUNTERS: InfoWithCountersContent = {
+  title: 'Zahlen, die für sich sprechen',
+  description:
+    'Seit Jahren fertigen wir individuelle Planen für Kunden aus ganz Deutschland. Präzision, Qualität und Kundennähe sind unser Antrieb.',
+  counters: [
+    { id: 'customers', value: '500+', label: 'Zufriedene Kunden' },
+    { id: 'products', value: '1.000+', label: 'Gefertigte Planen' },
+    { id: 'experience', value: '20+', label: 'Jahre Erfahrung' },
+    { id: 'rating', value: '4,8', label: 'Ø Kundenbewertung' },
+  ],
 }
 ````
 
@@ -26549,365 +26195,262 @@ export function ProductsShowcase({ products }: ProductsShowcaseProps) {
 }
 ````
 
-## File: src/lib/customizer-pricing.ts
+## File: src/lib/customizer-runtime.ts
 ````typescript
-import type {
-  ConfigFormState,
-  ResolvedChoice,
-  ResolvedCustomizerConfig,
-  SupportedProductType,
-  SupportedUnitSelector,
-} from '@/lib/customizer-runtime'
-export interface PriceCalculationRequestBody {
-  productId: string | number
+export type ToggleState = '' | 'yes' | 'no'
+export type SupportedProductType =
+  | 'tarpaulins'
+  | 'trailer'
+  | 'rectangular'
+  | 'lounge'
+  | 'unknown'
+export type SupportedUnitSelector = 'squaremeter' | 'cubicmeter' | 'unknown'
+export type StepId =
+  | 'color'
+  | 'size'
+  | 'topSide'
+  | 'leftSide'
+  | 'rightSide'
+  | 'bottomSide'
+  | 'window'
+  | 'door'
+  | 'eyelets'
+  | 'closureType'
+  | 'frontClosure'
+  | 'backClosure'
+  | 'extras'
+  | 'sketch'
+export type ConfigFormField =
+  | 'material'
+  | 'color'
+  | 'lengthACm'
+  | 'heightRightBCm'
+  | 'heightLeftCCm'
+  | 'trailerWidthCm'
+  | 'trailerLengthCm'
+  | 'trailerHeightCm'
+  | 'rectangularLengthCm'
+  | 'rectangularWidthCm'
+  | 'rectangularHeightCm'
+  | 'sideACm'
+  | 'sideBCm'
+  | 'sideCCm'
+  | 'sideFCm'
+  | 'sideHCm'
+  | 'topSide'
+  | 'leftSide'
+  | 'rightSide'
+  | 'bottomSide'
+  | 'hasWindow'
+  | 'windowWidthCm'
+  | 'windowHeightCm'
+  | 'windowDistanceSideCm'
+  | 'windowDistanceBottomCm'
+  | 'windowSplit'
+  | 'windowSplitLeftWidthCm'
+  | 'windowSplitLeftHeightCm'
+  | 'windowSplitRightWidthCm'
+  | 'windowSplitRightHeightCm'
+  | 'windowSplitRightDistanceRightCm'
+  | 'windowSplitLeftDistanceLeftCm'
+  | 'windowSplitLeftDistanceBottomCm'
+  | 'windowSplitRightDistanceBottomCm'
+  | 'hasDoor'
+  | 'doorWidthCm'
+  | 'doorHeightCm'
+  | 'doorDistanceLeftCm'
+  | 'eyeletEdge'
+  | 'closureType'
+  | 'frontClosure'
+  | 'backClosure'
+export interface ConfigFormState {
+  material: string
+  color: string
+  lengthACm: string
+  heightRightBCm: string
+  heightLeftCCm: string
+  trailerWidthCm: string
+  trailerLengthCm: string
+  trailerHeightCm: string
+  rectangularLengthCm: string
+  rectangularWidthCm: string
+  rectangularHeightCm: string
+  sideACm: string
+  sideBCm: string
+  sideCCm: string
+  sideFCm: string
+  sideHCm: string
+  topSide: string
+  leftSide: string
+  rightSide: string
+  bottomSide: string
+  hasWindow: ToggleState
+  windowWidthCm: string
+  windowHeightCm: string
+  windowDistanceSideCm: string
+  windowDistanceBottomCm: string
+  windowSplit: ToggleState
+  windowSplitLeftWidthCm: string
+  windowSplitLeftHeightCm: string
+  windowSplitRightWidthCm: string
+  windowSplitRightHeightCm: string
+  windowSplitRightDistanceRightCm: string
+  windowSplitLeftDistanceLeftCm: string
+  windowSplitLeftDistanceBottomCm: string
+  windowSplitRightDistanceBottomCm: string
+  hasDoor: ToggleState
+  doorWidthCm: string
+  doorHeightCm: string
+  doorDistanceLeftCm: string
+  doorExtras: string[]
+  hasExtras: ToggleState
+  extrasSelected: string[]
+  eyeletEdge: string
+  closureType: string
+  frontClosure: string
+  frontClosureExtras: string[]
+  backClosure: string
+  backClosureExtras: string[]
+}
+export const emptyConfigFormState: ConfigFormState = {
+  material: '',
+  color: '',
+  lengthACm: '',
+  heightRightBCm: '',
+  heightLeftCCm: '',
+  trailerWidthCm: '',
+  trailerLengthCm: '',
+  trailerHeightCm: '',
+  rectangularLengthCm: '',
+  rectangularWidthCm: '',
+  rectangularHeightCm: '',
+  sideACm: '',
+  sideBCm: '',
+  sideCCm: '',
+  sideFCm: '',
+  sideHCm: '',
+  topSide: '',
+  leftSide: '',
+  rightSide: '',
+  bottomSide: '',
+  hasWindow: '',
+  windowWidthCm: '',
+  windowHeightCm: '',
+  windowDistanceSideCm: '',
+  windowDistanceBottomCm: '',
+  windowSplit: '',
+  windowSplitLeftWidthCm: '',
+  windowSplitLeftHeightCm: '',
+  windowSplitRightWidthCm: '',
+  windowSplitRightHeightCm: '',
+  windowSplitRightDistanceRightCm: '',
+  windowSplitLeftDistanceLeftCm: '',
+  windowSplitLeftDistanceBottomCm: '',
+  windowSplitRightDistanceBottomCm: '',
+  hasDoor: '',
+  doorWidthCm: '',
+  doorHeightCm: '',
+  doorDistanceLeftCm: '',
+  doorExtras: [],
+  hasExtras: 'no',
+  extrasSelected: [],
+  eyeletEdge: '',
+  closureType: '',
+  frontClosure: '',
+  frontClosureExtras: [],
+  backClosure: '',
+  backClosureExtras: [],
+}
+export interface ResolvedChoice {
+  id: string
+  label: string
+  imageSrc?: string
+  price?: number | null
+  meta?: Record<string, string | number | boolean | null | undefined>
+}
+export interface ResolvedDimensionField {
+  key: ConfigFormField
+  label: string
+  min: number
+  required: boolean
+}
+export interface ResolvedDimensionConfig {
+  title: string
+  description?: string
+  imageSrc?: string
+  /** Skizze wenn Hoehe rechts B > Hoehe links C (Customizer: „Image if B greater“) */
+  imageSrcWhenBGreater?: string
+  /** Skizze wenn Hoehe links C > Hoehe rechts B (Customizer: „Image if C greater“) */
+  imageSrcWhenCGreater?: string
+  fields: ResolvedDimensionField[]
+  minimumValue?: number
+}
+export interface ResolvedConfiguratorHints {
+  color: string
+  size: string
+  topSide: string
+  leftSide: string
+  rightSide: string
+  bottomSide: string
+  window: string
+  door: string
+  eyelets: string
+  closureType: string
+  frontClosure: string
+  backClosure: string
+  extras: string
+  sketch: string
+}
+export interface ResolvedCustomizerConfig {
+  configId: number
+  productId: string
+  productTitle: string
   productType: SupportedProductType
   unitSelector: SupportedUnitSelector
-  material: string
-  color?: string
-  dimensions: Partial<Record<
-    | 'lengthACm'
-    | 'heightRightBCm'
-    | 'heightLeftCCm'
-    | 'trailerWidthCm'
-    | 'trailerLengthCm'
-    | 'trailerHeightCm'
-    | 'rectangularLengthCm'
-    | 'rectangularWidthCm'
-    | 'rectangularHeightCm'
-    | 'sideACm'
-    | 'sideBCm'
-    | 'sideCCm'
-    | 'sideFCm'
-    | 'sideHCm',
-    string
-  >>
-  selections: {
-    topSide?: string
-    leftSide?: string
-    rightSide?: string
-    bottomSide?: string
-    eyeletEdge?: string
-    closureType?: string
-    frontClosure?: string
-    backClosure?: string
-    doorExtras: string[]
-    extrasSelected: string[]
-    frontClosureExtras: string[]
-    backClosureExtras: string[]
+  steps: StepId[]
+  dimensions: ResolvedDimensionConfig
+  options: {
+    colors: ResolvedChoice[]
+    materials: ResolvedChoice[]
+    topSide: ResolvedChoice[]
+    leftSide: ResolvedChoice[]
+    rightSide: ResolvedChoice[]
+    bottomSide: ResolvedChoice[]
+    doorExtras: ResolvedChoice[]
+    extras: ResolvedChoice[]
+    eyelets: ResolvedChoice[]
+    closureTypes: ResolvedChoice[]
+    frontClosures: ResolvedChoice[]
+    frontClosureExtras: ResolvedChoice[]
+    backClosures: ResolvedChoice[]
+    backClosureExtras: ResolvedChoice[]
   }
-  toggles: {
-    hasWindow: boolean
-    hasDoor: boolean
-    hasExtras: boolean
-    windowSplit: boolean
+  pricingCapabilities: {
+    livePrice: boolean
+    allowsEdges: boolean
+    allowsWindow: boolean
+    allowsDoor: boolean
+    supportsEyelets: boolean
+    supportsClosureType: boolean
+    supportsFrontBackClosure: boolean
   }
-  window: {
-    widthCm?: string
-    heightCm?: string
-    distanceSideCm?: string
-    distanceBottomCm?: string
-    splitLeftWidthCm?: string
-    splitRightWidthCm?: string
+  validationRules: {
+    requiredFields: ConfigFormField[]
+    minimumForPrice: ConfigFormField[]
   }
-  door: {
-    widthCm?: string
-    heightCm?: string
-    distanceLeftCm?: string
-  }
-  notes: {
-    extras?: string
-  }
+  hints: ResolvedConfiguratorHints
+  issues: string[]
 }
-export interface PriceCalculationResult {
-  total: number
-  formatted: string
-  price: string
-}
-export interface ConfigurationSummaryEntry {
-  label: string
-  value: string
-}
-export interface ConfiguredCartPayload {
-  extraData: Record<string, string>
-  summary: ConfigurationSummaryEntry[]
-}
-function resolveLabels(ids: string[], choices: ResolvedChoice[]): string[] {
-  const choiceMap = new Map(choices.map((choice) => [choice.id, choice.label]))
-  return ids
-    .map((id) => choiceMap.get(id) ?? id)
-    .filter((label) => typeof label === 'string' && label.trim().length > 0)
-}
-function selectionKey(prefix: string, label: string): string {
-  return `${prefix}${label.replace(/\s/g, '_')}`
-}
-function readNumericPrice(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim().length > 0) {
-    const normalized = value.replace(',', '.').replace(/[^\d.-]/g, '')
-    const parsed = Number.parseFloat(normalized)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
-}
-export function buildPriceCalculationRequest(
-  productId: number | string,
-  form: ConfigFormState,
-  resolvedConfig: ResolvedCustomizerConfig,
-): PriceCalculationRequestBody {
-  return {
-    productId,
-    productType: resolvedConfig.productType,
-    unitSelector: resolvedConfig.unitSelector,
-    material: form.material,
-    color: form.color || undefined,
-    dimensions: {
-      lengthACm: form.lengthACm || undefined,
-      heightRightBCm: form.heightRightBCm || undefined,
-      heightLeftCCm: form.heightLeftCCm || undefined,
-      trailerWidthCm: form.trailerWidthCm || undefined,
-      trailerLengthCm: form.trailerLengthCm || undefined,
-      trailerHeightCm: form.trailerHeightCm || undefined,
-      rectangularLengthCm: form.rectangularLengthCm || undefined,
-      rectangularWidthCm: form.rectangularWidthCm || undefined,
-      rectangularHeightCm: form.rectangularHeightCm || undefined,
-      sideACm: form.sideACm || undefined,
-      sideBCm: form.sideBCm || undefined,
-      sideCCm: form.sideCCm || undefined,
-      sideFCm: form.sideFCm || undefined,
-      sideHCm: form.sideHCm || undefined,
-    },
-    selections: {
-      topSide: form.topSide || undefined,
-      leftSide: form.leftSide || undefined,
-      rightSide: form.rightSide || undefined,
-      bottomSide: form.bottomSide || undefined,
-      eyeletEdge: form.eyeletEdge || undefined,
-      closureType: form.closureType || undefined,
-      frontClosure: form.frontClosure || undefined,
-      backClosure: form.backClosure || undefined,
-      doorExtras: resolveLabels(form.doorExtras, resolvedConfig.options.doorExtras),
-      extrasSelected: resolveLabels(form.extrasSelected, resolvedConfig.options.extras),
-      frontClosureExtras: resolveLabels(form.frontClosureExtras, resolvedConfig.options.frontClosureExtras),
-      backClosureExtras: resolveLabels(form.backClosureExtras, resolvedConfig.options.backClosureExtras),
-    },
-    toggles: {
-      hasWindow: form.hasWindow === 'yes',
-      hasDoor: form.hasDoor === 'yes',
-      hasExtras: form.hasExtras === 'yes',
-      windowSplit: form.windowSplit === 'yes',
-    },
-    window: {
-      widthCm: form.windowWidthCm || undefined,
-      heightCm: form.windowHeightCm || undefined,
-      distanceSideCm: form.windowDistanceSideCm || undefined,
-      distanceBottomCm: form.windowDistanceBottomCm || undefined,
-      splitLeftWidthCm: form.windowSplitLeftWidthCm || undefined,
-      splitRightWidthCm: form.windowSplitRightWidthCm || undefined,
-    },
-    door: {
-      widthCm: form.doorWidthCm || undefined,
-      heightCm: form.doorHeightCm || undefined,
-      distanceLeftCm: form.doorDistanceLeftCm || undefined,
-    },
-    notes: {
-      extras: form.extras || undefined,
-    },
-  }
-}
-export function buildWordPressPriceFormData(body: PriceCalculationRequestBody): URLSearchParams {
-  const params = new URLSearchParams()
-  params.set('action', 'prices_update_request')
-  params.set('product_id', String(body.productId))
-  params.set('fabric', body.material || '')
-  switch (body.productType) {
-    case 'lounge':
-      params.set('side_a', body.dimensions.sideACm || '0')
-      params.set('side_b', body.dimensions.sideBCm || '0')
-      params.set('side_c', body.dimensions.sideCCm || '0')
-      params.set('side_f', body.dimensions.sideFCm || '0')
-      params.set('side_h', body.dimensions.sideHCm || '0')
-      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Öse')
-      params.set('closureType', body.selections.closureType || 'Ohne Verschluss')
-      break
-    case 'trailer':
-      params.set('trailer_width', body.dimensions.trailerWidthCm || '0')
-      params.set('trailer_length', body.dimensions.trailerLengthCm || '0')
-      params.set('trailer_height', body.dimensions.trailerHeightCm || '0')
-      params.set('front_clouser', body.selections.frontClosure || 'Without front clouser')
-      params.set('back_clouser', body.selections.backClosure || 'Without back clouser')
-      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Ã–se')
-      params.set('front_clouser_accessories', '')
-      params.set('back_clouser_accessories', '')
-      for (const extra of body.selections.frontClosureExtras) {
-        params.set(selectionKey('Zubehör_für_den_Frontverschluss_', extra), extra)
-      }
-      for (const extra of body.selections.backClosureExtras) {
-        params.set(selectionKey('Zubehör_für_den_Rückenverschluss_', extra), extra)
-      }
-      break
-    case 'rectangular':
-      params.set('rectangular_length', body.dimensions.rectangularLengthCm || '0')
-      params.set('rectangular_width', body.dimensions.rectangularWidthCm || '0')
-      params.set('rectangular_height', body.dimensions.rectangularHeightCm || '0')
-      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Öse')
-      params.set('closureType', body.selections.closureType || 'Ohne Verschluss')
-      break
-    case 'tarpaulins':
-    default:
-      params.set('width', body.dimensions.lengthACm || '0')
-      params.set('height_right', body.dimensions.heightRightBCm || '0')
-      params.set('height_left', body.dimensions.heightLeftCCm || body.dimensions.heightRightBCm || '0')
-      params.set('has_top_edge', body.selections.topSide || 'Ohne Extras')
-      params.set('has_edge_left_0', body.selections.leftSide || 'Ohne Extras')
-      params.set('has_edge_right_0', body.selections.rightSide || 'Ohne Extras')
-      params.set('has_edge_bottom_0', body.selections.bottomSide || 'Ohne Extras')
-      if (body.toggles.hasWindow) {
-        if (body.window.widthCm) params.set('window_width', body.window.widthCm)
-        if (body.window.heightCm) params.set('window_height', body.window.heightCm)
-        if (body.toggles.windowSplit) {
-          let splitCount = 0
-          if (body.window.splitLeftWidthCm) splitCount += 1
-          if (body.window.splitRightWidthCm) splitCount += 1
-          if (splitCount > 0) params.set('window_split_num', String(splitCount))
-        }
-      }
-      if (body.toggles.hasDoor) {
-        if (body.door.widthCm) params.set('door_width', body.door.widthCm)
-        if (body.door.heightCm) params.set('door_height', body.door.heightCm)
-        for (const extra of body.selections.doorExtras) {
-          params.set(selectionKey('Door_Extra_', extra), extra)
-        }
-      }
-      break
-  }
-  if (body.toggles.hasExtras) {
-    for (const extra of body.selections.extrasSelected) {
-      params.set(selectionKey('Extra_', extra), extra)
-    }
-  }
-  return params
-}
-function addSummaryEntry(
-  entries: ConfigurationSummaryEntry[],
-  label: string,
-  value: string | string[] | undefined,
-) {
-  if (Array.isArray(value)) {
-    const normalized = value.map((entry) => entry.trim()).filter((entry) => entry.length > 0)
-    if (normalized.length === 0) return
-    entries.push({ label, value: normalized.join(', ') })
-    return
-  }
-  if (!value) return
-  const normalized = value.trim()
-  if (!normalized) return
-  entries.push({ label, value: normalized })
-}
-export function buildConfigurationSummary(
-  body: PriceCalculationRequestBody,
-  sketchFileName?: string,
-): ConfigurationSummaryEntry[] {
-  const entries: ConfigurationSummaryEntry[] = []
-  addSummaryEntry(entries, 'Material', body.material)
-  addSummaryEntry(entries, 'Farbe', body.color)
-  switch (body.productType) {
-    case 'lounge':
-      addSummaryEntry(entries, 'Seite A', body.dimensions.sideACm ? `${body.dimensions.sideACm} cm` : undefined)
-      addSummaryEntry(entries, 'Seite B', body.dimensions.sideBCm ? `${body.dimensions.sideBCm} cm` : undefined)
-      addSummaryEntry(entries, 'Seite C', body.dimensions.sideCCm ? `${body.dimensions.sideCCm} cm` : undefined)
-      addSummaryEntry(entries, 'Seite F', body.dimensions.sideFCm ? `${body.dimensions.sideFCm} cm` : undefined)
-      addSummaryEntry(entries, 'Hoehe H', body.dimensions.sideHCm ? `${body.dimensions.sideHCm} cm` : undefined)
-      break
-    case 'trailer':
-      addSummaryEntry(entries, 'Anhaengerbreite A', body.dimensions.trailerWidthCm ? `${body.dimensions.trailerWidthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Anhaengerlaenge B', body.dimensions.trailerLengthCm ? `${body.dimensions.trailerLengthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Planenhoehe C', body.dimensions.trailerHeightCm ? `${body.dimensions.trailerHeightCm} cm` : undefined)
-      break
-    case 'rectangular':
-      addSummaryEntry(entries, 'Laenge A', body.dimensions.rectangularLengthCm ? `${body.dimensions.rectangularLengthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Breite B', body.dimensions.rectangularWidthCm ? `${body.dimensions.rectangularWidthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Hoehe C', body.dimensions.rectangularHeightCm ? `${body.dimensions.rectangularHeightCm} cm` : undefined)
-      break
-    case 'tarpaulins':
-    default:
-      addSummaryEntry(entries, 'Laenge A', body.dimensions.lengthACm ? `${body.dimensions.lengthACm} cm` : undefined)
-      addSummaryEntry(entries, 'Hoehe rechts B', body.dimensions.heightRightBCm ? `${body.dimensions.heightRightBCm} cm` : undefined)
-      addSummaryEntry(entries, 'Hoehe links C', body.dimensions.heightLeftCCm ? `${body.dimensions.heightLeftCCm} cm` : undefined)
-      break
-  }
-  addSummaryEntry(entries, 'Obere Seite', body.selections.topSide)
-  addSummaryEntry(entries, 'Linke Seite', body.selections.leftSide)
-  addSummaryEntry(entries, 'Rechte Seite', body.selections.rightSide)
-  addSummaryEntry(entries, 'Untere Seite', body.selections.bottomSide)
-  addSummaryEntry(entries, 'Oesen', body.selections.eyeletEdge)
-  addSummaryEntry(entries, 'Verschlussart', body.selections.closureType)
-  addSummaryEntry(entries, 'Frontverschluss', body.selections.frontClosure)
-  addSummaryEntry(entries, 'Rueckenverschluss', body.selections.backClosure)
-  if (body.toggles.hasWindow) {
-    addSummaryEntry(entries, 'Fenster', 'Ja')
-    addSummaryEntry(entries, 'Fensterbreite', body.window.widthCm ? `${body.window.widthCm} cm` : undefined)
-    addSummaryEntry(entries, 'Fensterhoehe', body.window.heightCm ? `${body.window.heightCm} cm` : undefined)
-  }
-  if (body.toggles.hasDoor) {
-    addSummaryEntry(entries, 'Tuer', 'Ja')
-    addSummaryEntry(entries, 'Tuerbreite', body.door.widthCm ? `${body.door.widthCm} cm` : undefined)
-    addSummaryEntry(entries, 'Tuerhoehe', body.door.heightCm ? `${body.door.heightCm} cm` : undefined)
-    addSummaryEntry(entries, 'Tuerabstand links', body.door.distanceLeftCm ? `${body.door.distanceLeftCm} cm` : undefined)
-    addSummaryEntry(entries, 'Tuer-Extras', body.selections.doorExtras)
-  }
-  if (body.toggles.hasExtras) {
-    addSummaryEntry(entries, 'Extras', body.selections.extrasSelected)
-  }
-  addSummaryEntry(entries, 'Frontverschluss-Zubehoer', body.selections.frontClosureExtras)
-  addSummaryEntry(entries, 'Rueckenverschluss-Zubehoer', body.selections.backClosureExtras)
-  addSummaryEntry(entries, 'Hinweise', body.notes.extras)
-  addSummaryEntry(entries, 'Skizze', sketchFileName)
-  return entries
-}
-export function buildConfiguredCartPayload(
-  body: PriceCalculationRequestBody,
-  uniqueKey: string,
-  sketchFileName?: string,
-): ConfiguredCartPayload {
-  const extraData = Object.fromEntries(buildWordPressPriceFormData(body).entries())
-  delete extraData.action
-  delete extraData.product_id
-  extraData.custom_option = 'configured'
-  extraData.unique_key = uniqueKey
-  extraData.planenadler_configuration_id = uniqueKey
-  const summary = buildConfigurationSummary(body, sketchFileName)
-  extraData.planenadler_configuration_summary = JSON.stringify(summary)
-  if (sketchFileName?.trim()) {
-    extraData.planenadler_sketch_file_name = sketchFileName.trim()
-  }
-  return {
-    extraData,
-    summary,
-  }
-}
-export function parsePriceCalculationResponse(rawPrice: unknown): PriceCalculationResult {
-  const total =
-    readNumericPrice(rawPrice) ??
-    (typeof rawPrice === 'object' && rawPrice !== null
-      ? readNumericPrice(
-          'price' in rawPrice
-            ? (rawPrice as { price?: unknown }).price
-            : 'total' in rawPrice
-              ? (rawPrice as { total?: unknown }).total
-              : 'data' in rawPrice
-                ? (rawPrice as { data?: unknown }).data
-                : undefined,
-        )
-      : null)
-  if (total === null || !Number.isFinite(total)) {
-    throw new Error('WordPress hat keinen gueltigen Preis zurueckgegeben.')
-  }
-  const formatted = `${total.toFixed(2).replace('.', ',')} €`
-  return {
-    total,
-    formatted,
-    price: formatted,
-  }
+export type ConfiguratorStatus =
+  | 'ready'
+  | 'partial'
+  | 'missing'
+  | 'error'
+  | 'unsupported'
+export interface ConfiguratorState {
+  status: ConfiguratorStatus
+  message?: string
+  warnings?: string[]
 }
 ````
 
@@ -27575,6 +27118,99 @@ export default function ProductTabs({ tabs }: ProductTabsProps) {
 }
 ````
 
+## File: src/features/home/sections/BlogShowcase/mapBlogPostToArticle.ts
+````typescript
+import type { BlogPost } from '@/features/blog/types'
+import type { Article, ArticleCategory } from './types'
+const BLOG_AUTHOR_NAME = 'Adler Planen'
+const BLOG_AUTHOR_AVATAR_SRC = '/images/Planenadler%20bild%20von%20Mitarbeiter.png'
+export interface WordPressBlogPost {
+  id: number
+  slug: string
+  title: { rendered: string }
+  excerpt: { rendered: string }
+  date: string
+  categories: number[]
+  featured_media_url?: string
+  _embedded?: {
+    author?: Array<{ name: string; avatar_urls?: Record<string, string> }>
+    'wp:term'?: Array<Array<{ id: number; slug: string; name: string }>>
+  }
+}
+type BlogShowcaseSourcePost = WordPressBlogPost | BlogPost
+function stripHtml(value: unknown): string {
+  if (typeof value === 'string') return value.replace(/<[^>]+>/g, '').trim()
+  if (value && typeof value === 'object' && 'rendered' in value)
+    return String((value as { rendered: string }).rendered ?? '').replace(/<[^>]+>/g, '').trim()
+  return ''
+}
+function isWordPressBlogPost(post: BlogShowcaseSourcePost): post is WordPressBlogPost {
+  return typeof post.title !== 'string'
+}
+function getPostCategory(post: BlogShowcaseSourcePost): string {
+  if (isWordPressBlogPost(post)) {
+    return post._embedded?.['wp:term']?.[0]?.[0]?.slug ?? 'allgemein'
+  }
+  return post.category ?? post.categories?.[0]?.slug ?? 'allgemein'
+}
+function getPostCategoryLabel(post: BlogShowcaseSourcePost): string | null {
+  if (isWordPressBlogPost(post)) {
+    return post._embedded?.['wp:term']?.[0]?.[0]?.name ?? null
+  }
+  return post.categories?.[0]?.name ?? (post.category ? post.category.replace(/-/g, ' ') : null)
+}
+function formatDate(date: string): string {
+  if (!date) return ''
+  return new Intl.DateTimeFormat('de-DE', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(date))
+}
+export function mapBlogPostToArticle(post: BlogShowcaseSourcePost): Article {
+  const title = stripHtml(post.title)
+  const excerpt = stripHtml(post.excerpt)
+  const publishedAt = isWordPressBlogPost(post) ? post.date : post.publishedAt
+  return {
+    id: String(post.id),
+    title: title || 'Ohne Titel',
+    excerpt: excerpt || '',
+    category: getPostCategory(post),
+    date: formatDate(publishedAt),
+    readTime: isWordPressBlogPost(post)
+      ? '5 Min. Lesezeit'
+      : `${post.readingTimeMin ?? 5} Min. Lesezeit`,
+    slug: post.slug,
+    image: {
+      src: isWordPressBlogPost(post)
+        ? post.featured_media_url ?? 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&q=80'
+        : post.coverImage.src,
+      alt: title || 'Blog-Artikel',
+    },
+    author: {
+      name: BLOG_AUTHOR_NAME,
+      avatar: {
+        src: BLOG_AUTHOR_AVATAR_SRC,
+        alt: BLOG_AUTHOR_NAME,
+      },
+    },
+  }
+}
+export function getCategoriesFromBlogPosts(posts: BlogShowcaseSourcePost[]): ArticleCategory[] {
+  const seen = new Set<string>()
+  const categories: ArticleCategory[] = [{ slug: 'all', label: 'Alle' }]
+  for (const post of posts) {
+    const slug = getPostCategory(post)
+    const label = getPostCategoryLabel(post)
+    if (slug && label && !seen.has(slug)) {
+      seen.add(slug)
+      categories.push({ slug, label })
+    }
+  }
+  return categories
+}
+````
+
 ## File: src/features/home/sections/ProductsShowcase/components/ProductCard.tsx
 ````typescript
 'use client'
@@ -27839,525 +27475,357 @@ export function ProductCard({ product }: ProductCardProps) {
 }
 ````
 
-## File: src/lib/customizer-resolver.ts
+## File: src/lib/customizer-pricing.ts
 ````typescript
 import type {
-  CustomizerApiResponse,
-  CustomizerBackClosure,
-  CustomizerCalculationUnit,
-  CustomizerClosure,
-  CustomizerClosureExtra,
-  CustomizerClosureType,
-  CustomizerColor,
-  CustomizerConfig,
-  CustomizerDimensions,
-  CustomizerDoorData,
-  CustomizerDoorExtra,
-  CustomizerEyelet,
-  CustomizerMainExtra,
-  CustomizerMaterial,
-  CustomizerWindowData,
-  CustomizerTopEdge,
-  CustomizerLeftEdge,
-  CustomizerRightEdge,
-  CustomizerBottomEdge,
-} from '@/lib/customizer-types'
-import type {
-  ConfigFormField,
-  ConfiguratorState,
+  ConfigFormState,
   ResolvedChoice,
-  ResolvedConfiguratorHints,
   ResolvedCustomizerConfig,
-  ResolvedDimensionConfig,
-  StepId,
   SupportedProductType,
   SupportedUnitSelector,
 } from '@/lib/customizer-runtime'
-const DEFAULT_HINTS: ResolvedConfiguratorHints = {
-  color: 'Waehlen Sie die gewuenschte Planenfarbe passend zu Einsatz und Fahrzeug.',
-  size: 'Tragen Sie die benoetigten Masse in Zentimetern ein. Diese Werte werden fuer Fertigung und Preisberechnung verwendet.',
-  topSide: 'Waehlen Sie die Verarbeitung fuer die obere Seite der Plane.',
-  leftSide: 'Waehlen Sie die Verarbeitung fuer die linke Seite der Plane.',
-  rightSide: 'Waehlen Sie die Verarbeitung fuer die rechte Seite der Plane.',
-  bottomSide: 'Waehlen Sie die Verarbeitung fuer die untere Seite der Plane.',
-  window: 'Definieren Sie Fenstermaeße und Position fuer die exakte Konfektion.',
-  door: 'Definieren Sie Tuermasse und Position fuer die exakte Platzierung.',
-  eyelets: 'Waehlen Sie aus, ob und wie Oesen an diesem Produkt eingesetzt werden sollen.',
-  closureType: 'Waehlen Sie den gewuenschten Verschlusstyp passend zur Konstruktion.',
-  frontClosure: 'Waehlen Sie den Frontverschluss und optionales Zubehoer.',
-  backClosure: 'Waehlen Sie den Rueckenverschluss und optionales Zubehoer.',
-  extras: 'Hier koennen Sie zusaetzliche Ausstattungen und Sonderwuensche definieren.',
-  sketch: 'Laden Sie optional eine Skizze hoch, damit Positionen und Masse eindeutig zugeordnet werden koennen.',
+export interface PriceCalculationRequestBody {
+  productId: string | number
+  productType: SupportedProductType
+  unitSelector: SupportedUnitSelector
+  material: string
+  color?: string
+  dimensions: Partial<Record<
+    | 'lengthACm'
+    | 'heightRightBCm'
+    | 'heightLeftCCm'
+    | 'trailerWidthCm'
+    | 'trailerLengthCm'
+    | 'trailerHeightCm'
+    | 'rectangularLengthCm'
+    | 'rectangularWidthCm'
+    | 'rectangularHeightCm'
+    | 'sideACm'
+    | 'sideBCm'
+    | 'sideCCm'
+    | 'sideFCm'
+    | 'sideHCm',
+    string
+  >>
+  selections: {
+    topSide?: string
+    leftSide?: string
+    rightSide?: string
+    bottomSide?: string
+    eyeletEdge?: string
+    closureType?: string
+    frontClosure?: string
+    backClosure?: string
+    doorExtras: string[]
+    extrasSelected: string[]
+    frontClosureExtras: string[]
+    backClosureExtras: string[]
+  }
+  toggles: {
+    hasWindow: boolean
+    hasDoor: boolean
+    hasExtras: boolean
+    windowSplit: boolean
+  }
+  window: {
+    widthCm?: string
+    heightCm?: string
+    distanceSideCm?: string
+    distanceBottomCm?: string
+    splitLeftWidthCm?: string
+    splitRightWidthCm?: string
+  }
+  door: {
+    widthCm?: string
+    heightCm?: string
+    distanceLeftCm?: string
+  }
 }
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+export interface PriceCalculationResult {
+  total: number
+  formatted: string
+  price: string
 }
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0
+export interface ConfigurationSummaryEntry {
+  label: string
+  value: string
 }
-function hasMeaningfulScalar(value: unknown): boolean {
-  if (isNonEmptyString(value)) return true
-  if (typeof value === 'number') return Number.isFinite(value) && value > 0
-  if (typeof value === 'boolean') return value
-  return false
+export interface ConfiguredCartPayload {
+  extraData: Record<string, string>
+  summary: ConfigurationSummaryEntry[]
 }
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : []
+function resolveLabels(ids: string[], choices: ResolvedChoice[]): string[] {
+  const choiceMap = new Map(choices.map((choice) => [choice.id, choice.label]))
+  return ids
+    .map((id) => choiceMap.get(id) ?? id)
+    .filter((label) => typeof label === 'string' && label.trim().length > 0)
 }
-function cleanImageUrl(value: unknown): string | undefined {
-  if (!isNonEmptyString(value)) return undefined
-  const url = value.trim()
-  if (url === 'http://null' || url === 'http://null/' || url.endsWith('/null')) return undefined
-  return url
+function selectionKey(prefix: string, label: string): string {
+  return `${prefix}${label.replace(/\s/g, '_')}`
 }
-function toNumber(value: unknown): number | null {
+function readNumericPrice(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value.replace(',', '.'))
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const normalized = value.replace(',', '.').replace(/[^\d.-]/g, '')
+    const parsed = Number.parseFloat(normalized)
     return Number.isFinite(parsed) ? parsed : null
   }
   return null
 }
-function hasMeaningfulMap(value: unknown): value is Record<string, unknown> {
-  if (!isRecord(value)) return false
-  return Object.values(value).some((entry) => {
-    if (Array.isArray(entry)) return entry.length > 0
-    if (isRecord(entry)) return hasMeaningfulMap(entry)
-    return hasMeaningfulScalar(entry)
-  })
-}
-function hasWindowConfig(windowData: CustomizerWindowData | null): boolean {
-  return hasMeaningfulMap(windowData)
-}
-function hasDoorConfig(doorData: CustomizerDoorData | null): boolean {
-  return hasMeaningfulMap(doorData)
-}
-function normalizeProductType(value: string | undefined): SupportedProductType {
-  const normalized = (value ?? '').trim().toLowerCase()
-  if (normalized === 'tarpulin' || normalized === 'tarpaulins') return 'tarpaulins'
-  if (normalized === 'trailer') return 'trailer'
-  if (normalized === 'rectangular') return 'rectangular'
-  if (normalized === 'lounge') return 'lounge'
-  return 'unknown'
-}
-function normalizeUnitSelector(value: string | undefined): SupportedUnitSelector {
-  const normalized = (value ?? '').trim().toLowerCase()
-  if (normalized === 'squaremeter') return 'squaremeter'
-  if (normalized === 'cubicmeter') return 'cubicmeter'
-  return 'unknown'
-}
-function makeChoice(
-  id: string,
-  label: string | undefined,
-  price?: unknown,
-  imageSrc?: unknown,
-  meta?: Record<string, string | number | boolean | null | undefined>,
-): ResolvedChoice | null {
-  if (!isNonEmptyString(label)) return null
+export function buildPriceCalculationRequest(
+  productId: number | string,
+  form: ConfigFormState,
+  resolvedConfig: ResolvedCustomizerConfig,
+): PriceCalculationRequestBody {
   return {
-    id,
-    label: label.trim(),
-    price: toNumber(price),
-    imageSrc: cleanImageUrl(imageSrc),
-    meta,
+    productId,
+    productType: resolvedConfig.productType,
+    unitSelector: resolvedConfig.unitSelector,
+    material: form.material,
+    color: form.color || undefined,
+    dimensions: {
+      lengthACm: form.lengthACm || undefined,
+      heightRightBCm: form.heightRightBCm || undefined,
+      heightLeftCCm: form.heightLeftCCm || undefined,
+      trailerWidthCm: form.trailerWidthCm || undefined,
+      trailerLengthCm: form.trailerLengthCm || undefined,
+      trailerHeightCm: form.trailerHeightCm || undefined,
+      rectangularLengthCm: form.rectangularLengthCm || undefined,
+      rectangularWidthCm: form.rectangularWidthCm || undefined,
+      rectangularHeightCm: form.rectangularHeightCm || undefined,
+      sideACm: form.sideACm || undefined,
+      sideBCm: form.sideBCm || undefined,
+      sideCCm: form.sideCCm || undefined,
+      sideFCm: form.sideFCm || undefined,
+      sideHCm: form.sideHCm || undefined,
+    },
+    selections: {
+      topSide: form.topSide || undefined,
+      leftSide: form.leftSide || undefined,
+      rightSide: form.rightSide || undefined,
+      bottomSide: form.bottomSide || undefined,
+      eyeletEdge: form.eyeletEdge || undefined,
+      closureType: form.closureType || undefined,
+      frontClosure: form.frontClosure || undefined,
+      backClosure: form.backClosure || undefined,
+      doorExtras: resolveLabels(form.doorExtras, resolvedConfig.options.doorExtras),
+      extrasSelected: resolveLabels(form.extrasSelected, resolvedConfig.options.extras),
+      frontClosureExtras: resolveLabels(form.frontClosureExtras, resolvedConfig.options.frontClosureExtras),
+      backClosureExtras: resolveLabels(form.backClosureExtras, resolvedConfig.options.backClosureExtras),
+    },
+    toggles: {
+      hasWindow: form.hasWindow === 'yes',
+      hasDoor: form.hasDoor === 'yes',
+      hasExtras: form.hasExtras === 'yes',
+      windowSplit: form.windowSplit === 'yes',
+    },
+    window: {
+      widthCm: form.windowWidthCm || undefined,
+      heightCm: form.windowHeightCm || undefined,
+      distanceSideCm: form.windowDistanceSideCm || undefined,
+      distanceBottomCm: form.windowDistanceBottomCm || undefined,
+      splitLeftWidthCm: form.windowSplitLeftWidthCm || undefined,
+      splitRightWidthCm: form.windowSplitRightWidthCm || undefined,
+    },
+    door: {
+      widthCm: form.doorWidthCm || undefined,
+      heightCm: form.doorHeightCm || undefined,
+      distanceLeftCm: form.doorDistanceLeftCm || undefined,
+    },
   }
 }
-function resolveColorChoices(colors: CustomizerColor[] | null): ResolvedChoice[] {
-  return asArray<CustomizerColor>(colors)
-    .map((color, index) =>
-      makeChoice(`color-${index}`, color.subtitle || color.color, undefined, color.image_url, {
-        hex: color.color,
-      }),
-    )
-    .filter((choice): choice is ResolvedChoice => choice !== null)
-}
-function resolveMaterialChoices(materials: CustomizerMaterial[] | null): ResolvedChoice[] {
-  return asArray<CustomizerMaterial>(materials)
-    .map((material, index) => makeChoice(`material-${index}`, material.name, material.price))
-    .filter((choice): choice is ResolvedChoice => choice !== null)
-}
-function resolveEdgeChoices<T extends CustomizerTopEdge | CustomizerLeftEdge | CustomizerRightEdge | CustomizerBottomEdge>(
-  entries: T[] | null,
-  labelKeys: Array<keyof T>,
-  priceKey: keyof T,
-  imageKey: keyof T | null = null,
-): ResolvedChoice[] {
-  return asArray<T>(entries)
-    .map((entry, index) => {
-      const label = labelKeys
-        .map((key) => entry[key])
-        .find((value) => isNonEmptyString(value))
-      const image = imageKey ? entry[imageKey] : undefined
-      return makeChoice(`edge-${index}`, typeof label === 'string' ? label : undefined, entry[priceKey], image)
-    })
-    .filter((choice): choice is ResolvedChoice => choice !== null)
-}
-function resolveDoorExtras(entries: CustomizerDoorExtra[] | null): ResolvedChoice[] {
-  return asArray<CustomizerDoorExtra>(entries)
-    .map((entry, index) =>
-      makeChoice(`door-extra-${index}`, entry.door_extras__subtitle, entry.door_extras_price, entry.image_url, {
-        priceMode: entry.door_extra_pl,
-      }),
-    )
-    .filter((choice): choice is ResolvedChoice => choice !== null)
-}
-function resolveMainExtras(entries: CustomizerMainExtra[] | null): ResolvedChoice[] {
-  return asArray<CustomizerMainExtra>(entries)
-    .map((entry, index) =>
-      makeChoice(`main-extra-${index}`, entry.main_extras__subtitle, entry.main_extras_price, entry.image_url, {
-        priceMode: entry.main_extra_pl,
-        required: entry.main_extra_required,
-      }),
-    )
-    .filter((choice): choice is ResolvedChoice => choice !== null)
-}
-function resolveEyelets(entries: CustomizerEyelet[] | null): ResolvedChoice[] {
-  return asArray<CustomizerEyelet>(entries)
-    .map((entry, index) =>
-      makeChoice(`eyelet-${index}`, entry.eyelet_tarpaulin__subtitle, entry.eyelet_tarpaulin_price, entry.image_url, {
-        priceMode: entry.eyelet_pl_handler,
-      }),
-    )
-    .filter((choice): choice is ResolvedChoice => choice !== null)
-}
-function resolveClosureTypes(entries: CustomizerClosureType[] | null): ResolvedChoice[] {
-  return asArray<CustomizerClosureType>(entries)
-    .map((entry, index) =>
-      makeChoice(
-        `closure-type-${index}`,
-        entry.closure_type_tarpaulin__subtitle,
-        entry.closure_type_tarpaulin_price,
-        entry.image_url,
-      ),
-    )
-    .filter((choice): choice is ResolvedChoice => choice !== null)
-}
-function resolveClosures(entries: CustomizerClosure[] | null): ResolvedChoice[] {
-  return asArray<CustomizerClosure>(entries)
-    .map((entry, index) =>
-      makeChoice(`front-closure-${index}`, entry.front_closure__subtitle, entry.front_closure_price, entry.image_url, {
-        priceMode: entry.front_clouser_pl_handler,
-      }),
-    )
-    .filter((choice): choice is ResolvedChoice => choice !== null)
-}
-function resolveBackClosures(entries: CustomizerBackClosure[] | null): ResolvedChoice[] {
-  return asArray<CustomizerBackClosure>(entries)
-    .map((entry, index) =>
-      makeChoice(`back-closure-${index}`, entry.back_closure__subtitle, entry.back_closure_price, entry.image_url, {
-        priceMode: entry.back_clouser_pl_handler,
-      }),
-    )
-    .filter((choice): choice is ResolvedChoice => choice !== null)
-}
-function resolveClosureExtras(entries: CustomizerClosureExtra[] | null, prefix: string): ResolvedChoice[] {
-  return asArray<CustomizerClosureExtra>(entries)
-    .map((entry, index) => {
-      const label = isNonEmptyString(entry.subtitle)
-        ? entry.subtitle
-        : isNonEmptyString(entry.front_clouser_extra__subtitle)
-          ? entry.front_clouser_extra__subtitle
-          : isNonEmptyString(entry.back_clouser_extra__subtitle)
-            ? entry.back_clouser_extra__subtitle
-            : undefined
-      const price =
-        entry.price ??
-        entry.front_clouser_extra_price ??
-        entry.back_clouser_extra_price
-      const selector = isNonEmptyString(entry.front_clouser_extra_selector)
-        ? entry.front_clouser_extra_selector
-        : isNonEmptyString(entry.back_clouser_extra_selector)
-          ? entry.back_clouser_extra_selector
-          : undefined
-      return makeChoice(`${prefix}-${index}`, label, price, entry.image_url, {
-        selector: selector?.trim().toLowerCase(),
-      })
-    })
-    .filter((choice): choice is ResolvedChoice => choice !== null)
-}
-function resolveDimensionConfig(
-  productType: SupportedProductType,
-  dimensions: CustomizerDimensions | null,
-): ResolvedDimensionConfig {
-  const minValue = toNumber(dimensions?.minimum_value) ?? 1
-  const dimensionDescription = isNonEmptyString(dimensions?.dimension_description)
-    ? dimensions.dimension_description
-    : DEFAULT_HINTS.size
-  const makeField = (
-    key: ConfigFormField,
-    label: string,
-    required = true,
-  ) => ({ key, label, min: minValue, required })
-  switch (productType) {
+export function buildWordPressPriceFormData(body: PriceCalculationRequestBody): URLSearchParams {
+  const params = new URLSearchParams()
+  params.set('action', 'prices_update_request')
+  params.set('product_id', String(body.productId))
+  params.set('fabric', body.material || '')
+  switch (body.productType) {
     case 'lounge':
-      return {
-        title: 'Masse waehlen',
-        description: dimensionDescription,
-        imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
-        minimumValue: minValue,
-        fields: [
-          makeField('sideACm', 'Seite A (cm)'),
-          makeField('sideBCm', 'Seite B (cm)'),
-          makeField('sideCCm', 'Seite C (cm)'),
-          makeField('sideFCm', 'Seite F (cm)'),
-          makeField('sideHCm', 'Hoehe H (cm)'),
-        ],
-      }
+      params.set('side_a', body.dimensions.sideACm || '0')
+      params.set('side_b', body.dimensions.sideBCm || '0')
+      params.set('side_c', body.dimensions.sideCCm || '0')
+      params.set('side_f', body.dimensions.sideFCm || '0')
+      params.set('side_h', body.dimensions.sideHCm || '0')
+      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Öse')
+      params.set('closureType', body.selections.closureType || 'Ohne Verschluss')
+      break
     case 'trailer':
-      return {
-        title: 'Masse waehlen',
-        description: dimensionDescription,
-        imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
-        minimumValue: minValue,
-        fields: [
-          makeField('trailerWidthCm', 'Anhaengerbreite A (cm)'),
-          makeField('trailerLengthCm', 'Anhaengerlaenge B (cm)'),
-          makeField('trailerHeightCm', 'Planenhoehe C (cm)'),
-        ],
+      params.set('trailer_width', body.dimensions.trailerWidthCm || '0')
+      params.set('trailer_length', body.dimensions.trailerLengthCm || '0')
+      params.set('trailer_height', body.dimensions.trailerHeightCm || '0')
+      params.set('front_clouser', body.selections.frontClosure || 'Without front clouser')
+      params.set('back_clouser', body.selections.backClosure || 'Without back clouser')
+      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Ã–se')
+      params.set('front_clouser_accessories', '')
+      params.set('back_clouser_accessories', '')
+      for (const extra of body.selections.frontClosureExtras) {
+        params.set(selectionKey('Zubehör_für_den_Frontverschluss_', extra), extra)
       }
+      for (const extra of body.selections.backClosureExtras) {
+        params.set(selectionKey('Zubehör_für_den_Rückenverschluss_', extra), extra)
+      }
+      break
     case 'rectangular':
-      return {
-        title: 'Masse waehlen',
-        description: dimensionDescription,
-        imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
-        minimumValue: minValue,
-        fields: [
-          makeField('rectangularLengthCm', 'Laenge A (cm)'),
-          makeField('rectangularWidthCm', 'Breite B (cm)'),
-          makeField('rectangularHeightCm', 'Hoehe C (cm)'),
-        ],
-      }
+      params.set('rectangular_length', body.dimensions.rectangularLengthCm || '0')
+      params.set('rectangular_width', body.dimensions.rectangularWidthCm || '0')
+      params.set('rectangular_height', body.dimensions.rectangularHeightCm || '0')
+      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Öse')
+      params.set('closureType', body.selections.closureType || 'Ohne Verschluss')
+      break
     case 'tarpaulins':
     default:
-      return {
-        title: 'Masse waehlen',
-        description: dimensionDescription,
-        imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
-        minimumValue: minValue,
-        fields: [
-          makeField('lengthACm', 'Laenge A (cm)'),
-          makeField('heightRightBCm', 'Hoehe rechts B (cm)'),
-          makeField('heightLeftCCm', 'Hoehe links C (cm)'),
-        ],
+      params.set('width', body.dimensions.lengthACm || '0')
+      params.set('height_right', body.dimensions.heightRightBCm || '0')
+      params.set('height_left', body.dimensions.heightLeftCCm || body.dimensions.heightRightBCm || '0')
+      params.set('has_top_edge', body.selections.topSide || 'Ohne Extras')
+      params.set('has_edge_left_0', body.selections.leftSide || 'Ohne Extras')
+      params.set('has_edge_right_0', body.selections.rightSide || 'Ohne Extras')
+      params.set('has_edge_bottom_0', body.selections.bottomSide || 'Ohne Extras')
+      if (body.toggles.hasWindow) {
+        if (body.window.widthCm) params.set('window_width', body.window.widthCm)
+        if (body.window.heightCm) params.set('window_height', body.window.heightCm)
+        if (body.toggles.windowSplit) {
+          let splitCount = 0
+          if (body.window.splitLeftWidthCm) splitCount += 1
+          if (body.window.splitRightWidthCm) splitCount += 1
+          if (splitCount > 0) params.set('window_split_num', String(splitCount))
+        }
       }
+      if (body.toggles.hasDoor) {
+        if (body.door.widthCm) params.set('door_width', body.door.widthCm)
+        if (body.door.heightCm) params.set('door_height', body.door.heightCm)
+        for (const extra of body.selections.doorExtras) {
+          params.set(selectionKey('Door_Extra_', extra), extra)
+        }
+      }
+      break
   }
-}
-function buildStepOrder(
-  productType: SupportedProductType,
-  config: {
-    colors: ResolvedChoice[]
-    materials: ResolvedChoice[]
-    top: ResolvedChoice[]
-    left: ResolvedChoice[]
-    right: ResolvedChoice[]
-    bottom: ResolvedChoice[]
-    doorExtras: ResolvedChoice[]
-    extras: ResolvedChoice[]
-    eyelets: ResolvedChoice[]
-    closureTypes: ResolvedChoice[]
-    frontClosures: ResolvedChoice[]
-    frontClosureExtras: ResolvedChoice[]
-    backClosures: ResolvedChoice[]
-    backClosureExtras: ResolvedChoice[]
-    windowData: CustomizerWindowData | null
-    doorData: CustomizerDoorData | null
-  },
-): StepId[] {
-  if (productType === 'unknown') return []
-  const steps: StepId[] = []
-  if (config.colors.length || config.materials.length) steps.push('color')
-  steps.push('size')
-  if (productType === 'tarpaulins') {
-    if (config.top.length) steps.push('topSide')
-    if (config.left.length) steps.push('leftSide')
-    if (config.right.length) steps.push('rightSide')
-    if (config.bottom.length) steps.push('bottomSide')
-    if (hasWindowConfig(config.windowData)) steps.push('window')
-    if (hasDoorConfig(config.doorData)) steps.push('door')
-  }
-  if (productType === 'lounge' || productType === 'rectangular') {
-    if (config.eyelets.length) steps.push('eyelets')
-    if (config.closureTypes.length) steps.push('closureType')
-  }
-  if (productType === 'trailer') {
-    if (config.frontClosures.length || config.frontClosureExtras.length) steps.push('frontClosure')
-    if (config.backClosures.length || config.backClosureExtras.length) steps.push('backClosure')
-    if (config.eyelets.length) steps.push('eyelets')
-  }
-  if (config.extras.length) steps.push('extras')
-  steps.push('sketch')
-  return steps
-}
-function uniqueIssues(issues: string[]): string[] {
-  return Array.from(new Set(issues.filter((issue) => issue.trim().length > 0)))
-}
-function buildValidationRules(
-  productType: SupportedProductType,
-  steps: StepId[],
-  sizeFields: ConfigFormField[],
-  colors: ResolvedChoice[],
-  materials: ResolvedChoice[],
-): ResolvedCustomizerConfig['validationRules'] {
-  const requiredFields: ConfigFormField[] = [...sizeFields]
-  if (materials.length > 1) requiredFields.unshift('material')
-  if (colors.length > 0) requiredFields.unshift('color')
-  if (steps.includes('topSide')) requiredFields.push('topSide')
-  if (steps.includes('leftSide')) requiredFields.push('leftSide')
-  if (steps.includes('rightSide')) requiredFields.push('rightSide')
-  if (steps.includes('bottomSide')) requiredFields.push('bottomSide')
-  if (steps.includes('window')) requiredFields.push('hasWindow')
-  if (steps.includes('door')) requiredFields.push('hasDoor')
-  if (productType === 'unknown') {
-    return { requiredFields: [], minimumForPrice: [] }
-  }
-    return {
-      requiredFields,
-      minimumForPrice: [
-        ...(materials.length > 0 ? (['material'] as ConfigFormField[]) : []),
-        ...(colors.length > 0 ? (['color'] as ConfigFormField[]) : []),
-        ...sizeFields,
-      ],
+  if (body.toggles.hasExtras) {
+    for (const extra of body.selections.extrasSelected) {
+      params.set(selectionKey('Extra_', extra), extra)
     }
+  }
+  return params
 }
-function toMaybeConfig(response: CustomizerApiResponse | null | undefined): CustomizerConfig | null {
-  if (!response?.success || !response.data) return null
-  return response.data
+function addSummaryEntry(
+  entries: ConfigurationSummaryEntry[],
+  label: string,
+  value: string | string[] | undefined,
+) {
+  if (Array.isArray(value)) {
+    const normalized = value.map((entry) => entry.trim()).filter((entry) => entry.length > 0)
+    if (normalized.length === 0) return
+    entries.push({ label, value: normalized.join(', ') })
+    return
+  }
+  if (!value) return
+  const normalized = value.trim()
+  if (!normalized) return
+  entries.push({ label, value: normalized })
 }
-export function resolveCustomizerConfig(config: CustomizerConfig): ResolvedCustomizerConfig {
-  const issues: string[] = []
-  const calculationUnit = (config.calculation_unit ?? {}) as CustomizerCalculationUnit
-  const productType = normalizeProductType(calculationUnit.product_type)
-  const unitSelector = normalizeUnitSelector(calculationUnit.unit_selector)
-  const colors = resolveColorChoices(config.colors)
-  const materials = resolveMaterialChoices(config.material)
-  const top = resolveEdgeChoices(config.top_tarpaulin, ['top_tarpaulin__subtitle', 'subtitle'], 'top_tarpaulin_price', 'image_url')
-  const left = resolveEdgeChoices(config.left_tarpaulin, ['left_tarpaulin__subtitle', 'subtitle'], 'left_tarpaulin_price', 'image_url')
-  const right = resolveEdgeChoices(config.right_tarpaulin, ['right_tarpaulin__subtitle', 'subtitle'], 'right_tarpaulin_price', 'image_url')
-  const bottom = resolveEdgeChoices(config.bottom_tarpaulin, ['bottom_tarpaulin__subtitle', 'subtitle'], 'bottom_tarpaulin_price', 'image_url')
-  const doorExtras = resolveDoorExtras(config.extras)
-  const extras = resolveMainExtras(config.main_extra)
-  const eyelets = resolveEyelets(config.eyelets)
-  const closureTypes = resolveClosureTypes(config.closure_type)
-  const frontClosures = resolveClosures(config.front_clouser)
-  const backClosures = resolveBackClosures(config.back_clouser)
-  const frontClosureExtras = resolveClosureExtras(config.front_clouser_extra, 'front-closure-extra')
-  const backClosureExtras = resolveClosureExtras(config.back_clouser_extra, 'back-closure-extra')
-  if (!colors.length && !materials.length) {
-    issues.push('Es wurden keine Farben oder Materialien fuer den Konfigurator gefunden.')
+export function buildConfigurationSummary(
+  body: PriceCalculationRequestBody,
+  sketchFileName?: string,
+): ConfigurationSummaryEntry[] {
+  const entries: ConfigurationSummaryEntry[] = []
+  addSummaryEntry(entries, 'Material', body.material)
+  addSummaryEntry(entries, 'Farbe', body.color)
+  switch (body.productType) {
+    case 'lounge':
+      addSummaryEntry(entries, 'Seite A', body.dimensions.sideACm ? `${body.dimensions.sideACm} cm` : undefined)
+      addSummaryEntry(entries, 'Seite B', body.dimensions.sideBCm ? `${body.dimensions.sideBCm} cm` : undefined)
+      addSummaryEntry(entries, 'Seite C', body.dimensions.sideCCm ? `${body.dimensions.sideCCm} cm` : undefined)
+      addSummaryEntry(entries, 'Seite F', body.dimensions.sideFCm ? `${body.dimensions.sideFCm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe H', body.dimensions.sideHCm ? `${body.dimensions.sideHCm} cm` : undefined)
+      break
+    case 'trailer':
+      addSummaryEntry(entries, 'Anhaengerbreite A', body.dimensions.trailerWidthCm ? `${body.dimensions.trailerWidthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Anhaengerlaenge B', body.dimensions.trailerLengthCm ? `${body.dimensions.trailerLengthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Planenhoehe C', body.dimensions.trailerHeightCm ? `${body.dimensions.trailerHeightCm} cm` : undefined)
+      break
+    case 'rectangular':
+      addSummaryEntry(entries, 'Laenge A', body.dimensions.rectangularLengthCm ? `${body.dimensions.rectangularLengthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Breite B', body.dimensions.rectangularWidthCm ? `${body.dimensions.rectangularWidthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe C', body.dimensions.rectangularHeightCm ? `${body.dimensions.rectangularHeightCm} cm` : undefined)
+      break
+    case 'tarpaulins':
+    default:
+      addSummaryEntry(entries, 'Laenge A', body.dimensions.lengthACm ? `${body.dimensions.lengthACm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe rechts B', body.dimensions.heightRightBCm ? `${body.dimensions.heightRightBCm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe links C', body.dimensions.heightLeftCCm ? `${body.dimensions.heightLeftCCm} cm` : undefined)
+      break
   }
-  if (productType === 'unknown') {
-    issues.push('Der Produkttyp aus WordPress wird vom Frontend derzeit nicht unterstuetzt.')
+  addSummaryEntry(entries, 'Obere Seite', body.selections.topSide)
+  addSummaryEntry(entries, 'Linke Seite', body.selections.leftSide)
+  addSummaryEntry(entries, 'Rechte Seite', body.selections.rightSide)
+  addSummaryEntry(entries, 'Untere Seite', body.selections.bottomSide)
+  addSummaryEntry(entries, 'Oesen', body.selections.eyeletEdge)
+  addSummaryEntry(entries, 'Verschlussart', body.selections.closureType)
+  addSummaryEntry(entries, 'Frontverschluss', body.selections.frontClosure)
+  addSummaryEntry(entries, 'Rueckenverschluss', body.selections.backClosure)
+  if (body.toggles.hasWindow) {
+    addSummaryEntry(entries, 'Fenster', 'Ja')
+    addSummaryEntry(entries, 'Fensterbreite', body.window.widthCm ? `${body.window.widthCm} cm` : undefined)
+    addSummaryEntry(entries, 'Fensterhoehe', body.window.heightCm ? `${body.window.heightCm} cm` : undefined)
   }
-  if (unitSelector === 'unknown') {
-    issues.push('Die Berechnungseinheit aus WordPress ist unvollstaendig.')
+  if (body.toggles.hasDoor) {
+    addSummaryEntry(entries, 'Tuer', 'Ja')
+    addSummaryEntry(entries, 'Tuerbreite', body.door.widthCm ? `${body.door.widthCm} cm` : undefined)
+    addSummaryEntry(entries, 'Tuerhoehe', body.door.heightCm ? `${body.door.heightCm} cm` : undefined)
+    addSummaryEntry(entries, 'Tuerabstand links', body.door.distanceLeftCm ? `${body.door.distanceLeftCm} cm` : undefined)
+    addSummaryEntry(entries, 'Tuer-Extras', body.selections.doorExtras)
   }
-  const dimensions = resolveDimensionConfig(productType, config.dimentions)
-  const sizeFields = dimensions.fields.filter((field) => field.required).map((field) => field.key)
-  const hasWindowStep = hasWindowConfig(config.window_data)
-  const hasDoorStep = hasDoorConfig(config.door_data)
-  const steps = buildStepOrder(productType, {
-    colors,
-    materials,
-    top,
-    left,
-    right,
-    bottom,
-    doorExtras,
-    extras,
-    eyelets,
-    closureTypes,
-    frontClosures,
-    frontClosureExtras,
-    backClosures,
-    backClosureExtras,
-    windowData: config.window_data,
-    doorData: config.door_data,
-  })
-  const validationRules = buildValidationRules(productType, steps, sizeFields, colors, materials)
-  const livePrice = unitSelector !== 'unknown' && materials.length > 0 && sizeFields.length > 0
-  if (!livePrice) {
-    issues.push('Die Live-Preisberechnung ist nur eingeschraenkt verfuegbar, weil Material- oder Massdaten fehlen.')
+  if (body.toggles.hasExtras) {
+    addSummaryEntry(entries, 'Extras', body.selections.extrasSelected)
+  }
+  addSummaryEntry(entries, 'Frontverschluss-Zubehoer', body.selections.frontClosureExtras)
+  addSummaryEntry(entries, 'Rueckenverschluss-Zubehoer', body.selections.backClosureExtras)
+  addSummaryEntry(entries, 'Skizze', sketchFileName)
+  return entries
+}
+export function buildConfiguredCartPayload(
+  body: PriceCalculationRequestBody,
+  uniqueKey: string,
+  sketchFileName?: string,
+): ConfiguredCartPayload {
+  const extraData = Object.fromEntries(buildWordPressPriceFormData(body).entries())
+  delete extraData.action
+  delete extraData.product_id
+  extraData.custom_option = 'configured'
+  extraData.unique_key = uniqueKey
+  extraData.planenadler_configuration_id = uniqueKey
+  const summary = buildConfigurationSummary(body, sketchFileName)
+  extraData.planenadler_configuration_summary = JSON.stringify(summary)
+  if (sketchFileName?.trim()) {
+    extraData.planenadler_sketch_file_name = sketchFileName.trim()
   }
   return {
-    configId: config.id,
-    productId: config.product_id,
-    productTitle: config.product_title,
-    productType,
-    unitSelector,
-    steps,
-    dimensions,
-    options: {
-      colors,
-      materials,
-      topSide: top,
-      leftSide: left,
-      rightSide: right,
-      bottomSide: bottom,
-      doorExtras,
-      extras,
-      eyelets,
-      closureTypes,
-      frontClosures,
-      frontClosureExtras,
-      backClosures,
-      backClosureExtras,
-    },
-    pricingCapabilities: {
-      livePrice,
-      allowsEdges: productType === 'tarpaulins',
-      allowsWindow: productType === 'tarpaulins' && hasWindowStep,
-      allowsDoor: productType === 'tarpaulins' && hasDoorStep,
-      supportsEyelets: (productType === 'lounge' || productType === 'rectangular' || productType === 'trailer') && eyelets.length > 0,
-      supportsClosureType:
-        (productType === 'lounge' || productType === 'rectangular') &&
-        closureTypes.length > 0,
-      supportsFrontBackClosure: productType === 'trailer',
-    },
-    validationRules,
-    hints: DEFAULT_HINTS,
-    issues: uniqueIssues(issues),
+    extraData,
+    summary,
   }
 }
-export function resolveCustomizerState(
-  response: CustomizerApiResponse | null | undefined,
-): { state: ConfiguratorState; resolvedConfig: ResolvedCustomizerConfig | null } {
-  const rawConfig = toMaybeConfig(response)
-  if (!rawConfig) {
-    return {
-      state: {
-        status: 'missing',
-        message: response?.message || 'Fuer dieses Produkt wurde keine Konfiguration in WordPress gefunden.',
-      },
-      resolvedConfig: null,
-    }
+export function parsePriceCalculationResponse(rawPrice: unknown): PriceCalculationResult {
+  const total =
+    readNumericPrice(rawPrice) ??
+    (typeof rawPrice === 'object' && rawPrice !== null
+      ? readNumericPrice(
+          'price' in rawPrice
+            ? (rawPrice as { price?: unknown }).price
+            : 'total' in rawPrice
+              ? (rawPrice as { total?: unknown }).total
+              : 'data' in rawPrice
+                ? (rawPrice as { data?: unknown }).data
+                : undefined,
+        )
+      : null)
+  if (total === null || !Number.isFinite(total)) {
+    throw new Error('WordPress hat keinen gueltigen Preis zurueckgegeben.')
   }
-  const resolvedConfig = resolveCustomizerConfig(rawConfig)
-  if (resolvedConfig.productType === 'unknown') {
-    return {
-      state: {
-        status: 'unsupported',
-        message: 'Der Konfigurator fuer diesen Produkttyp wird im Frontend noch nicht sicher unterstuetzt.',
-        warnings: resolvedConfig.issues,
-      },
-      resolvedConfig,
-    }
-  }
-  if (resolvedConfig.issues.length > 0) {
-    return {
-      state: {
-        status: 'partial',
-        message: 'Die Konfiguration ist nur teilweise vollstaendig. Fehlende Bereiche wurden defensiv ausgeblendet.',
-        warnings: resolvedConfig.issues,
-      },
-      resolvedConfig,
-    }
-  }
+  const formatted = `${total.toFixed(2).replace('.', ',')} €`
   return {
-    state: {
-      status: 'ready',
-      warnings: [],
-    },
-    resolvedConfig,
+    total,
+    formatted,
+    price: formatted,
   }
 }
 ````
@@ -29772,6 +29240,589 @@ function Index({
 export default Index
 ````
 
+## File: src/lib/customizer-resolver.ts
+````typescript
+import type {
+  CustomizerApiResponse,
+  CustomizerBackClosure,
+  CustomizerCalculationUnit,
+  CustomizerClosure,
+  CustomizerClosureExtra,
+  CustomizerClosureType,
+  CustomizerColor,
+  CustomizerConfig,
+  CustomizerDimensions,
+  CustomizerDoorData,
+  CustomizerDoorExtra,
+  CustomizerEyelet,
+  CustomizerMainExtra,
+  CustomizerMaterial,
+  CustomizerWindowData,
+  CustomizerTopEdge,
+  CustomizerLeftEdge,
+  CustomizerRightEdge,
+  CustomizerBottomEdge,
+} from '@/lib/customizer-types'
+import type {
+  ConfigFormField,
+  ConfiguratorState,
+  ResolvedChoice,
+  ResolvedConfiguratorHints,
+  ResolvedCustomizerConfig,
+  ResolvedDimensionConfig,
+  StepId,
+  SupportedProductType,
+  SupportedUnitSelector,
+} from '@/lib/customizer-runtime'
+const DEFAULT_HINTS: ResolvedConfiguratorHints = {
+  color: 'Waehlen Sie die gewuenschte Planenfarbe passend zu Einsatz und Fahrzeug.',
+  size: 'Tragen Sie die benoetigten Masse in Zentimetern ein. Diese Werte werden fuer Fertigung und Preisberechnung verwendet.',
+  topSide: 'Waehlen Sie die Verarbeitung fuer die obere Seite der Plane.',
+  leftSide: 'Waehlen Sie die Verarbeitung fuer die linke Seite der Plane.',
+  rightSide: 'Waehlen Sie die Verarbeitung fuer die rechte Seite der Plane.',
+  bottomSide: 'Waehlen Sie die Verarbeitung fuer die untere Seite der Plane.',
+  window: 'Wünschen Sie ein Fenster in Ihrer Plane?',
+  door: 'Wünschen Sie eine Tür in Ihrer Plane?',
+  eyelets: 'Waehlen Sie aus, ob und wie Oesen an diesem Produkt eingesetzt werden sollen.',
+  closureType: 'Waehlen Sie den gewuenschten Verschlusstyp passend zur Konstruktion.',
+  frontClosure: 'Waehlen Sie den Frontverschluss und optionales Zubehoer.',
+  backClosure: 'Waehlen Sie den Rueckenverschluss und optionales Zubehoer.',
+  extras: 'Hier koennen Sie zusaetzliche Ausstattungen und Sonderwuensche definieren.',
+  sketch: 'Laden Sie optional eine Skizze hoch, damit Positionen und Masse eindeutig zugeordnet werden koennen.',
+}
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+function hasMeaningfulScalar(value: unknown): boolean {
+  if (isNonEmptyString(value)) return true
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0
+  if (typeof value === 'boolean') return value
+  return false
+}
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : []
+}
+function cleanImageUrl(value: unknown): string | undefined {
+  if (!isNonEmptyString(value)) return undefined
+  const url = value.trim()
+  if (url === 'http://null' || url === 'http://null/' || url.endsWith('/null')) return undefined
+  return url
+}
+/** URLs aus dimentions-Map; optional alternative Schluessel (Legacy/Tippfehler im Backend). */
+function pickDimensionDiagramUrls(dimensions: CustomizerDimensions | null): {
+  defaultUrl: string | undefined
+  whenBGreaterUrl: string | undefined
+  whenCGreaterUrl: string | undefined
+} {
+  const raw = dimensions as Record<string, unknown> | null
+  if (!raw) {
+    return { defaultUrl: undefined, whenBGreaterUrl: undefined, whenCGreaterUrl: undefined }
+  }
+  return {
+    defaultUrl: cleanImageUrl(raw.dimension_image_url ?? raw.dimention_image_url),
+    whenBGreaterUrl: cleanImageUrl(
+      raw.dimension_b_image_url ?? raw.dimention_b_image_url,
+    ),
+    whenCGreaterUrl: cleanImageUrl(
+      raw.dimension_c_image_url ?? raw.dimention_c_image_url,
+    ),
+  }
+}
+function toNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value.replace(',', '.'))
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+function hasMeaningfulMap(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value)) return false
+  return Object.values(value).some((entry) => {
+    if (Array.isArray(entry)) return entry.length > 0
+    if (isRecord(entry)) return hasMeaningfulMap(entry)
+    return hasMeaningfulScalar(entry)
+  })
+}
+function hasWindowConfig(windowData: CustomizerWindowData | null): boolean {
+  return hasMeaningfulMap(windowData)
+}
+function hasDoorConfig(doorData: CustomizerDoorData | null): boolean {
+  return hasMeaningfulMap(doorData)
+}
+function normalizeProductType(value: string | undefined): SupportedProductType {
+  const normalized = (value ?? '').trim().toLowerCase()
+  if (normalized === 'tarpulin' || normalized === 'tarpaulins') return 'tarpaulins'
+  if (normalized === 'trailer') return 'trailer'
+  if (normalized === 'rectangular') return 'rectangular'
+  if (normalized === 'lounge') return 'lounge'
+  return 'unknown'
+}
+function isPoolProductConfig(config: Pick<CustomizerConfig, 'product_title'>): boolean {
+  const title = (config.product_title ?? '').trim().toLowerCase()
+  return title.includes('pool')
+}
+function normalizeUnitSelector(value: string | undefined): SupportedUnitSelector {
+  const normalized = (value ?? '').trim().toLowerCase()
+  if (normalized === 'squaremeter') return 'squaremeter'
+  if (normalized === 'cubicmeter') return 'cubicmeter'
+  return 'unknown'
+}
+function makeChoice(
+  id: string,
+  label: string | undefined,
+  price?: unknown,
+  imageSrc?: unknown,
+  meta?: Record<string, string | number | boolean | null | undefined>,
+): ResolvedChoice | null {
+  if (!isNonEmptyString(label)) return null
+  return {
+    id,
+    label: label.trim(),
+    price: toNumber(price),
+    imageSrc: cleanImageUrl(imageSrc),
+    meta,
+  }
+}
+function resolveColorChoices(colors: CustomizerColor[] | null): ResolvedChoice[] {
+  return asArray<CustomizerColor>(colors)
+    .map((color, index) =>
+      makeChoice(`color-${index}`, color.subtitle || color.color, undefined, color.image_url, {
+        hex: color.color,
+      }),
+    )
+    .filter((choice): choice is ResolvedChoice => choice !== null)
+}
+function resolveMaterialChoices(materials: CustomizerMaterial[] | null): ResolvedChoice[] {
+  return asArray<CustomizerMaterial>(materials)
+    .map((material, index) => makeChoice(`material-${index}`, material.name, material.price))
+    .filter((choice): choice is ResolvedChoice => choice !== null)
+}
+function resolveEdgeChoices<T extends CustomizerTopEdge | CustomizerLeftEdge | CustomizerRightEdge | CustomizerBottomEdge>(
+  entries: T[] | null,
+  labelKeys: Array<keyof T>,
+  priceKey: keyof T,
+  imageKey: keyof T | null = null,
+): ResolvedChoice[] {
+  return asArray<T>(entries)
+    .map((entry, index) => {
+      const label = labelKeys
+        .map((key) => entry[key])
+        .find((value) => isNonEmptyString(value))
+      const image = imageKey ? entry[imageKey] : undefined
+      return makeChoice(`edge-${index}`, typeof label === 'string' ? label : undefined, entry[priceKey], image)
+    })
+    .filter((choice): choice is ResolvedChoice => choice !== null)
+}
+function resolveDoorExtras(entries: CustomizerDoorExtra[] | null): ResolvedChoice[] {
+  return asArray<CustomizerDoorExtra>(entries)
+    .map((entry, index) =>
+      makeChoice(`door-extra-${index}`, entry.door_extras__subtitle, entry.door_extras_price, entry.image_url, {
+        priceMode: entry.door_extra_pl,
+      }),
+    )
+    .filter((choice): choice is ResolvedChoice => choice !== null)
+}
+function resolveMainExtras(entries: CustomizerMainExtra[] | null): ResolvedChoice[] {
+  return asArray<CustomizerMainExtra>(entries)
+    .map((entry, index) =>
+      makeChoice(`main-extra-${index}`, entry.main_extras__subtitle, entry.main_extras_price, entry.image_url, {
+        priceMode: entry.main_extra_pl,
+        required: entry.main_extra_required,
+      }),
+    )
+    .filter((choice): choice is ResolvedChoice => choice !== null)
+}
+function resolveEyelets(entries: CustomizerEyelet[] | null): ResolvedChoice[] {
+  return asArray<CustomizerEyelet>(entries)
+    .map((entry, index) =>
+      makeChoice(`eyelet-${index}`, entry.eyelet_tarpaulin__subtitle, entry.eyelet_tarpaulin_price, entry.image_url, {
+        priceMode: entry.eyelet_pl_handler,
+      }),
+    )
+    .filter((choice): choice is ResolvedChoice => choice !== null)
+}
+function resolveClosureTypes(entries: CustomizerClosureType[] | null): ResolvedChoice[] {
+  return asArray<CustomizerClosureType>(entries)
+    .map((entry, index) =>
+      makeChoice(
+        `closure-type-${index}`,
+        entry.closure_type_tarpaulin__subtitle,
+        entry.closure_type_tarpaulin_price,
+        entry.image_url,
+      ),
+    )
+    .filter((choice): choice is ResolvedChoice => choice !== null)
+}
+function resolveClosures(entries: CustomizerClosure[] | null): ResolvedChoice[] {
+  return asArray<CustomizerClosure>(entries)
+    .map((entry, index) =>
+      makeChoice(`front-closure-${index}`, entry.front_closure__subtitle, entry.front_closure_price, entry.image_url, {
+        priceMode: entry.front_clouser_pl_handler,
+      }),
+    )
+    .filter((choice): choice is ResolvedChoice => choice !== null)
+}
+function resolveBackClosures(entries: CustomizerBackClosure[] | null): ResolvedChoice[] {
+  return asArray<CustomizerBackClosure>(entries)
+    .map((entry, index) =>
+      makeChoice(`back-closure-${index}`, entry.back_closure__subtitle, entry.back_closure_price, entry.image_url, {
+        priceMode: entry.back_clouser_pl_handler,
+      }),
+    )
+    .filter((choice): choice is ResolvedChoice => choice !== null)
+}
+function resolveClosureExtras(entries: CustomizerClosureExtra[] | null, prefix: string): ResolvedChoice[] {
+  return asArray<CustomizerClosureExtra>(entries)
+    .map((entry, index) => {
+      const label = isNonEmptyString(entry.subtitle)
+        ? entry.subtitle
+        : isNonEmptyString(entry.front_clouser_extra__subtitle)
+          ? entry.front_clouser_extra__subtitle
+          : isNonEmptyString(entry.back_clouser_extra__subtitle)
+            ? entry.back_clouser_extra__subtitle
+            : undefined
+      const price =
+        entry.price ??
+        entry.front_clouser_extra_price ??
+        entry.back_clouser_extra_price
+      const selector = isNonEmptyString(entry.front_clouser_extra_selector)
+        ? entry.front_clouser_extra_selector
+        : isNonEmptyString(entry.back_clouser_extra_selector)
+          ? entry.back_clouser_extra_selector
+          : undefined
+      return makeChoice(`${prefix}-${index}`, label, price, entry.image_url, {
+        selector: selector?.trim().toLowerCase(),
+      })
+    })
+    .filter((choice): choice is ResolvedChoice => choice !== null)
+}
+function resolveDimensionConfig(
+  productType: SupportedProductType,
+  dimensions: CustomizerDimensions | null,
+  config?: Pick<CustomizerConfig, 'product_title'>,
+): ResolvedDimensionConfig {
+  const minValue = toNumber(dimensions?.minimum_value) ?? 1
+  const dimensionDescription = isNonEmptyString(dimensions?.dimension_description)
+    ? dimensions.dimension_description
+    : DEFAULT_HINTS.size
+  const diagramUrls = pickDimensionDiagramUrls(dimensions)
+  const dimensionDiagramVariants = {
+    imageSrcWhenBGreater: diagramUrls.whenBGreaterUrl,
+    imageSrcWhenCGreater: diagramUrls.whenCGreaterUrl,
+  }
+  const makeField = (
+    key: ConfigFormField,
+    label: string,
+    required = true,
+  ) => ({ key, label, min: minValue, required })
+  switch (productType) {
+    case 'lounge':
+      return {
+        title: 'Masse waehlen',
+        description: dimensionDescription,
+        imageSrc: diagramUrls.defaultUrl,
+        ...dimensionDiagramVariants,
+        minimumValue: minValue,
+        fields: [
+          makeField('sideACm', 'Seite A (cm)'),
+          makeField('sideBCm', 'Seite B (cm)'),
+          makeField('sideCCm', 'Seite C (cm)'),
+          makeField('sideFCm', 'Seite F (cm)'),
+          makeField('sideHCm', 'Hoehe H (cm)'),
+        ],
+      }
+    case 'trailer':
+      return {
+        title: 'Masse waehlen',
+        description: dimensionDescription,
+        imageSrc: diagramUrls.defaultUrl,
+        ...dimensionDiagramVariants,
+        minimumValue: minValue,
+        fields: [
+          makeField('trailerWidthCm', 'Anhaengerbreite A (cm)'),
+          makeField('trailerLengthCm', 'Anhaengerlaenge B (cm)'),
+          makeField('trailerHeightCm', 'Planenhoehe C (cm)'),
+        ],
+      }
+    case 'rectangular':
+      if (config && isPoolProductConfig(config)) {
+        return {
+          title: 'Masse waehlen',
+          description: dimensionDescription,
+          imageSrc: diagramUrls.defaultUrl,
+          ...dimensionDiagramVariants,
+          minimumValue: minValue,
+          fields: [
+            makeField('rectangularLengthCm', 'Laenge (cm)'),
+            makeField('rectangularWidthCm', 'Breite (cm)'),
+          ],
+        }
+      }
+      return {
+        title: 'Masse waehlen',
+        description: dimensionDescription,
+        imageSrc: diagramUrls.defaultUrl,
+        ...dimensionDiagramVariants,
+        minimumValue: minValue,
+        fields: [
+          makeField('rectangularLengthCm', 'Laenge A (cm)'),
+          makeField('rectangularWidthCm', 'Breite B (cm)'),
+          makeField('rectangularHeightCm', 'Hoehe C (cm)'),
+        ],
+      }
+    case 'tarpaulins':
+    default:
+      if (config && isPoolProductConfig(config)) {
+        return {
+          title: 'Masse waehlen',
+          description: dimensionDescription,
+          imageSrc: diagramUrls.defaultUrl,
+          ...dimensionDiagramVariants,
+          minimumValue: minValue,
+          fields: [
+            makeField('lengthACm', 'Laenge A (cm)'),
+            makeField('heightRightBCm', 'Hoehe rechts B (cm)'),
+          ],
+        }
+      }
+      return {
+        title: 'Masse waehlen',
+        description: dimensionDescription,
+        imageSrc: diagramUrls.defaultUrl,
+        ...dimensionDiagramVariants,
+        minimumValue: minValue,
+        fields: [
+          makeField('lengthACm', 'Laenge A (cm)'),
+          makeField('heightRightBCm', 'Hoehe rechts B (cm)'),
+          makeField('heightLeftCCm', 'Hoehe links C (cm)'),
+        ],
+      }
+  }
+}
+function buildStepOrder(
+  productType: SupportedProductType,
+  config: {
+    colors: ResolvedChoice[]
+    materials: ResolvedChoice[]
+    top: ResolvedChoice[]
+    left: ResolvedChoice[]
+    right: ResolvedChoice[]
+    bottom: ResolvedChoice[]
+    doorExtras: ResolvedChoice[]
+    extras: ResolvedChoice[]
+    eyelets: ResolvedChoice[]
+    closureTypes: ResolvedChoice[]
+    frontClosures: ResolvedChoice[]
+    frontClosureExtras: ResolvedChoice[]
+    backClosures: ResolvedChoice[]
+    backClosureExtras: ResolvedChoice[]
+    windowData: CustomizerWindowData | null
+    doorData: CustomizerDoorData | null
+  },
+): StepId[] {
+  if (productType === 'unknown') return []
+  const steps: StepId[] = []
+  if (config.colors.length || config.materials.length) steps.push('color')
+  steps.push('size')
+  if (productType === 'tarpaulins') {
+    if (config.top.length) steps.push('topSide')
+    if (config.left.length) steps.push('leftSide')
+    if (config.right.length) steps.push('rightSide')
+    if (config.bottom.length) steps.push('bottomSide')
+    if (hasWindowConfig(config.windowData)) steps.push('window')
+    if (hasDoorConfig(config.doorData)) steps.push('door')
+  }
+  if (productType === 'lounge' || productType === 'rectangular') {
+    if (config.eyelets.length) steps.push('eyelets')
+    if (config.closureTypes.length) steps.push('closureType')
+  }
+  if (productType === 'trailer') {
+    if (config.frontClosures.length || config.frontClosureExtras.length) steps.push('frontClosure')
+    if (config.backClosures.length || config.backClosureExtras.length) steps.push('backClosure')
+    if (config.eyelets.length) steps.push('eyelets')
+  }
+  if (config.extras.length) steps.push('extras')
+  steps.push('sketch')
+  return steps
+}
+function uniqueIssues(issues: string[]): string[] {
+  return Array.from(new Set(issues.filter((issue) => issue.trim().length > 0)))
+}
+function buildValidationRules(
+  productType: SupportedProductType,
+  steps: StepId[],
+  sizeFields: ConfigFormField[],
+  colors: ResolvedChoice[],
+  materials: ResolvedChoice[],
+): ResolvedCustomizerConfig['validationRules'] {
+  const requiredFields: ConfigFormField[] = [...sizeFields]
+  if (materials.length > 1) requiredFields.unshift('material')
+  if (colors.length > 0) requiredFields.unshift('color')
+  if (steps.includes('topSide')) requiredFields.push('topSide')
+  if (steps.includes('leftSide')) requiredFields.push('leftSide')
+  if (steps.includes('rightSide')) requiredFields.push('rightSide')
+  if (steps.includes('bottomSide')) requiredFields.push('bottomSide')
+  if (steps.includes('window')) requiredFields.push('hasWindow')
+  if (steps.includes('door')) requiredFields.push('hasDoor')
+  if (productType === 'unknown') {
+    return { requiredFields: [], minimumForPrice: [] }
+  }
+    return {
+      requiredFields,
+      minimumForPrice: [
+        ...(materials.length > 0 ? (['material'] as ConfigFormField[]) : []),
+        ...(colors.length > 0 ? (['color'] as ConfigFormField[]) : []),
+        ...sizeFields,
+      ],
+    }
+}
+function toMaybeConfig(response: CustomizerApiResponse | null | undefined): CustomizerConfig | null {
+  if (!response?.success || !response.data) return null
+  return response.data
+}
+export function resolveCustomizerConfig(config: CustomizerConfig): ResolvedCustomizerConfig {
+  const issues: string[] = []
+  const calculationUnit = (config.calculation_unit ?? {}) as CustomizerCalculationUnit
+  const productType = normalizeProductType(calculationUnit.product_type)
+  const unitSelector = normalizeUnitSelector(calculationUnit.unit_selector)
+  const colors = resolveColorChoices(config.colors)
+  const materials = resolveMaterialChoices(config.material)
+  const top = resolveEdgeChoices(config.top_tarpaulin, ['top_tarpaulin__subtitle', 'subtitle'], 'top_tarpaulin_price', 'image_url')
+  const left = resolveEdgeChoices(config.left_tarpaulin, ['left_tarpaulin__subtitle', 'subtitle'], 'left_tarpaulin_price', 'image_url')
+  const right = resolveEdgeChoices(config.right_tarpaulin, ['right_tarpaulin__subtitle', 'subtitle'], 'right_tarpaulin_price', 'image_url')
+  const bottom = resolveEdgeChoices(config.bottom_tarpaulin, ['bottom_tarpaulin__subtitle', 'subtitle'], 'bottom_tarpaulin_price', 'image_url')
+  const doorExtras = resolveDoorExtras(config.extras)
+  const extras = resolveMainExtras(config.main_extra)
+  const eyelets = resolveEyelets(config.eyelets)
+  const closureTypes = resolveClosureTypes(config.closure_type)
+  const frontClosures = resolveClosures(config.front_clouser)
+  const backClosures = resolveBackClosures(config.back_clouser)
+  const frontClosureExtras = resolveClosureExtras(config.front_clouser_extra, 'front-closure-extra')
+  const backClosureExtras = resolveClosureExtras(config.back_clouser_extra, 'back-closure-extra')
+  if (!colors.length && !materials.length) {
+    issues.push('Es wurden keine Farben oder Materialien fuer den Konfigurator gefunden.')
+  }
+  if (productType === 'unknown') {
+    issues.push('Der Produkttyp aus WordPress wird vom Frontend derzeit nicht unterstuetzt.')
+  }
+  if (unitSelector === 'unknown') {
+    issues.push('Die Berechnungseinheit aus WordPress ist unvollstaendig.')
+  }
+  const dimensions = resolveDimensionConfig(productType, config.dimentions, config)
+  const sizeFields = dimensions.fields.filter((field) => field.required).map((field) => field.key)
+  const hasWindowStep = hasWindowConfig(config.window_data)
+  const hasDoorStep = hasDoorConfig(config.door_data)
+  const steps = buildStepOrder(productType, {
+    colors,
+    materials,
+    top,
+    left,
+    right,
+    bottom,
+    doorExtras,
+    extras,
+    eyelets,
+    closureTypes,
+    frontClosures,
+    frontClosureExtras,
+    backClosures,
+    backClosureExtras,
+    windowData: config.window_data,
+    doorData: config.door_data,
+  })
+  const validationRules = buildValidationRules(productType, steps, sizeFields, colors, materials)
+  const livePrice = unitSelector !== 'unknown' && materials.length > 0 && sizeFields.length > 0
+  if (!livePrice) {
+    issues.push('Die Live-Preisberechnung ist nur eingeschraenkt verfuegbar, weil Material- oder Massdaten fehlen.')
+  }
+  return {
+    configId: config.id,
+    productId: config.product_id,
+    productTitle: config.product_title,
+    productType,
+    unitSelector,
+    steps,
+    dimensions,
+    options: {
+      colors,
+      materials,
+      topSide: top,
+      leftSide: left,
+      rightSide: right,
+      bottomSide: bottom,
+      doorExtras,
+      extras,
+      eyelets,
+      closureTypes,
+      frontClosures,
+      frontClosureExtras,
+      backClosures,
+      backClosureExtras,
+    },
+    pricingCapabilities: {
+      livePrice,
+      allowsEdges: productType === 'tarpaulins',
+      allowsWindow: productType === 'tarpaulins' && hasWindowStep,
+      allowsDoor: productType === 'tarpaulins' && hasDoorStep,
+      supportsEyelets: (productType === 'lounge' || productType === 'rectangular' || productType === 'trailer') && eyelets.length > 0,
+      supportsClosureType:
+        (productType === 'lounge' || productType === 'rectangular') &&
+        closureTypes.length > 0,
+      supportsFrontBackClosure: productType === 'trailer',
+    },
+    validationRules,
+    hints: DEFAULT_HINTS,
+    issues: uniqueIssues(issues),
+  }
+}
+export function resolveCustomizerState(
+  response: CustomizerApiResponse | null | undefined,
+): { state: ConfiguratorState; resolvedConfig: ResolvedCustomizerConfig | null } {
+  const rawConfig = toMaybeConfig(response)
+  if (!rawConfig) {
+    return {
+      state: {
+        status: 'missing',
+        message: response?.message || 'Fuer dieses Produkt wurde keine Konfiguration in WordPress gefunden.',
+      },
+      resolvedConfig: null,
+    }
+  }
+  const resolvedConfig = resolveCustomizerConfig(rawConfig)
+  if (resolvedConfig.productType === 'unknown') {
+    return {
+      state: {
+        status: 'unsupported',
+        message: 'Der Konfigurator fuer diesen Produkttyp wird im Frontend noch nicht sicher unterstuetzt.',
+        warnings: resolvedConfig.issues,
+      },
+      resolvedConfig,
+    }
+  }
+  if (resolvedConfig.issues.length > 0) {
+    return {
+      state: {
+        status: 'partial',
+        message: 'Die Konfiguration ist nur teilweise vollstaendig. Fehlende Bereiche wurden defensiv ausgeblendet.',
+        warnings: resolvedConfig.issues,
+      },
+      resolvedConfig,
+    }
+  }
+  return {
+    state: {
+      status: 'ready',
+      warnings: [],
+    },
+    resolvedConfig,
+  }
+}
+````
+
 ## File: src/app/(shop)/product/[slug]/page.tsx
 ````typescript
 import type { Metadata } from 'next'
@@ -30620,14 +30671,14 @@ interface GraphQLResponse<T> {
 }
 const STEP_TITLES: Record<StepId, string> = {
   color: 'Material und Farbe',
-  size: 'Masse waehlen',
-  topSide: 'Obere Seite der Plane',
+  size: 'Maße wählen',
+  topSide: 'Ösen',
   leftSide: 'Linke Seite der Plane',
   rightSide: 'Rechte Seite der Plane',
   bottomSide: 'Untere Seite der Plane',
   window: 'Fenster',
   door: 'Tuer',
-  eyelets: 'Oesen',
+  eyelets: 'Ösen',
   closureType: 'Verschlussart',
   frontClosure: 'Frontverschluss',
   backClosure: 'Rueckenverschluss',
@@ -30715,6 +30766,44 @@ function isFilled(field: ConfigFormField, form: ConfigFormState): boolean {
 function isValidImageUrl(url?: string | null): boolean {
   return Boolean(url && url !== 'http://null' && url !== 'http://null/' && !url.endsWith('/null'))
 }
+function parseCmFromForm(value: string | number | undefined): number | null {
+  if (value === undefined || value === null) return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  const trimmed = String(value).trim()
+  if (!trimmed) return null
+  const parsed = Number(trimmed.replace(',', '.'))
+  return Number.isFinite(parsed) ? parsed : null
+}
+function resolveDimensionDiagramSrc(
+  dim: ResolvedCustomizerConfig['dimensions'],
+  form: ConfigFormState,
+): string | undefined {
+  const fieldKeys = new Set(dim.fields.map((f) => f.key))
+  const hasTerraceHeightsBc =
+    fieldKeys.has('heightRightBCm') && fieldKeys.has('heightLeftCCm')
+  const defaultSrc = dim.imageSrc
+  const bGreaterSrc = dim.imageSrcWhenBGreater
+  const cGreaterSrc = dim.imageSrcWhenCGreater
+  if (!hasTerraceHeightsBc) {
+    return isValidImageUrl(defaultSrc) ? defaultSrc : undefined
+  }
+  const bCm = parseCmFromForm(form.heightRightBCm)
+  const cCm = parseCmFromForm(form.heightLeftCCm)
+  if (bCm !== null && cCm !== null) {
+    if (bCm > cCm) {
+      if (isValidImageUrl(bGreaterSrc)) return bGreaterSrc
+      if (isValidImageUrl(defaultSrc)) return defaultSrc
+      return undefined
+    }
+    if (cCm > bCm) {
+      if (isValidImageUrl(cGreaterSrc)) return cGreaterSrc
+      if (isValidImageUrl(defaultSrc)) return defaultSrc
+      return undefined
+    }
+  }
+  if (isValidImageUrl(defaultSrc)) return defaultSrc
+  return undefined
+}
 function normalizeChoiceSelector(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase()
 }
@@ -30755,7 +30844,7 @@ function getDynamicRequiredFields(
 const REQUIRED_FIELD_LABELS: Partial<Record<ConfigFormField, string>> = {
   material: 'Material',
   color: 'Farbe',
-  topSide: 'Obere Seite der Plane',
+  topSide: 'Ösen',
   leftSide: 'Linke Seite der Plane',
   rightSide: 'Rechte Seite der Plane',
   bottomSide: 'Untere Seite der Plane',
@@ -30764,10 +30853,10 @@ const REQUIRED_FIELD_LABELS: Partial<Record<ConfigFormField, string>> = {
   windowHeightCm: 'Fensterhoehe',
   windowSplitLeftWidthCm: 'Fensterbreite links',
   windowSplitRightWidthCm: 'Fensterbreite rechts',
-  hasDoor: 'Tuer: Bitte Ja oder Nein waehlen',
-  doorWidthCm: 'Tuerbreite',
-  doorHeightCm: 'Tuerhoehe',
-  eyeletEdge: 'Oesen',
+  hasDoor: 'Tür: Bitte Ja oder Nein waehlen',
+  doorWidthCm: 'Türbreite',
+  doorHeightCm: 'Türhöhe',
+  eyeletEdge: 'Ösen',
   closureType: 'Verschlussart',
   frontClosure: 'Frontverschluss',
   backClosure: 'Rueckenverschluss',
@@ -30917,7 +31006,7 @@ function NestedAccordion({
 }: {
   title: string
   isOpen: boolean
-  onToggle: () => void
+  onToggle: (anchorEl?: HTMLElement | null) => void
   children: ReactNode
 }) {
   return (
@@ -30925,7 +31014,7 @@ function NestedAccordion({
       <button
         type="button"
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#F4F9FF]"
-        onClick={onToggle}
+        onClick={(event) => onToggle(event.currentTarget)}
         aria-expanded={isOpen}
       >
         <span className="text-base font-semibold text-[#0F2B52]">{title}</span>
@@ -30950,7 +31039,7 @@ function StepAccordionItem({
   id: StepId
   title: string
   openStep: StepId | null
-  onToggle: (id: StepId) => void
+  onToggle: (id: StepId, anchorEl?: HTMLElement | null) => void
   showWarning?: boolean
   children: ReactNode
 }) {
@@ -30960,7 +31049,7 @@ function StepAccordionItem({
       <button
         type="button"
         className="flex w-full items-center justify-between gap-4 bg-gradient-to-r from-[#FFFFFF] to-[#F7FBFF] px-5 py-4 text-left transition hover:from-[#F8FBFF] hover:to-[#F2F8FF]"
-        onClick={() => onToggle(id)}
+        onClick={(event) => onToggle(id, event.currentTarget)}
         aria-expanded={isOpen}
       >
         <span className="text-lg font-semibold text-[#0F2B52]">{title}</span>
@@ -31233,13 +31322,13 @@ function YesNoToggle({
   onChange,
 }: {
   value: '' | 'yes' | 'no'
-  onChange: (value: '' | 'yes' | 'no') => void
+  onChange: (value: '' | 'yes' | 'no', anchorEl?: HTMLElement | null) => void
 }) {
   return (
     <div className="inline-flex rounded-xl border border-[#CFE0F5] bg-[#F8FBFF] p-1">
       <button
         type="button"
-        onClick={() => onChange('yes')}
+        onClick={(event) => onChange('yes', event.currentTarget)}
         className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
           value === 'yes' ? 'bg-[#1F5CAB] text-white' : 'text-[#1F5CAB] hover:bg-[#EAF3FF]'
         }`}
@@ -31248,7 +31337,7 @@ function YesNoToggle({
       </button>
       <button
         type="button"
-        onClick={() => onChange('no')}
+        onClick={(event) => onChange('no', event.currentTarget)}
         className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
           value === 'no' ? 'bg-[#1F5CAB] text-white' : 'text-[#1F5CAB] hover:bg-[#EAF3FF]'
         }`}
@@ -31295,8 +31384,8 @@ export default function ProductConfigurator({
       leftSide: 'Waehlen Sie die Verarbeitung fuer die linke Seite der Plane.',
       rightSide: 'Waehlen Sie die Verarbeitung fuer die rechte Seite der Plane.',
       bottomSide: 'Waehlen Sie die Verarbeitung fuer die untere Seite der Plane.',
-      window: 'Definieren Sie Fenstermaeße und Position.',
-      door: 'Definieren Sie Tuermasse und Position.',
+      window: 'Wünschen Sie ein Fenster in Ihrer Plane?',
+      door: 'Wünschen Sie eine Tür in Ihrer Plane?',
       eyelets: 'Waehlen Sie die Oesenkonfiguration.',
       closureType: 'Waehlen Sie die Verschlussart.',
       frontClosure: 'Waehlen Sie den Frontverschluss.',
@@ -31323,6 +31412,17 @@ export default function ProductConfigurator({
     if (!resolvedConfig) return false
     return resolvedConfig.validationRules.minimumForPrice.every((field) => isFilled(field, form))
   }, [form, resolvedConfig])
+  const dimensionDiagramSrc = useMemo(() => {
+    if (!resolvedConfig) return undefined
+    return resolveDimensionDiagramSrc(resolvedConfig.dimensions, form)
+  }, [
+    resolvedConfig?.dimensions.imageSrc,
+    resolvedConfig?.dimensions.imageSrcWhenBGreater,
+    resolvedConfig?.dimensions.imageSrcWhenCGreater,
+    (resolvedConfig?.dimensions.fields ?? []).map((f) => f.key).join(','),
+    form.heightRightBCm,
+    form.heightLeftCCm,
+  ])
   const canSubmit = useMemo(() => {
     if (!resolvedConfig) return false
     if (
@@ -31478,30 +31578,35 @@ export default function ProductConfigurator({
     windowSplitLeftDistanceBottomCm: '',
     windowSplitRightDistanceBottomCm: '',
   })
-  const preserveConfiguratorScroll = (update: () => void) => {
-    const anchor = configuratorCardRef.current
+  const preserveConfiguratorScroll = (
+    update: () => void,
+    anchorElement?: HTMLElement | null,
+  ) => {
+    const anchor = anchorElement ?? configuratorCardRef.current
     const beforeTop = anchor?.getBoundingClientRect().top ?? null
     update()
     if (beforeTop === null || typeof window === 'undefined') {
       return
     }
     window.requestAnimationFrame(() => {
-      const afterTop = anchor?.getBoundingClientRect().top ?? null
-      if (afterTop === null) {
-        return
-      }
-      const delta = afterTop - beforeTop
-      if (Math.abs(delta) > 1) {
-        window.scrollBy({ top: delta, behavior: 'auto' })
-      }
+      window.requestAnimationFrame(() => {
+        const afterTop = anchor?.getBoundingClientRect().top ?? null
+        if (afterTop === null) {
+          return
+        }
+        const delta = afterTop - beforeTop
+        if (Math.abs(delta) > 1) {
+          window.scrollBy({ top: delta, behavior: 'auto' })
+        }
+      })
     })
   }
-  const toggleStep = (step: StepId) => {
+  const toggleStep = (step: StepId, anchorElement?: HTMLElement | null) => {
     preserveConfiguratorScroll(() => {
       setOpenStep((prev) => (prev === step ? null : step))
-    })
+    }, anchorElement)
   }
-  const setWindowEnabled = (value: '' | 'yes' | 'no') => {
+  const setWindowEnabled = (value: '' | 'yes' | 'no', anchorElement?: HTMLElement | null) => {
     preserveConfiguratorScroll(() => {
       setForm((prev) => {
         let next: ConfigFormState = { ...prev, hasWindow: value }
@@ -31512,9 +31617,9 @@ export default function ProductConfigurator({
         }
         return next
       })
-    })
+    }, anchorElement)
   }
-  const setWindowSplitMode = (value: '' | 'yes' | 'no') => {
+  const setWindowSplitMode = (value: '' | 'yes' | 'no', anchorElement?: HTMLElement | null) => {
     preserveConfiguratorScroll(() => {
       setForm((prev) => {
         let next: ConfigFormState = { ...prev, windowSplit: value }
@@ -31525,7 +31630,7 @@ export default function ProductConfigurator({
         }
         return next
       })
-    })
+    }, anchorElement)
   }
   const toggleMultiValue = (
     field: 'doorExtras' | 'extrasSelected' | 'frontClosureExtras' | 'backClosureExtras',
@@ -31770,6 +31875,19 @@ export default function ProductConfigurator({
                     </label>
                   ))}
                 </div>
+                {isValidImageUrl(dimensionDiagramSrc) ? (
+                  <div className="mt-4 overflow-hidden rounded-xl border border-[#CFE0F5] bg-[#F8FBFF] p-3">
+                    <img
+                      key={dimensionDiagramSrc}
+                      src={dimensionDiagramSrc}
+                      alt="Massenskizze zur Orientierung bei den Angaben A, B und C"
+                      className="mx-auto max-h-72 w-full max-w-lg object-contain"
+                      width={800}
+                      height={600}
+                      decoding="async"
+                    />
+                  </div>
+                ) : null}
               </StepAccordionItem>
             ) : null}
             {steps.includes('topSide') ? (
@@ -31962,15 +32080,6 @@ export default function ProductConfigurator({
                       {resolvedConfig.options.extras.length > 0 ? (
                         <MultiChoiceGrid choices={resolvedConfig.options.extras} selectedIds={form.extrasSelected} onToggle={(value) => toggleMultiValue('extrasSelected', value)} onPreview={setPreviewChoice} />
                       ) : null}
-                      <label className="space-y-1">
-                        <span className="text-xs font-semibold text-[#1F5CAB]">Hinweise zu den Extras (optional)</span>
-                        <textarea
-                          value={form.extras}
-                          onChange={(event) => setField('extras', event.target.value)}
-                          placeholder="Weitere Anforderungen, Hinweise oder Sonderwuensche"
-                          className="min-h-20 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] p-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
-                        />
-                      </label>
                     </>
                   ) : null}
                 </div>
