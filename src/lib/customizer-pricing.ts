@@ -5,6 +5,7 @@ import type {
   SupportedProductType,
   SupportedUnitSelector,
 } from '@/lib/customizer-runtime'
+import { TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM } from '@/lib/tarpaulin-opening-rules'
 
 export interface PriceCalculationRequestBody {
   productId: string | number
@@ -56,6 +57,12 @@ export interface PriceCalculationRequestBody {
     distanceBottomCm?: string
     splitLeftWidthCm?: string
     splitRightWidthCm?: string
+    splitLeftHeightCm?: string
+    splitRightHeightCm?: string
+    splitDistanceLeftCm?: string
+    splitDistanceRightCm?: string
+    splitLeftBottomCm?: string
+    splitRightBottomCm?: string
   }
   door: {
     widthCm?: string
@@ -157,6 +164,12 @@ export function buildPriceCalculationRequest(
       distanceBottomCm: form.windowDistanceBottomCm || undefined,
       splitLeftWidthCm: form.windowSplitLeftWidthCm || undefined,
       splitRightWidthCm: form.windowSplitRightWidthCm || undefined,
+      splitLeftHeightCm: form.windowSplitLeftHeightCm || undefined,
+      splitRightHeightCm: form.windowSplitRightHeightCm || undefined,
+      splitDistanceLeftCm: form.windowSplitLeftDistanceLeftCm || undefined,
+      splitDistanceRightCm: form.windowSplitRightDistanceRightCm || undefined,
+      splitLeftBottomCm: form.windowSplitLeftDistanceBottomCm || undefined,
+      splitRightBottomCm: form.windowSplitRightDistanceBottomCm || undefined,
     },
     door: {
       widthCm: form.doorWidthCm || undefined,
@@ -216,19 +229,34 @@ export function buildWordPressPriceFormData(body: PriceCalculationRequestBody): 
       params.set('has_edge_bottom_0', body.selections.bottomSide || 'Ohne Extras')
 
       if (body.toggles.hasWindow) {
-        if (body.window.widthCm) params.set('window_width', body.window.widthCm)
-        if (body.window.heightCm) params.set('window_height', body.window.heightCm)
         if (body.toggles.windowSplit) {
-          let splitCount = 0
-          if (body.window.splitLeftWidthCm) splitCount += 1
-          if (body.window.splitRightWidthCm) splitCount += 1
-          if (splitCount > 0) params.set('window_split_num', String(splitCount))
+          params.set('window_split', '1')
+          params.set('window_split_num', '2')
+          params.set('window_split_offset', String(TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM))
+          if (body.window.splitLeftWidthCm) params.set('window_width_one', body.window.splitLeftWidthCm)
+          if (body.window.splitRightWidthCm) params.set('window_width_two', body.window.splitRightWidthCm)
+          if (body.window.splitLeftHeightCm) params.set('window_height_one', body.window.splitLeftHeightCm)
+          if (body.window.splitRightHeightCm) params.set('window_height_two', body.window.splitRightHeightCm)
+          if (body.window.splitDistanceLeftCm) params.set('window_left_margin', body.window.splitDistanceLeftCm)
+          if (body.window.splitDistanceRightCm) params.set('window_right_margin', body.window.splitDistanceRightCm)
+          if (body.window.splitLeftBottomCm) {
+            params.set('window_left_bottom_margin', body.window.splitLeftBottomCm)
+          }
+          if (body.window.splitRightBottomCm) {
+            params.set('window_right_bottom_margin', body.window.splitRightBottomCm)
+          }
+        } else {
+          if (body.window.widthCm) params.set('window_width', body.window.widthCm)
+          if (body.window.heightCm) params.set('window_height', body.window.heightCm)
+          if (body.window.distanceSideCm) params.set('window_offset_left', body.window.distanceSideCm)
+          if (body.window.distanceBottomCm) params.set('window_offset_bottom', body.window.distanceBottomCm)
         }
       }
 
       if (body.toggles.hasDoor) {
         if (body.door.widthCm) params.set('door_width', body.door.widthCm)
         if (body.door.heightCm) params.set('door_height', body.door.heightCm)
+        if (body.door.distanceLeftCm) params.set('door_offset_left', body.door.distanceLeftCm)
         for (const extra of body.selections.doorExtras) {
           params.set(selectionKey('Door_Extra_', extra), extra)
         }
@@ -309,8 +337,27 @@ export function buildConfigurationSummary(
 
   if (body.toggles.hasWindow) {
     addSummaryEntry(entries, 'Fenster', 'Ja')
-    addSummaryEntry(entries, 'Fensterbreite', body.window.widthCm ? `${body.window.widthCm} cm` : undefined)
-    addSummaryEntry(entries, 'Fensterhoehe', body.window.heightCm ? `${body.window.heightCm} cm` : undefined)
+    if (body.toggles.windowSplit) {
+      addSummaryEntry(entries, 'Fenster geteilt', 'Ja')
+      addSummaryEntry(
+        entries,
+        'Fensterabstand zueinander',
+        `${TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM} cm`,
+      )
+      addSummaryEntry(entries, 'Fensterbreite links', body.window.splitLeftWidthCm ? `${body.window.splitLeftWidthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fensterbreite rechts', body.window.splitRightWidthCm ? `${body.window.splitRightWidthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fensterhoehe links', body.window.splitLeftHeightCm ? `${body.window.splitLeftHeightCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fensterhoehe rechts', body.window.splitRightHeightCm ? `${body.window.splitRightHeightCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster Rand links', body.window.splitDistanceLeftCm ? `${body.window.splitDistanceLeftCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster Rand rechts', body.window.splitDistanceRightCm ? `${body.window.splitDistanceRightCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster unten links', body.window.splitLeftBottomCm ? `${body.window.splitLeftBottomCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster unten rechts', body.window.splitRightBottomCm ? `${body.window.splitRightBottomCm} cm` : undefined)
+    } else {
+      addSummaryEntry(entries, 'Fensterbreite', body.window.widthCm ? `${body.window.widthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fensterhoehe', body.window.heightCm ? `${body.window.heightCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster Abstand Seite', body.window.distanceSideCm ? `${body.window.distanceSideCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster Abstand unten', body.window.distanceBottomCm ? `${body.window.distanceBottomCm} cm` : undefined)
+    }
   }
 
   if (body.toggles.hasDoor) {

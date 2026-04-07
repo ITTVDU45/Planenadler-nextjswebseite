@@ -23,6 +23,11 @@ import type {
   StepId,
 } from '@/lib/customizer-runtime'
 import { emptyConfigFormState } from '@/lib/customizer-runtime'
+import {
+  getTarpaulinOpeningValidationIssues,
+  isTerraceTarpaulinLayout,
+  TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM,
+} from '@/lib/tarpaulin-opening-rules'
 import { cn } from '@/lib/utils'
 
 interface ProductConfiguratorProps {
@@ -281,17 +286,33 @@ function getDynamicRequiredFields(
   resolvedConfig: ResolvedCustomizerConfig,
 ): ConfigFormField[] {
   const dynamic: ConfigFormField[] = []
+  const terraceTarp = isTerraceTarpaulinLayout(resolvedConfig)
 
   if (resolvedConfig.steps.includes('window') && form.hasWindow === 'yes') {
     if (form.windowSplit === 'yes') {
-      dynamic.push('windowSplitLeftWidthCm', 'windowSplitRightWidthCm')
+      dynamic.push(
+        'windowSplitLeftWidthCm',
+        'windowSplitRightWidthCm',
+        'windowSplitLeftHeightCm',
+        'windowSplitRightHeightCm',
+        'windowSplitLeftDistanceLeftCm',
+        'windowSplitRightDistanceRightCm',
+        'windowSplitLeftDistanceBottomCm',
+        'windowSplitRightDistanceBottomCm',
+      )
     } else {
       dynamic.push('windowWidthCm', 'windowHeightCm')
+      if (terraceTarp) {
+        dynamic.push('windowDistanceSideCm', 'windowDistanceBottomCm')
+      }
     }
   }
 
   if (resolvedConfig.steps.includes('door') && form.hasDoor === 'yes') {
     dynamic.push('doorWidthCm', 'doorHeightCm')
+    if (terraceTarp) {
+      dynamic.push('doorDistanceLeftCm')
+    }
   }
 
   if (
@@ -317,6 +338,15 @@ const REQUIRED_FIELD_LABELS: Partial<Record<ConfigFormField, string>> = {
   windowHeightCm: 'Fensterhoehe',
   windowSplitLeftWidthCm: 'Fensterbreite links',
   windowSplitRightWidthCm: 'Fensterbreite rechts',
+  windowSplitLeftHeightCm: 'Fensterhoehe links',
+  windowSplitRightHeightCm: 'Fensterhoehe rechts',
+  windowSplitLeftDistanceLeftCm: 'Abstand linkes Fenster zum linken Rand',
+  windowSplitRightDistanceRightCm: 'Abstand rechtes Fenster zum rechten Rand',
+  windowSplitLeftDistanceBottomCm: 'Abstand linkes Fenster zum unteren Rand',
+  windowSplitRightDistanceBottomCm: 'Abstand rechtes Fenster zum unteren Rand',
+  windowDistanceSideCm: 'Fenster: Abstand zum Seitenrand',
+  windowDistanceBottomCm: 'Fenster: Abstand zur unteren Seite',
+  doorDistanceLeftCm: 'Tuer: Abstand zur linken Seite',
   hasDoor: 'Tür: Bitte Ja oder Nein waehlen',
   doorWidthCm: 'Türbreite',
   doorHeightCm: 'Türhöhe',
@@ -909,6 +939,11 @@ export default function ProductConfigurator({
   const steps = resolvedConfig?.steps ?? []
   const stateMessage = describeStateMessage(configuratorState?.message, configuratorState?.warnings)
 
+  const terraceTarpaulin = useMemo(
+    () => (resolvedConfig ? isTerraceTarpaulinLayout(resolvedConfig) : false),
+    [resolvedConfig],
+  )
+
   useEffect(() => {
     setForm(initialFormState)
     setOpenStep(resolvedConfig?.steps[0] ?? null)
@@ -946,6 +981,11 @@ export default function ProductConfigurator({
     form.rectangularHeightCm,
   ])
 
+  const openingValidationIssues = useMemo(() => {
+    if (!resolvedConfig) return []
+    return getTarpaulinOpeningValidationIssues(resolvedConfig, form)
+  }, [form, resolvedConfig])
+
   const canSubmit = useMemo(() => {
     if (!resolvedConfig) return false
     if (
@@ -955,8 +995,9 @@ export default function ProductConfigurator({
     ) {
       return false
     }
+    if (openingValidationIssues.length > 0) return false
     return requiredFields.every((field) => isFilled(field, form))
-  }, [configuratorState?.status, requiredFields, resolvedConfig, form])
+  }, [configuratorState?.status, requiredFields, resolvedConfig, form, openingValidationIssues.length])
 
   const missingRequiredFields = useMemo(() => {
     if (!resolvedConfig) return []
@@ -989,6 +1030,20 @@ export default function ProductConfigurator({
         .filter((stepId): stepId is StepId => stepId !== null),
     )
   }, [missingRequiredFields, resolvedConfig])
+
+  const stepsWithOpeningErrors = useMemo(() => {
+    const next = new Set<StepId>()
+    if (!resolvedConfig || openingValidationIssues.length === 0 || !terraceTarpaulin) return next
+    if (form.hasWindow === 'yes' && resolvedConfig.steps.includes('window')) next.add('window')
+    if (form.hasDoor === 'yes' && resolvedConfig.steps.includes('door')) next.add('door')
+    return next
+  }, [
+    form.hasDoor,
+    form.hasWindow,
+    openingValidationIssues.length,
+    resolvedConfig,
+    terraceTarpaulin,
+  ])
 
   const filteredFrontClosureExtras = useMemo(
     () =>
@@ -1428,6 +1483,13 @@ export default function ProductConfigurator({
           {!canSubmit && missingFieldsMessage ? (
             <p className="mt-2 text-xs font-medium text-amber-700">{missingFieldsMessage}</p>
           ) : null}
+          {!canSubmit && openingValidationIssues.length > 0 && terraceTarpaulin ? (
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-xs font-medium text-red-700">
+              {openingValidationIssues.map((msg, idx) => (
+                <li key={`sticky-opening-${idx}`}>{msg}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </div>
 
@@ -1561,7 +1623,13 @@ export default function ProductConfigurator({
             ) : null}
 
             {steps.includes('window') ? (
-              <StepAccordionItem id="window" title={STEP_TITLES.window} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('window')}>
+              <StepAccordionItem
+                id="window"
+                title={STEP_TITLES.window}
+                openStep={openStep}
+                onToggle={toggleStep}
+                showWarning={stepsWithMissingFields.has('window') || stepsWithOpeningErrors.has('window')}
+              >
                 <HintPanel text={effectiveHints.window} />
                 <div className="space-y-3">
                   <YesNoToggle value={form.hasWindow} onChange={setWindowEnabled} />
@@ -1572,15 +1640,94 @@ export default function ProductConfigurator({
                         <YesNoToggle value={form.windowSplit} onChange={setWindowSplitMode} />
                       </div>
                       {form.windowSplit === 'yes' ? (
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <label className="space-y-1">
-                            <span className="text-xs font-semibold text-[#1F5CAB]">Fensterbreite links (a) cm</span>
-                            <input type="number" min="0" value={form.windowSplitLeftWidthCm} onChange={(event) => setField('windowSplitLeftWidthCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
-                          </label>
-                          <label className="space-y-1">
-                            <span className="text-xs font-semibold text-[#1F5CAB]">Fensterbreite rechts (b) cm</span>
-                            <input type="number" min="0" value={form.windowSplitRightWidthCm} onChange={(event) => setField('windowSplitRightWidthCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
-                          </label>
+                        <div className="space-y-3">
+                          <p className="text-xs text-[#1F5CAB]/85">
+                            Zwischen den beiden Fenstern werden {TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM} cm Abstand angenommen (fester Wert).
+                          </p>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Fensterbreite links (a) cm</span>
+                              <input
+                                type="number"
+                                min="1"
+                                value={form.windowSplitLeftWidthCm}
+                                onChange={(event) => setField('windowSplitLeftWidthCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Fensterbreite rechts (c) cm</span>
+                              <input
+                                type="number"
+                                min="1"
+                                value={form.windowSplitRightWidthCm}
+                                onChange={(event) => setField('windowSplitRightWidthCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Fensterhoehe links (b) cm</span>
+                              <input
+                                type="number"
+                                min="1"
+                                max={130}
+                                value={form.windowSplitLeftHeightCm}
+                                onChange={(event) => setField('windowSplitLeftHeightCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Fensterhoehe rechts (d) cm</span>
+                              <input
+                                type="number"
+                                min="1"
+                                max={130}
+                                value={form.windowSplitRightHeightCm}
+                                onChange={(event) => setField('windowSplitRightHeightCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Abstand linkes Fenster zum linken Rand (x) cm</span>
+                              <input
+                                type="number"
+                                min={terraceTarpaulin ? 10 : 0}
+                                value={form.windowSplitLeftDistanceLeftCm}
+                                onChange={(event) => setField('windowSplitLeftDistanceLeftCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Abstand rechtes Fenster zum rechten Rand (z) cm</span>
+                              <input
+                                type="number"
+                                min={terraceTarpaulin ? 10 : 0}
+                                value={form.windowSplitRightDistanceRightCm}
+                                onChange={(event) => setField('windowSplitRightDistanceRightCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Abstand linkes Fenster zum unteren Rand (w) cm</span>
+                              <input
+                                type="number"
+                                min={terraceTarpaulin ? 10 : 0}
+                                value={form.windowSplitLeftDistanceBottomCm}
+                                onChange={(event) => setField('windowSplitLeftDistanceBottomCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold text-[#1F5CAB]">Abstand rechtes Fenster zum unteren Rand (y) cm</span>
+                              <input
+                                type="number"
+                                min={terraceTarpaulin ? 10 : 0}
+                                value={form.windowSplitRightDistanceBottomCm}
+                                onChange={(event) => setField('windowSplitRightDistanceBottomCm', event.target.value)}
+                                className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                              />
+                            </label>
+                          </div>
                         </div>
                       ) : (
                         <div className="grid gap-3 sm:grid-cols-2">
@@ -1590,25 +1737,50 @@ export default function ProductConfigurator({
                           </label>
                           <label className="space-y-1">
                             <span className="text-xs font-semibold text-[#1F5CAB]">Fensterhoehe (b) in cm</span>
-                            <input type="number" min="1" value={form.windowHeightCm} onChange={(event) => setField('windowHeightCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
+                            <input type="number" min="1" max={130} value={form.windowHeightCm} onChange={(event) => setField('windowHeightCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
                           </label>
                           <label className="space-y-1">
                             <span className="text-xs font-semibold text-[#1F5CAB]">Entfernung zum Seitenrand (c) in cm</span>
-                            <input type="number" min="0" value={form.windowDistanceSideCm} onChange={(event) => setField('windowDistanceSideCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
+                            <input
+                              type="number"
+                              min={terraceTarpaulin ? 10 : 0}
+                              value={form.windowDistanceSideCm}
+                              onChange={(event) => setField('windowDistanceSideCm', event.target.value)}
+                              className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                            />
                           </label>
                           <label className="space-y-1">
                             <span className="text-xs font-semibold text-[#1F5CAB]">Entfernung zur unteren Seite (d) in cm</span>
-                            <input type="number" min="0" value={form.windowDistanceBottomCm} onChange={(event) => setField('windowDistanceBottomCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
+                            <input
+                              type="number"
+                              min={terraceTarpaulin ? 10 : 0}
+                              value={form.windowDistanceBottomCm}
+                              onChange={(event) => setField('windowDistanceBottomCm', event.target.value)}
+                              className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                            />
                           </label>
                         </div>
                       )}
                     </>
                   ) : null}
+                  {openingValidationIssues.length > 0 && terraceTarpaulin && form.hasWindow === 'yes' ? (
+                    <ul className="list-disc space-y-1.5 rounded-lg border border-red-200 bg-red-50/90 px-3 py-2 pl-8 text-sm text-red-800">
+                      {openingValidationIssues.map((msg, idx) => (
+                        <li key={`win-opening-${idx}`}>{msg}</li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
               </StepAccordionItem>
             ) : null}
             {steps.includes('door') ? (
-              <StepAccordionItem id="door" title={STEP_TITLES.door} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('door')}>
+              <StepAccordionItem
+                id="door"
+                title={STEP_TITLES.door}
+                openStep={openStep}
+                onToggle={toggleStep}
+                showWarning={stepsWithMissingFields.has('door') || stepsWithOpeningErrors.has('door')}
+              >
                 <HintPanel text={effectiveHints.door} />
                 <div className="space-y-3">
                   <YesNoToggle value={form.hasDoor} onChange={(value) => setField('hasDoor', value)} />
@@ -1625,9 +1797,22 @@ export default function ProductConfigurator({
                         </label>
                         <label className="space-y-1 sm:col-span-2">
                           <span className="text-xs font-semibold text-[#1F5CAB]">Entfernung der Tuer zur linken Seite (c) in cm</span>
-                          <input type="number" min="0" value={form.doorDistanceLeftCm} onChange={(event) => setField('doorDistanceLeftCm', event.target.value)} className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15" />
+                          <input
+                            type="number"
+                            min={terraceTarpaulin ? 10 : 0}
+                            value={form.doorDistanceLeftCm}
+                            onChange={(event) => setField('doorDistanceLeftCm', event.target.value)}
+                            className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                          />
                         </label>
                       </div>
+                      {openingValidationIssues.length > 0 && terraceTarpaulin && form.hasDoor === 'yes' ? (
+                        <ul className="list-disc space-y-1.5 rounded-lg border border-red-200 bg-red-50/90 px-3 py-2 pl-8 text-sm text-red-800">
+                          {openingValidationIssues.map((msg, idx) => (
+                            <li key={`door-opening-${idx}`}>{msg}</li>
+                          ))}
+                        </ul>
+                      ) : null}
                       {resolvedConfig.options.doorExtras.length > 0 ? (
                         <NestedAccordion title="Extras zur Tuer" isOpen={doorExtrasAccordionOpen} onToggle={() => preserveConfiguratorScroll(() => setDoorExtrasAccordionOpen((prev) => !prev))}>
                           <p className="mb-3 text-xs font-medium text-[#1F5CAB]/80">Mehrfachauswahl moeglich.</p>
@@ -1769,6 +1954,16 @@ export default function ProductConfigurator({
             {!canSubmit && missingFieldsMessage ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
                 {missingFieldsMessage}
+              </div>
+            ) : null}
+            {!canSubmit && openingValidationIssues.length > 0 && terraceTarpaulin ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900">
+                <p className="font-semibold">Massen / Oeffnungen</p>
+                <ul className="mt-2 list-disc space-y-1 pl-4">
+                  {openingValidationIssues.map((msg, idx) => (
+                    <li key={`form-opening-${idx}`}>{msg}</li>
+                  ))}
+                </ul>
               </div>
             ) : null}
 
