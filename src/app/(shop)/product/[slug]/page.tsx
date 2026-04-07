@@ -141,6 +141,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </div>
             <ProductConfigurator
               productId={product.databaseId}
+              productSlug={slug}
               productName={product.title}
               price={product.price}
               hints={product.configuratorHints}

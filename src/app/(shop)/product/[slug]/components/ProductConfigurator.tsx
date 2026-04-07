@@ -23,10 +23,13 @@ import type {
   StepId,
 } from '@/lib/customizer-runtime'
 import { emptyConfigFormState } from '@/lib/customizer-runtime'
+import { isPoolPlaneProductSlug } from '@/lib/customizer-resolver'
 import { cn } from '@/lib/utils'
 
 interface ProductConfiguratorProps {
   productId: number
+  /** Shop-Slug (z. B. poolplane) fuer produktspezifische UI */
+  productSlug?: string
   productName: string
   price: string
   hints?: ConfiguratorHints
@@ -259,6 +262,7 @@ function hasConditionalClosureExtras(choices: ResolvedChoice[]): boolean {
 function getDynamicRequiredFields(
   form: ConfigFormState,
   resolvedConfig: ResolvedCustomizerConfig,
+  productSlug?: string,
 ): ConfigFormField[] {
   const dynamic: ConfigFormField[] = []
 
@@ -272,6 +276,14 @@ function getDynamicRequiredFields(
 
   if (resolvedConfig.steps.includes('door') && form.hasDoor === 'yes') {
     dynamic.push('doorWidthCm', 'doorHeightCm')
+  }
+
+  if (
+    isPoolPlaneProductSlug(productSlug) &&
+    resolvedConfig.steps.includes('extras') &&
+    resolvedConfig.options.extras.length > 0
+  ) {
+    dynamic.push('extrasSelected')
   }
 
   return dynamic
@@ -296,12 +308,17 @@ const REQUIRED_FIELD_LABELS: Partial<Record<ConfigFormField, string>> = {
   closureType: 'Verschlussart',
   frontClosure: 'Frontverschluss',
   backClosure: 'Rueckenverschluss',
+  extrasSelected: 'Extras',
 }
 
 function getRequiredFieldLabel(
   field: ConfigFormField,
   resolvedConfig: ResolvedCustomizerConfig,
+  productSlug?: string,
 ): string {
+  if (field === 'extrasSelected' && isPoolPlaneProductSlug(productSlug)) {
+    return 'Hohlsaum'
+  }
   const dimensionField = resolvedConfig.dimensions.fields.find((entry) => entry.key === field)
   if (dimensionField) return dimensionField.label
   return REQUIRED_FIELD_LABELS[field] ?? field
@@ -353,6 +370,8 @@ function getStepIdForField(
       return 'frontClosure'
     case 'backClosure':
       return 'backClosure'
+    case 'extrasSelected':
+      return 'extras'
     default:
       return null
   }
@@ -816,6 +835,7 @@ function YesNoToggle({
 
 export default function ProductConfigurator({
   productId,
+  productSlug,
   productName,
   price,
   hints,
@@ -845,25 +865,36 @@ export default function ProductConfigurator({
   const priceAbortRef = useRef<AbortController | null>(null)
   const configuratorCardRef = useRef<HTMLDivElement | null>(null)
 
-  const effectiveHints = useMemo(
-    () => mergeHints(resolvedConfig?.hints ?? {
-      color: 'Waehlen Sie Material und Farbe passend zum Einsatzzweck.',
-      size: 'Tragen Sie die benoetigten Masse in Zentimetern ein.',
-      topSide: 'Waehlen Sie die Verarbeitung fuer die obere Seite der Plane.',
-      leftSide: 'Waehlen Sie die Verarbeitung fuer die linke Seite der Plane.',
-      rightSide: 'Waehlen Sie die Verarbeitung fuer die rechte Seite der Plane.',
-      bottomSide: 'Waehlen Sie die Verarbeitung fuer die untere Seite der Plane.',
-      window: 'Wünschen Sie ein Fenster in Ihrer Plane?',
-      door: 'Wünschen Sie eine Tür in Ihrer Plane?',
-      eyelets: 'Waehlen Sie die Oesenkonfiguration.',
-      closureType: 'Waehlen Sie die Verschlussart.',
-      frontClosure: 'Waehlen Sie den Frontverschluss.',
-      backClosure: 'Waehlen Sie den Rueckenverschluss.',
-      extras: 'Definieren Sie zusaetzliche Ausstattungen und Sonderwuensche.',
-      sketch: 'Laden Sie optional eine Skizze hoch.',
-    }, hints),
-    [hints, resolvedConfig],
-  )
+  const poolPlaneUi = isPoolPlaneProductSlug(productSlug)
+
+  const effectiveHints = useMemo(() => {
+    const merged = mergeHints(
+      resolvedConfig?.hints ?? {
+        color: 'Waehlen Sie Material und Farbe passend zum Einsatzzweck.',
+        size: 'Tragen Sie die benoetigten Masse in Zentimetern ein.',
+        topSide: 'Waehlen Sie die Verarbeitung fuer die obere Seite der Plane.',
+        leftSide: 'Waehlen Sie die Verarbeitung fuer die linke Seite der Plane.',
+        rightSide: 'Waehlen Sie die Verarbeitung fuer die rechte Seite der Plane.',
+        bottomSide: 'Waehlen Sie die Verarbeitung fuer die untere Seite der Plane.',
+        window: 'Wünschen Sie ein Fenster in Ihrer Plane?',
+        door: 'Wünschen Sie eine Tür in Ihrer Plane?',
+        eyelets: 'Waehlen Sie die Oesenkonfiguration.',
+        closureType: 'Waehlen Sie die Verschlussart.',
+        frontClosure: 'Waehlen Sie den Frontverschluss.',
+        backClosure: 'Waehlen Sie den Rueckenverschluss.',
+        extras: 'Definieren Sie zusaetzliche Ausstattungen und Sonderwuensche.',
+        sketch: 'Laden Sie optional eine Skizze hoch.',
+      },
+      hints,
+    )
+    if (poolPlaneUi && !(hints?.extras && hints.extras.trim())) {
+      return {
+        ...merged,
+        extras: 'Bitte waehlen Sie eine Hohlsaum-Variante (Pflichtfeld).',
+      }
+    }
+    return merged
+  }, [hints, poolPlaneUi, resolvedConfig])
 
   const steps = resolvedConfig?.steps ?? []
   const stateMessage = describeStateMessage(configuratorState?.message, configuratorState?.warnings)
@@ -873,13 +904,18 @@ export default function ProductConfigurator({
     setOpenStep(resolvedConfig?.steps[0] ?? null)
   }, [initialFormState, resolvedConfig])
 
+  useEffect(() => {
+    if (!poolPlaneUi || !resolvedConfig?.steps.includes('extras')) return
+    setForm((prev) => (prev.hasExtras === 'yes' ? prev : { ...prev, hasExtras: 'yes' }))
+  }, [poolPlaneUi, resolvedConfig?.steps])
+
   const requiredFields = useMemo(() => {
     if (!resolvedConfig) return []
     return [
       ...resolvedConfig.validationRules.requiredFields,
-      ...getDynamicRequiredFields(form, resolvedConfig),
+      ...getDynamicRequiredFields(form, resolvedConfig, productSlug),
     ]
-  }, [form, resolvedConfig])
+  }, [form, productSlug, resolvedConfig])
 
   const hasMinimumForPrice = useMemo(() => {
     if (!resolvedConfig) return false
@@ -922,7 +958,7 @@ export default function ProductConfigurator({
 
     const labels = Array.from(
       new Set(
-        missingRequiredFields.map((field) => getRequiredFieldLabel(field, resolvedConfig)),
+        missingRequiredFields.map((field) => getRequiredFieldLabel(field, resolvedConfig, productSlug)),
       ),
     )
 
@@ -932,7 +968,7 @@ export default function ProductConfigurator({
       remainingCount > 0 ? ` und ${remainingCount} weitere Angaben` : ''
 
     return `Bitte vervollstaendigen Sie zuerst: ${visibleLabels.join(', ')}${suffix}.`
-  }, [canSubmit, missingRequiredFields, resolvedConfig])
+  }, [canSubmit, missingRequiredFields, productSlug, resolvedConfig])
 
   const stepsWithMissingFields = useMemo(() => {
     if (!resolvedConfig) return new Set<StepId>()
@@ -1602,25 +1638,44 @@ export default function ProductConfigurator({
             ) : null}
 
             {steps.includes('extras') ? (
-              <StepAccordionItem id="extras" title={STEP_TITLES.extras} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('extras')}>
+              <StepAccordionItem
+                id="extras"
+                title={poolPlaneUi ? 'Hohlsaum' : STEP_TITLES.extras}
+                openStep={openStep}
+                onToggle={toggleStep}
+                showWarning={stepsWithMissingFields.has('extras')}
+              >
                 <HintPanel text={effectiveHints.extras} />
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-[#0F2B52]">Extras hinzufuegen</p>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={form.hasExtras === 'yes'}
-                      onClick={() => setField('hasExtras', form.hasExtras === 'yes' ? 'no' : 'yes')}
-                      className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${form.hasExtras === 'yes' ? 'border-emerald-500 bg-emerald-500' : 'border-[#CFE0F5] bg-white'}`}
-                    >
-                      <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${form.hasExtras === 'yes' ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                  {form.hasExtras === 'yes' ? (
+                  {!poolPlaneUi ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-[#0F2B52]">Extras hinzufuegen</p>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={form.hasExtras === 'yes'}
+                        onClick={() => setField('hasExtras', form.hasExtras === 'yes' ? 'no' : 'yes')}
+                        className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${form.hasExtras === 'yes' ? 'border-emerald-500 bg-emerald-500' : 'border-[#CFE0F5] bg-white'}`}
+                      >
+                        <span
+                          className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${form.hasExtras === 'yes' ? 'translate-x-6' : 'translate-x-1'}`}
+                        />
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-sm font-semibold text-[#0F2B52]">
+                      Hohlsaum <span className="font-normal text-red-600">*</span>
+                    </p>
+                  )}
+                  {poolPlaneUi || form.hasExtras === 'yes' ? (
                     <>
                       {resolvedConfig.options.extras.length > 0 ? (
-                        <MultiChoiceGrid choices={resolvedConfig.options.extras} selectedIds={form.extrasSelected} onToggle={(value) => toggleMultiValue('extrasSelected', value)} onPreview={setPreviewChoice} />
+                        <MultiChoiceGrid
+                          choices={resolvedConfig.options.extras}
+                          selectedIds={form.extrasSelected}
+                          onToggle={(value) => toggleMultiValue('extrasSelected', value)}
+                          onPreview={setPreviewChoice}
+                        />
                       ) : null}
                     </>
                   ) : null}

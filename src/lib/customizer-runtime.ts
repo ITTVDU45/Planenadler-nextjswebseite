@@ -68,6 +68,8 @@ export type ConfigFormField =
   | 'closureType'
   | 'frontClosure'
   | 'backClosure'
+  /** Mehrfachauswahl main extras (Pflicht z. B. Poolplane / Hohlsaum) */
+  | 'extrasSelected'
 
 export interface ConfigFormState {
   material: string

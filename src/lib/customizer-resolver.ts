@@ -196,20 +196,25 @@ export interface CustomizerResolveContext {
   productSlug?: string
 }
 
+/** Gleiche Slug-Heuristik wie fuer Massenskizze/Pool im Resolver (Shop-URL). */
+export function isPoolPlaneProductSlug(slug: string | undefined | null): boolean {
+  const s = (slug ?? '').trim().toLowerCase()
+  if (!s) return false
+  return (
+    s.includes('poolplane') ||
+    s.includes('poolabdeckung') ||
+    s.includes('pool-abdeckung') ||
+    s.includes('pool-plan')
+  )
+}
+
 function isPoolProductConfig(
   config: Pick<CustomizerConfig, 'product_title'>,
   context?: CustomizerResolveContext,
 ): boolean {
   const title = (config.product_title ?? '').trim().toLowerCase()
   if (title.includes('pool')) return true
-  const slug = (context?.productSlug ?? '').trim().toLowerCase()
-  if (!slug) return false
-  return (
-    slug.includes('poolplane') ||
-    slug.includes('poolabdeckung') ||
-    slug.includes('pool-abdeckung') ||
-    slug.includes('pool-plan')
-  )
+  return isPoolPlaneProductSlug(context?.productSlug)
 }
 
 function normalizeUnitSelector(value: string | undefined): SupportedUnitSelector {
