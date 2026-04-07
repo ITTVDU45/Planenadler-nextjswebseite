@@ -153,6 +153,50 @@ function isValidImageUrl(url?: string | null): boolean {
   return Boolean(url && url !== 'http://null' && url !== 'http://null/' && !url.endsWith('/null'))
 }
 
+function parseCmFromForm(value: string | undefined): number | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const parsed = Number(trimmed.replace(',', '.'))
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function resolveDimensionDiagramSrc(
+  dim: ResolvedCustomizerConfig['dimensions'],
+  form: ConfigFormState,
+): string | undefined {
+  const fieldKeys = new Set(dim.fields.map((f) => f.key))
+  const hasTerraceHeightsBc =
+    fieldKeys.has('heightRightBCm') && fieldKeys.has('heightLeftCCm')
+
+  const defaultSrc = dim.imageSrc
+  const bGreaterSrc = dim.imageSrcWhenBGreater
+  const cGreaterSrc = dim.imageSrcWhenCGreater
+
+  if (!hasTerraceHeightsBc) {
+    return isValidImageUrl(defaultSrc) ? defaultSrc : undefined
+  }
+
+  const bCm = parseCmFromForm(form.heightRightBCm)
+  const cCm = parseCmFromForm(form.heightLeftCCm)
+
+  if (bCm !== null && cCm !== null) {
+    if (bCm > cCm) {
+      if (isValidImageUrl(bGreaterSrc)) return bGreaterSrc
+      if (isValidImageUrl(defaultSrc)) return defaultSrc
+      return undefined
+    }
+    if (cCm > bCm) {
+      if (isValidImageUrl(cGreaterSrc)) return cGreaterSrc
+      if (isValidImageUrl(defaultSrc)) return defaultSrc
+      return undefined
+    }
+  }
+
+  if (isValidImageUrl(defaultSrc)) return defaultSrc
+  return undefined
+}
+
 function normalizeChoiceSelector(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase()
 }
@@ -809,6 +853,15 @@ export default function ProductConfigurator({
     return resolvedConfig.validationRules.minimumForPrice.every((field) => isFilled(field, form))
   }, [form, resolvedConfig])
 
+  const dimensionDiagramSrc = useMemo(() => {
+    if (!resolvedConfig) return undefined
+    return resolveDimensionDiagramSrc(resolvedConfig.dimensions, form)
+  }, [
+    resolvedConfig,
+    form.heightRightBCm,
+    form.heightLeftCCm,
+  ])
+
   const canSubmit = useMemo(() => {
     if (!resolvedConfig) return false
     if (
@@ -1312,6 +1365,18 @@ export default function ProductConfigurator({
                     </label>
                   ))}
                 </div>
+                {isValidImageUrl(dimensionDiagramSrc) ? (
+                  <div className="mt-4 overflow-hidden rounded-xl border border-[#CFE0F5] bg-[#F8FBFF] p-3">
+                    <img
+                      src={dimensionDiagramSrc}
+                      alt="Massenskizze zur Orientierung bei den Angaben A, B und C"
+                      className="mx-auto max-h-72 w-full max-w-lg object-contain"
+                      width={800}
+                      height={600}
+                      decoding="async"
+                    />
+                  </div>
+                ) : null}
               </StepAccordionItem>
             ) : null}
 

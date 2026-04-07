@@ -272,6 +272,11 @@ function resolveDimensionConfig(
     ? dimensions.dimension_description
     : DEFAULT_HINTS.size
 
+  const dimensionDiagramVariants = {
+    imageSrcWhenBGreater: cleanImageUrl(dimensions?.dimension_b_image_url),
+    imageSrcWhenCGreater: cleanImageUrl(dimensions?.dimension_c_image_url),
+  }
+
   const makeField = (
     key: ConfigFormField,
     label: string,
@@ -284,6 +289,7 @@ function resolveDimensionConfig(
         title: 'Masse waehlen',
         description: dimensionDescription,
         imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
+        ...dimensionDiagramVariants,
         minimumValue: minValue,
         fields: [
           makeField('sideACm', 'Seite A (cm)'),
@@ -298,6 +304,7 @@ function resolveDimensionConfig(
         title: 'Masse waehlen',
         description: dimensionDescription,
         imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
+        ...dimensionDiagramVariants,
         minimumValue: minValue,
         fields: [
           makeField('trailerWidthCm', 'Anhaengerbreite A (cm)'),
@@ -311,6 +318,7 @@ function resolveDimensionConfig(
           title: 'Masse waehlen',
           description: dimensionDescription,
           imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
+          ...dimensionDiagramVariants,
           minimumValue: minValue,
           fields: [
             makeField('rectangularLengthCm', 'Laenge (cm)'),
@@ -323,6 +331,7 @@ function resolveDimensionConfig(
         title: 'Masse waehlen',
         description: dimensionDescription,
         imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
+        ...dimensionDiagramVariants,
         minimumValue: minValue,
         fields: [
           makeField('rectangularLengthCm', 'Laenge A (cm)'),
@@ -337,6 +346,7 @@ function resolveDimensionConfig(
           title: 'Masse waehlen',
           description: dimensionDescription,
           imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
+          ...dimensionDiagramVariants,
           minimumValue: minValue,
           fields: [
             makeField('lengthACm', 'Laenge A (cm)'),
@@ -349,6 +359,7 @@ function resolveDimensionConfig(
         title: 'Masse waehlen',
         description: dimensionDescription,
         imageSrc: cleanImageUrl(dimensions?.dimension_image_url),
+        ...dimensionDiagramVariants,
         minimumValue: minValue,
         fields: [
           makeField('lengthACm', 'Laenge A (cm)'),

@@ -191,6 +191,10 @@ export interface ResolvedDimensionConfig {
   title: string
   description?: string
   imageSrc?: string
+  /** Skizze wenn Hoehe rechts B > Hoehe links C (Customizer: „Image if B greater“) */
+  imageSrcWhenBGreater?: string
+  /** Skizze wenn Hoehe links C > Hoehe rechts B (Customizer: „Image if C greater“) */
+  imageSrcWhenCGreater?: string
   fields: ResolvedDimensionField[]
   minimumValue?: number
 }
