@@ -17,7 +17,7 @@ export const SHOP_FAQ_ITEMS: FaqItem[] = [
     id: 'materialien',
     question: 'Welche Materialien werden verwendet?',
     answer:
-      'Wir setzen auf hochwertiges PVC und PE-Material, je nach Einsatzbereich. Die Planen sind UV- und witterungsbeständig, reißfest und langlebig. Gern beraten wir Sie zur passenden Stärke und Oberfläche.',
+      'Wir setzen auf hochwertiges PVC Material, je nach Einsatzbereich. Die Planen sind UV- und witterungsbeständig, reißfest und langlebig. Gern beraten wir Sie zur passenden Stärke und Oberfläche.',
   },
   {
     id: 'garantie',

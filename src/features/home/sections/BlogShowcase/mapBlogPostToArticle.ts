@@ -1,7 +1,7 @@
 import type { BlogPost } from '@/features/blog/types'
 import type { Article, ArticleCategory } from './types'
 
-const BLOG_AUTHOR_NAME = 'Ahmet Karadag'
+const BLOG_AUTHOR_NAME = 'Adler Planen'
 const BLOG_AUTHOR_AVATAR_SRC = '/images/Planenadler%20bild%20von%20Mitarbeiter.png'
 
 export interface WordPressBlogPost {
