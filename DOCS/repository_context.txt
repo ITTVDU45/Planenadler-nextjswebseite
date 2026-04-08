@@ -573,6 +573,7 @@ src/
     seo-schema.ts
     seo.ts
     sync.ts
+    tarpaulin-constants.ts
     tarpaulin-opening-rules.ts
     utils.ts
     woo-session-cookie.ts
@@ -3166,6 +3167,105 @@ These files are not imported by any other file in the project.
 - [ ] `IProduct`
 - [ ] `IProductRootObject`
 - [ ] `IVariationNodes`
+````
+
+## File: .github/workflows/react-doctor.yml
+````yaml
+name: React Doctor
+on:
+  pull_request:
+    branches: [main, master]
+jobs:
+  react-doctor:
+    name: React Health Check
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm ci
+      - name: Run React Doctor
+        id: doctor
+        run: |
+          # Run react-doctor via local devDependency (avoids npx isolation issues with typescript)
+          npm run doctor 2>&1 | tee /tmp/react-doctor-raw.txt
+          # Strip ANSI escape codes for clean output
+          sed 's/\x1b\[[0-9;]*m//g; s/\x1b\[[0-9;]*[A-Za-z]//g' /tmp/react-doctor-raw.txt | tr -d '\r' > /tmp/react-doctor-output.txt
+          # Extract score from the cleaned output (matches "96 / 100" pattern)
+          SCORE=$(grep -oP '\d+ / 100' /tmp/react-doctor-output.txt | head -1 || echo "unknown")
+          echo "score=$SCORE" >> "$GITHUB_OUTPUT"
+          # Extract just the numeric score for threshold check
+          SCORE_NUM=$(echo "$SCORE" | grep -oP '^\d+' || echo "0")
+          echo "score_num=$SCORE_NUM" >> "$GITHUB_OUTPUT"
+          echo "Detected score: $SCORE (numeric: $SCORE_NUM)"
+      - name: Post PR comment with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('/tmp/react-doctor-output.txt', 'utf8');
+            const score = '${{ steps.doctor.outputs.score }}';
+            const body = [
+              `## 🩺 React Doctor — Score: ${score}`,
+              '',
+              '<details>',
+              '<summary>Full diagnostics</summary>',
+              '',
+              '```',
+              output.trim(),
+              '```',
+              '',
+              '</details>',
+              '',
+              '> Powered by [react-doctor](https://github.com/millionco/react-doctor)',
+            ].join('\n');
+            // Find existing comment to update instead of creating duplicates
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(
+              (c) => c.body?.includes('🩺 React Doctor')
+            );
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## 🩺 React Doctor — Score: ${{ steps.doctor.outputs.score }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/react-doctor-output.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Check score threshold
+        run: |
+          SCORE="${{ steps.doctor.outputs.score_num }}"
+          SCORE="${SCORE:-0}"
+          THRESHOLD=80
+          echo "React Doctor score: $SCORE (threshold: $THRESHOLD)"
+          if [ "$SCORE" -lt "$THRESHOLD" ]; then
+            echo "::error::React Doctor score $SCORE is below threshold $THRESHOLD"
+            exit 1
+          fi
 ````
 
 ## File: DOCS/wordpress/planenadler-provider-add-payment-method-patch.php
@@ -6444,97 +6544,6 @@ export async function GET(request: NextRequest) {
       { status: 502 },
     )
   }
-}
-````
-
-## File: src/app/api/graphql/route.ts
-````typescript
-import { NextRequest, NextResponse } from 'next/server'
-import { getClientIp } from '@/lib/client-ip'
-import { checkRateLimit } from '@/lib/rate-limit'
-import {
-  appendWooSessionCookie,
-  normalizeWooSessionToken,
-  readWooSessionTokenFromRequest,
-} from '@/lib/woo-session-cookie'
-import { validateSameOrigin } from '@/app/api/auth/wordpress/_lib'
-import { isRequestHttps } from '@/lib/request-is-https'
-const MAX_BODY_BYTES = 512 * 1024
-const UPSTREAM_TIMEOUT_MS = 30_000
-/**
- * Server: GRAPHQL_SERVER_URL (nicht im Client-Bundle) bevorzugen.
- * Öffentliche URL nur Fallback; CORS auf WordPress-Seite auf eure Next-Domain begrenzen.
- */
-function resolveGraphqlUrl(): string | null {
-  const server = process.env.GRAPHQL_SERVER_URL?.trim()
-  if (server) return server
-  return process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim() || null
-}
-export async function POST(request: NextRequest) {
-  const originError = validateSameOrigin(request)
-  if (originError) {
-    return NextResponse.json({ error: originError }, { status: 403 })
-  }
-  const ip = getClientIp(request)
-  const rl = checkRateLimit(`graphql:${ip}`, { windowMs: 60_000, max: 100 })
-  if (!rl.ok) {
-    return NextResponse.json(
-      { error: 'Zu viele Anfragen. Bitte kurz warten.' },
-      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec ?? 60) } },
-    )
-  }
-  const url = resolveGraphqlUrl()
-  if (!url) {
-    return NextResponse.json({ error: 'GraphQL ist nicht konfiguriert.' }, { status: 500 })
-  }
-  const contentLength = request.headers.get('content-length')
-  if (contentLength && Number(contentLength) > MAX_BODY_BYTES) {
-    return NextResponse.json({ error: 'Payload zu gross.' }, { status: 413 })
-  }
-  let bodyText: string
-  try {
-    bodyText = await request.text()
-  } catch {
-    return NextResponse.json({ error: 'Body konnte nicht gelesen werden.' }, { status: 400 })
-  }
-  if (bodyText.length > MAX_BODY_BYTES) {
-    return NextResponse.json({ error: 'Payload zu gross.' }, { status: 413 })
-  }
-  const sessionToken = readWooSessionTokenFromRequest(request)
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  }
-  if (sessionToken) {
-    headers['woocommerce-session'] = `Session ${sessionToken}`
-  }
-  let wpRes: Response
-  try {
-    wpRes = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: bodyText,
-      cache: 'no-store',
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-    })
-  } catch {
-    return NextResponse.json({ error: 'GraphQL-Upstream nicht erreichbar.' }, { status: 502 })
-  }
-  const responseBody = await wpRes.text()
-  const nextRes = new NextResponse(responseBody, {
-    status: wpRes.status,
-    headers: {
-      'Content-Type': wpRes.headers.get('content-type') || 'application/json',
-    },
-  })
-  const newSession = normalizeWooSessionToken(wpRes.headers.get('woocommerce-session'))
-  const isHttps = isRequestHttps(request)
-  if (newSession === null && wpRes.headers.get('woocommerce-session') === 'false') {
-    appendWooSessionCookie(nextRes, null, isHttps)
-  } else if (newSession) {
-    appendWooSessionCookie(nextRes, newSession, isHttps)
-  }
-  return nextRes
 }
 ````
 
@@ -15287,190 +15296,12 @@ export async function syncPendingActions() {
 }
 ````
 
-## File: src/lib/tarpaulin-opening-rules.ts
+## File: src/lib/tarpaulin-constants.ts
 ````typescript
-import type { ConfigFormState, ResolvedCustomizerConfig } from '@/lib/customizer-runtime'
+/** Gemeinsame Konstanten (keine Logik) – vermeidet Zyklen mit customizer-pricing. */
 export const TARPAULIN_OPENING_MARGIN_CM = 10
 export const TARPAULIN_MAX_WINDOW_HEIGHT_CM = 130
 export const TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM = 10
-function parseCm(value: string | undefined | null): number | null {
-  if (value === undefined || value === null) return null
-  const trimmed = String(value).trim()
-  if (!trimmed) return null
-  const parsed = Number(trimmed.replace(',', '.'))
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
-}
-/** Terrassen-Tarp (3 Massfelder A/B/C), kein 2-Feld-Pool-Tarp. */
-export function isTerraceTarpaulinLayout(resolvedConfig: ResolvedCustomizerConfig): boolean {
-  if (resolvedConfig.productType !== 'tarpaulins') return false
-  return resolvedConfig.dimensions.fields.some((f) => f.key === 'heightLeftCCm')
-}
-function usableHeightCm(form: ConfigFormState, hasLeftHeight: boolean): number | null {
-  const b = parseCm(form.heightRightBCm)
-  if (b === null || b <= 0) return null
-  if (!hasLeftHeight) return b
-  const c = parseCm(form.heightLeftCCm)
-  if (c === null || c <= 0) return null
-  return Math.min(b, c)
-}
-/** Aufsteigend sortiert; benachbarte Intervalle mindestens gapCm auseinander. */
-function horizontalOpeningsSeparated(
-  intervals: Array<[number, number]>,
-  gapCm: number,
-): boolean {
-  const valid = intervals.filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b >= a)
-  if (valid.length <= 1) return true
-  const sorted = [...valid].sort((x, y) => x[0] - y[0])
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const end = sorted[i][1]
-    const nextStart = sorted[i + 1][0]
-    if (end + gapCm > nextStart) return false
-  }
-  return true
-}
-export function getTarpaulinOpeningValidationIssues(
-  resolvedConfig: ResolvedCustomizerConfig,
-  form: ConfigFormState,
-): string[] {
-  if (!isTerraceTarpaulinLayout(resolvedConfig)) return []
-  const lengthA = parseCm(form.lengthACm)
-  const hasLeftHeight = resolvedConfig.dimensions.fields.some((f) => f.key === 'heightLeftCCm')
-  const usableH = usableHeightCm(form, hasLeftHeight)
-  const issues: string[] = []
-  const needsWindow = form.hasWindow === 'yes' && resolvedConfig.steps.includes('window')
-  const needsDoor = form.hasDoor === 'yes' && resolvedConfig.steps.includes('door')
-  if (!needsWindow && !needsDoor) return []
-  if (lengthA === null || lengthA <= 0) {
-    issues.push('Bitte zuerst eine gueltige Laenge A (cm) eintragen, damit Fenster- und Tuer-Masse geprueft werden koennen.')
-    return issues
-  }
-  if (usableH === null || usableH <= 0) {
-    issues.push('Bitte zuerst gueltige Hoehen B/C (cm) eintragen, damit Fenster- und Tuer-Masse geprueft werden koennen.')
-    return issues
-  }
-  const m = TARPAULIN_OPENING_MARGIN_CM
-  const gap = TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM
-  const maxWinH = TARPAULIN_MAX_WINDOW_HEIGHT_CM
-  type HInterval = { left: number; right: number }
-  const windowIntervals: HInterval[] = []
-  if (needsWindow && form.windowSplit !== 'yes') {
-    const side = parseCm(form.windowDistanceSideCm)
-    const bottom = parseCm(form.windowDistanceBottomCm)
-    const w = parseCm(form.windowWidthCm)
-    const h = parseCm(form.windowHeightCm)
-    if (side !== null && bottom !== null && w !== null && h !== null) {
-      if (side < m) {
-        issues.push(`Abstand Fenster zum Seitenrand (c) muss mindestens ${m} cm betragen.`)
-      }
-      if (bottom < m) {
-        issues.push(`Abstand Fenster zur unteren Seite (d) muss mindestens ${m} cm betragen.`)
-      }
-      if (h > maxWinH) {
-        issues.push(`Fensterhoehe (b) darf hoechstens ${maxWinH} cm betragen.`)
-      }
-      if (w > lengthA - 2 * m) {
-        issues.push(`Fensterbreite (a) darf hoechstens ${lengthA - 2 * m} cm betragen (je ${m} cm Rand links/rechts).`)
-      }
-      if (side + w > lengthA - m) {
-        issues.push(
-          'Fenster ragt ueber die rechte Kante: Abstand (c) plus Breite (a) muss so gewaehlt sein, dass rechts mindestens 10 cm Rand bleiben.',
-        )
-      }
-      if (bottom + h > usableH - m) {
-        issues.push(
-          'Fenster ragt nach oben: Abstand unten (d) plus Hoehe (b) muss so gewaehlt sein, dass oben mindestens 10 cm Rand bleiben.',
-        )
-      }
-      windowIntervals.push({ left: side, right: side + w })
-    }
-  }
-  if (needsWindow && form.windowSplit === 'yes') {
-    const leftM = parseCm(form.windowSplitLeftDistanceLeftCm)
-    const rightM = parseCm(form.windowSplitRightDistanceRightCm)
-    const w1 = parseCm(form.windowSplitLeftWidthCm)
-    const w2 = parseCm(form.windowSplitRightWidthCm)
-    const h1 = parseCm(form.windowSplitLeftHeightCm)
-    const h2 = parseCm(form.windowSplitRightHeightCm)
-    const b1 = parseCm(form.windowSplitLeftDistanceBottomCm)
-    const b2 = parseCm(form.windowSplitRightDistanceBottomCm)
-    if (
-      leftM !== null &&
-      rightM !== null &&
-      w1 !== null &&
-      w2 !== null &&
-      h1 !== null &&
-      h2 !== null &&
-      b1 !== null &&
-      b2 !== null
-    ) {
-      if (leftM < m) {
-        issues.push(`Abstand linkes Fenster zum linken Rand muss mindestens ${m} cm betragen.`)
-      }
-      if (rightM < m) {
-        issues.push(`Abstand rechtes Fenster zum rechten Rand muss mindestens ${m} cm betragen.`)
-      }
-      if (w1 <= 0 || w2 <= 0) {
-        issues.push('Fensterbreiten links und rechts muessen groesser als 0 sein.')
-      }
-      if (leftM + w1 + gap + w2 + rightM > lengthA) {
-        issues.push(
-          `Summe aus linkem Rand, beiden Fensterbreiten, ${gap} cm Zwischenraum und rechtem Rand darf die Laenge A (${lengthA} cm) nicht ueberschreiten.`,
-        )
-      }
-      if (h1 > maxWinH) issues.push(`Fensterhoehe links darf hoechstens ${maxWinH} cm betragen.`)
-      if (h2 > maxWinH) issues.push(`Fensterhoehe rechts darf hoechstens ${maxWinH} cm betragen.`)
-      if (b1 < m) {
-        issues.push(`Abstand linkes Fenster zum unteren Rand muss mindestens ${m} cm betragen.`)
-      }
-      if (b2 < m) {
-        issues.push(`Abstand rechtes Fenster zum unteren Rand muss mindestens ${m} cm betragen.`)
-      }
-      if (b1 + h1 > usableH - m) {
-        issues.push('Linkes Fenster: Abstand unten plus Hoehe verletzt den oberen Mindestrand (10 cm).')
-      }
-      if (b2 + h2 > usableH - m) {
-        issues.push('Rechtes Fenster: Abstand unten plus Hoehe verletzt den oberen Mindestrand (10 cm).')
-      }
-      const x1 = leftM
-      const x2 = leftM + w1 + gap
-      windowIntervals.push({ left: x1, right: x1 + w1 }, { left: x2, right: x2 + w2 })
-    }
-  }
-  let doorInterval: HInterval | null = null
-  if (needsDoor) {
-    const dLeft = parseCm(form.doorDistanceLeftCm)
-    const dw = parseCm(form.doorWidthCm)
-    const dh = parseCm(form.doorHeightCm)
-    if (dLeft !== null && dw !== null && dh !== null) {
-      if (dLeft < m) {
-        issues.push(`Abstand der Tuer zur linken Seite muss mindestens ${m} cm betragen.`)
-      }
-      if (dLeft + dw > lengthA - m) {
-        issues.push(
-          'Tuer ragt ueber die rechte Kante: Abstand plus Tuerbreite muss so sein, dass rechts mindestens 10 cm Rand bleiben.',
-        )
-      }
-      if (dh > usableH - m) {
-        issues.push(
-          'Tuerhoehe ist zu gross fuer die gewaehlte Planenhoehe (unterer Rand 10 cm, oberer Mindestrand 10 cm).',
-        )
-      }
-      doorInterval = { left: dLeft, right: dLeft + dw }
-    }
-  }
-  if (windowIntervals.length > 0 && doorInterval) {
-    const pairs: Array<[number, number]> = [
-      ...windowIntervals.map((i) => [i.left, i.right] as [number, number]),
-      [doorInterval.left, doorInterval.right],
-    ]
-    if (!horizontalOpeningsSeparated(pairs, gap)) {
-      issues.push(
-        `Fenster und Tuer duerfen sich nicht ueberlappen; zwischen den Oeffnungen muessen mindestens ${gap} cm frei bleiben.`,
-      )
-    }
-  }
-  return issues
-}
 ````
 
 ## File: src/lib/utils.ts
@@ -19419,6 +19250,114 @@ export async function POST(request: NextRequest) {
 }
 ````
 
+## File: src/app/api/graphql/route.ts
+````typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { getClientIp } from '@/lib/client-ip'
+import { checkRateLimit } from '@/lib/rate-limit'
+import {
+  appendWooSessionCookie,
+  normalizeWooSessionToken,
+  readWooSessionTokenFromRequest,
+} from '@/lib/woo-session-cookie'
+import { validateSameOrigin } from '@/app/api/auth/wordpress/_lib'
+import { isRequestHttps } from '@/lib/request-is-https'
+const MAX_BODY_BYTES = 512 * 1024
+const UPSTREAM_TIMEOUT_MS = 30_000
+/**
+ * Server: GRAPHQL_SERVER_URL (nicht im Client-Bundle) bevorzugen.
+ * Öffentliche URL nur Fallback; CORS auf WordPress-Seite auf eure Next-Domain begrenzen.
+ */
+function resolveGraphqlUrl(): string | null {
+  const server = process.env.GRAPHQL_SERVER_URL?.trim()
+  if (server) return server
+  return process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim() || null
+}
+export async function POST(request: NextRequest) {
+  const originError = validateSameOrigin(request)
+  if (originError) {
+    return NextResponse.json({ error: originError }, { status: 403 })
+  }
+  const ip = getClientIp(request)
+  const rl = checkRateLimit(`graphql:${ip}`, { windowMs: 60_000, max: 100 })
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Zu viele Anfragen. Bitte kurz warten.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec ?? 60) } },
+    )
+  }
+  const url = resolveGraphqlUrl()
+  if (!url) {
+    return NextResponse.json({ error: 'GraphQL ist nicht konfiguriert.' }, { status: 500 })
+  }
+  const contentLength = request.headers.get('content-length')
+  if (contentLength && Number(contentLength) > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: 'Payload zu gross.' }, { status: 413 })
+  }
+  let bodyText: string
+  try {
+    bodyText = await request.text()
+  } catch {
+    return NextResponse.json({ error: 'Body konnte nicht gelesen werden.' }, { status: 400 })
+  }
+  if (bodyText.length > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: 'Payload zu gross.' }, { status: 413 })
+  }
+  const sessionToken = readWooSessionTokenFromRequest(request)
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  }
+  if (sessionToken) {
+    headers['woocommerce-session'] = `Session ${sessionToken}`
+  }
+  let wpRes: Response
+  try {
+    wpRes = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: bodyText,
+      cache: 'no-store',
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    })
+  } catch {
+    return NextResponse.json({ error: 'GraphQL-Upstream nicht erreichbar.' }, { status: 502 })
+  }
+  let responseBody: string
+  try {
+    responseBody = await wpRes.text()
+  } catch (readErr) {
+    console.error('[api/graphql] upstream body read failed', readErr)
+    return NextResponse.json(
+      { errors: [{ message: 'GraphQL-Upstream-Antwort konnte nicht gelesen werden.' }] },
+      { status: 502 },
+    )
+  }
+  try {
+    const nextRes = new NextResponse(responseBody, {
+      status: wpRes.status,
+      headers: {
+        'Content-Type': wpRes.headers.get('content-type') || 'application/json',
+      },
+    })
+    const newSession = normalizeWooSessionToken(wpRes.headers.get('woocommerce-session'))
+    const isHttps = isRequestHttps(request)
+    if (newSession === null && wpRes.headers.get('woocommerce-session') === 'false') {
+      appendWooSessionCookie(nextRes, null, isHttps)
+    } else if (newSession) {
+      appendWooSessionCookie(nextRes, newSession, isHttps)
+    }
+    return nextRes
+  } catch (buildErr) {
+    console.error('[api/graphql] response assembly failed', buildErr)
+    return NextResponse.json(
+      { errors: [{ message: 'GraphQL-Proxy: Antwort konnte nicht aufbereitet werden.' }] },
+      { status: 502 },
+    )
+  }
+}
+````
+
 ## File: src/app/api/mein-konto/payment-methods/redirect/route.ts
 ````typescript
 import { NextResponse } from 'next/server'
@@ -22812,6 +22751,227 @@ export async function fetchGoogleReviews(): Promise<GoogleReviewData> {
 }
 ````
 
+## File: src/lib/tarpaulin-opening-rules.ts
+````typescript
+import type { ConfigFormState, ResolvedCustomizerConfig } from '@/lib/customizer-runtime'
+import {
+  TARPAULIN_MAX_WINDOW_HEIGHT_CM,
+  TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM,
+  TARPAULIN_OPENING_MARGIN_CM,
+} from '@/lib/tarpaulin-constants'
+export {
+  TARPAULIN_MAX_WINDOW_HEIGHT_CM,
+  TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM,
+  TARPAULIN_OPENING_MARGIN_CM,
+} from '@/lib/tarpaulin-constants'
+function parseCm(value: string | undefined | null): number | null {
+  if (value === undefined || value === null) return null
+  const trimmed = String(value).trim()
+  if (!trimmed) return null
+  const parsed = Number(trimmed.replace(',', '.'))
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+}
+function pushUnique(issues: string[], msg: string): void {
+  if (!issues.includes(msg)) issues.push(msg)
+}
+/** Terrassen-Tarp (3 Massfelder A/B/C), kein 2-Feld-Pool-Tarp. */
+export function isTerraceTarpaulinLayout(resolvedConfig: ResolvedCustomizerConfig): boolean {
+  if (resolvedConfig.productType !== 'tarpaulins') return false
+  return resolvedConfig.dimensions.fields.some((f) => f.key === 'heightLeftCCm')
+}
+function usableHeightCm(form: ConfigFormState, hasLeftHeight: boolean): number | null {
+  const b = parseCm(form.heightRightBCm)
+  if (b === null || b <= 0) return null
+  if (!hasLeftHeight) return b
+  const c = parseCm(form.heightLeftCCm)
+  if (c === null || c <= 0) return null
+  return Math.min(b, c)
+}
+/** Aufsteigend sortiert; benachbarte Intervalle mindestens gapCm auseinander. */
+function horizontalOpeningsSeparated(
+  intervals: Array<[number, number]>,
+  gapCm: number,
+): boolean {
+  const valid = intervals.filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b >= a)
+  if (valid.length <= 1) return true
+  const sorted = [...valid].sort((x, y) => x[0] - y[0])
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const end = sorted[i][1]
+    const nextStart = sorted[i + 1][0]
+    if (end + gapCm > nextStart) return false
+  }
+  return true
+}
+export function getTarpaulinOpeningValidationIssues(
+  resolvedConfig: ResolvedCustomizerConfig,
+  form: ConfigFormState,
+): string[] {
+  if (!isTerraceTarpaulinLayout(resolvedConfig)) return []
+  const lengthA = parseCm(form.lengthACm)
+  const hasLeftHeight = resolvedConfig.dimensions.fields.some((f) => f.key === 'heightLeftCCm')
+  const usableH = usableHeightCm(form, hasLeftHeight)
+  const issues: string[] = []
+  const needsWindow = form.hasWindow === 'yes' && resolvedConfig.steps.includes('window')
+  const needsDoor = form.hasDoor === 'yes' && resolvedConfig.steps.includes('door')
+  if (!needsWindow && !needsDoor) return []
+  if (lengthA === null || lengthA <= 0) {
+    pushUnique(
+      issues,
+      'Bitte zuerst eine gueltige Laenge A (cm) eintragen, damit Fenster- und Tuer-Masse geprueft werden koennen.',
+    )
+    return issues
+  }
+  if (usableH === null || usableH <= 0) {
+    pushUnique(
+      issues,
+      'Bitte zuerst gueltige Hoehen B/C (cm) eintragen, damit Fenster- und Tuer-Masse geprueft werden koennen.',
+    )
+    return issues
+  }
+  const m = TARPAULIN_OPENING_MARGIN_CM
+  const gap = TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM
+  const maxWinH = TARPAULIN_MAX_WINDOW_HEIGHT_CM
+  type HInterval = { left: number; right: number }
+  const windowIntervals: HInterval[] = []
+  if (needsWindow && form.windowSplit !== 'yes') {
+    const side = parseCm(form.windowDistanceSideCm)
+    const bottom = parseCm(form.windowDistanceBottomCm)
+    const w = parseCm(form.windowWidthCm)
+    const h = parseCm(form.windowHeightCm)
+    if (side !== null && side < m) {
+      pushUnique(issues, `Abstand Fenster zum Seitenrand (c) muss mindestens ${m} cm betragen.`)
+    }
+    if (bottom !== null && bottom < m) {
+      pushUnique(issues, `Abstand Fenster zur unteren Seite (d) muss mindestens ${m} cm betragen.`)
+    }
+    if (h !== null && h > maxWinH) {
+      pushUnique(issues, `Fensterhoehe (b) darf hoechstens ${maxWinH} cm betragen.`)
+    }
+    if (w !== null && w > lengthA - 2 * m) {
+      pushUnique(
+        issues,
+        `Fensterbreite (a) darf hoechstens ${lengthA - 2 * m} cm betragen (je ${m} cm Rand links/rechts).`,
+      )
+    }
+    if (side !== null && w !== null && side + w > lengthA - m) {
+      pushUnique(
+        issues,
+        'Fenster ragt ueber die rechte Kante: Abstand (c) plus Breite (a) muss so gewaehlt sein, dass rechts mindestens 10 cm Rand bleiben.',
+      )
+    }
+    if (bottom !== null && h !== null && bottom + h > usableH - m) {
+      pushUnique(
+        issues,
+        'Fenster ragt nach oben: Abstand unten (d) plus Hoehe (b) muss so gewaehlt sein, dass oben mindestens 10 cm Rand bleiben.',
+      )
+    }
+    if (side !== null && w !== null) {
+      windowIntervals.push({ left: side, right: side + w })
+    }
+  }
+  if (needsWindow && form.windowSplit === 'yes') {
+    const leftM = parseCm(form.windowSplitLeftDistanceLeftCm)
+    const rightM = parseCm(form.windowSplitRightDistanceRightCm)
+    const w1 = parseCm(form.windowSplitLeftWidthCm)
+    const w2 = parseCm(form.windowSplitRightWidthCm)
+    const h1 = parseCm(form.windowSplitLeftHeightCm)
+    const h2 = parseCm(form.windowSplitRightHeightCm)
+    const b1 = parseCm(form.windowSplitLeftDistanceBottomCm)
+    const b2 = parseCm(form.windowSplitRightDistanceBottomCm)
+    if (leftM !== null && leftM < m) {
+      pushUnique(issues, `Abstand linkes Fenster zum linken Rand muss mindestens ${m} cm betragen.`)
+    }
+    if (rightM !== null && rightM < m) {
+      pushUnique(issues, `Abstand rechtes Fenster zum rechten Rand muss mindestens ${m} cm betragen.`)
+    }
+    if (w1 !== null && w1 <= 0) {
+      pushUnique(issues, 'Fensterbreite links muss groesser als 0 sein.')
+    }
+    if (w2 !== null && w2 <= 0) {
+      pushUnique(issues, 'Fensterbreite rechts muss groesser als 0 sein.')
+    }
+    if (
+      leftM !== null &&
+      rightM !== null &&
+      w1 !== null &&
+      w2 !== null &&
+      leftM + w1 + gap + w2 + rightM > lengthA
+    ) {
+      pushUnique(
+        issues,
+        `Summe aus linkem Rand, beiden Fensterbreiten, ${gap} cm Zwischenraum und rechtem Rand darf die Laenge A (${lengthA} cm) nicht ueberschreiten.`,
+      )
+    }
+    if (h1 !== null && h1 > maxWinH) {
+      pushUnique(issues, `Fensterhoehe links darf hoechstens ${maxWinH} cm betragen.`)
+    }
+    if (h2 !== null && h2 > maxWinH) {
+      pushUnique(issues, `Fensterhoehe rechts darf hoechstens ${maxWinH} cm betragen.`)
+    }
+    if (b1 !== null && b1 < m) {
+      pushUnique(issues, `Abstand linkes Fenster zum unteren Rand muss mindestens ${m} cm betragen.`)
+    }
+    if (b2 !== null && b2 < m) {
+      pushUnique(issues, `Abstand rechtes Fenster zum unteren Rand muss mindestens ${m} cm betragen.`)
+    }
+    if (b1 !== null && h1 !== null && b1 + h1 > usableH - m) {
+      pushUnique(
+        issues,
+        'Linkes Fenster: Abstand unten plus Hoehe verletzt den oberen Mindestrand (10 cm).',
+      )
+    }
+    if (b2 !== null && h2 !== null && b2 + h2 > usableH - m) {
+      pushUnique(
+        issues,
+        'Rechtes Fenster: Abstand unten plus Hoehe verletzt den oberen Mindestrand (10 cm).',
+      )
+    }
+    if (leftM !== null && w1 !== null && w2 !== null) {
+      const x1 = leftM
+      const x2 = leftM + w1 + gap
+      windowIntervals.push({ left: x1, right: x1 + w1 }, { left: x2, right: x2 + w2 })
+    }
+  }
+  let doorInterval: HInterval | null = null
+  if (needsDoor) {
+    const dLeft = parseCm(form.doorDistanceLeftCm)
+    const dw = parseCm(form.doorWidthCm)
+    const dh = parseCm(form.doorHeightCm)
+    if (dLeft !== null && dLeft < m) {
+      pushUnique(issues, `Abstand der Tuer zur linken Seite muss mindestens ${m} cm betragen.`)
+    }
+    if (dLeft !== null && dw !== null && dLeft + dw > lengthA - m) {
+      pushUnique(
+        issues,
+        'Tuer ragt ueber die rechte Kante: Abstand plus Tuerbreite muss so sein, dass rechts mindestens 10 cm Rand bleiben.',
+      )
+    }
+    if (dh !== null && dh > usableH - m) {
+      pushUnique(
+        issues,
+        'Tuerhoehe ist zu gross fuer die gewaehlte Planenhoehe (unterer Rand 10 cm, oberer Mindestrand 10 cm).',
+      )
+    }
+    if (dLeft !== null && dw !== null) {
+      doorInterval = { left: dLeft, right: dLeft + dw }
+    }
+  }
+  if (windowIntervals.length > 0 && doorInterval) {
+    const pairs: Array<[number, number]> = [
+      ...windowIntervals.map((i) => [i.left, i.right] as [number, number]),
+      [doorInterval.left, doorInterval.right],
+    ]
+    if (!horizontalOpeningsSeparated(pairs, gap)) {
+      pushUnique(
+        issues,
+        `Fenster und Tuer duerfen sich nicht ueberlappen; zwischen den Oeffnungen muessen mindestens ${gap} cm frei bleiben.`,
+      )
+    }
+  }
+  return issues
+}
+````
+
 ## File: src/pages/api/contact.ts
 ````typescript
 import type { NextApiRequest, NextApiResponse } from 'next'
@@ -24071,105 +24231,6 @@ module.exports = {
   },
   plugins: [],
 };
-````
-
-## File: .github/workflows/react-doctor.yml
-````yaml
-name: React Doctor
-on:
-  pull_request:
-    branches: [main, master]
-jobs:
-  react-doctor:
-    name: React Health Check
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-      - name: Install dependencies
-        run: npm ci
-      - name: Run React Doctor
-        id: doctor
-        run: |
-          # Run react-doctor via local devDependency (avoids npx isolation issues with typescript)
-          npm run doctor 2>&1 | tee /tmp/react-doctor-raw.txt
-          # Strip ANSI escape codes for clean output
-          sed 's/\x1b\[[0-9;]*m//g; s/\x1b\[[0-9;]*[A-Za-z]//g' /tmp/react-doctor-raw.txt | tr -d '\r' > /tmp/react-doctor-output.txt
-          # Extract score from the cleaned output (matches "96 / 100" pattern)
-          SCORE=$(grep -oP '\d+ / 100' /tmp/react-doctor-output.txt | head -1 || echo "unknown")
-          echo "score=$SCORE" >> "$GITHUB_OUTPUT"
-          # Extract just the numeric score for threshold check
-          SCORE_NUM=$(echo "$SCORE" | grep -oP '^\d+' || echo "0")
-          echo "score_num=$SCORE_NUM" >> "$GITHUB_OUTPUT"
-          echo "Detected score: $SCORE (numeric: $SCORE_NUM)"
-      - name: Post PR comment with results
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const fs = require('fs');
-            const output = fs.readFileSync('/tmp/react-doctor-output.txt', 'utf8');
-            const score = '${{ steps.doctor.outputs.score }}';
-            const body = [
-              `## 🩺 React Doctor — Score: ${score}`,
-              '',
-              '<details>',
-              '<summary>Full diagnostics</summary>',
-              '',
-              '```',
-              output.trim(),
-              '```',
-              '',
-              '</details>',
-              '',
-              '> Powered by [react-doctor](https://github.com/millionco/react-doctor)',
-            ].join('\n');
-            // Find existing comment to update instead of creating duplicates
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const botComment = comments.find(
-              (c) => c.body?.includes('🩺 React Doctor')
-            );
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
-      - name: Write job summary
-        if: always()
-        run: |
-          echo "## 🩺 React Doctor — Score: ${{ steps.doctor.outputs.score }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat /tmp/react-doctor-output.txt >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-      - name: Check score threshold
-        run: |
-          SCORE="${{ steps.doctor.outputs.score_num }}"
-          SCORE="${SCORE:-0}"
-          THRESHOLD=80
-          echo "React Doctor score: $SCORE (threshold: $THRESHOLD)"
-          if [ "$SCORE" -lt "$THRESHOLD" ]; then
-            echo "::error::React Doctor score $SCORE is below threshold $THRESHOLD"
-            exit 1
-          fi
 ````
 
 ## File: src/app/(shop)/anmelden/page.tsx
@@ -28213,408 +28274,6 @@ export const GET_PRODUCTS_ALL = /* GraphQL */ `
 `
 ````
 
-## File: src/lib/customizer-pricing.ts
-````typescript
-import type {
-  ConfigFormState,
-  ResolvedChoice,
-  ResolvedCustomizerConfig,
-  SupportedProductType,
-  SupportedUnitSelector,
-} from '@/lib/customizer-runtime'
-import { TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM } from '@/lib/tarpaulin-opening-rules'
-export interface PriceCalculationRequestBody {
-  productId: string | number
-  productType: SupportedProductType
-  unitSelector: SupportedUnitSelector
-  material: string
-  color?: string
-  dimensions: Partial<Record<
-    | 'lengthACm'
-    | 'heightRightBCm'
-    | 'heightLeftCCm'
-    | 'trailerWidthCm'
-    | 'trailerLengthCm'
-    | 'trailerHeightCm'
-    | 'rectangularLengthCm'
-    | 'rectangularWidthCm'
-    | 'rectangularHeightCm'
-    | 'sideACm'
-    | 'sideBCm'
-    | 'sideCCm'
-    | 'sideFCm'
-    | 'sideHCm',
-    string
-  >>
-  selections: {
-    topSide?: string
-    leftSide?: string
-    rightSide?: string
-    bottomSide?: string
-    eyeletEdge?: string
-    closureType?: string
-    frontClosure?: string
-    backClosure?: string
-    doorExtras: string[]
-    extrasSelected: string[]
-    frontClosureExtras: string[]
-    backClosureExtras: string[]
-  }
-  toggles: {
-    hasWindow: boolean
-    hasDoor: boolean
-    hasExtras: boolean
-    windowSplit: boolean
-  }
-  window: {
-    widthCm?: string
-    heightCm?: string
-    distanceSideCm?: string
-    distanceBottomCm?: string
-    splitLeftWidthCm?: string
-    splitRightWidthCm?: string
-    splitLeftHeightCm?: string
-    splitRightHeightCm?: string
-    splitDistanceLeftCm?: string
-    splitDistanceRightCm?: string
-    splitLeftBottomCm?: string
-    splitRightBottomCm?: string
-  }
-  door: {
-    widthCm?: string
-    heightCm?: string
-    distanceLeftCm?: string
-  }
-}
-export interface PriceCalculationResult {
-  total: number
-  formatted: string
-  price: string
-}
-export interface ConfigurationSummaryEntry {
-  label: string
-  value: string
-}
-export interface ConfiguredCartPayload {
-  extraData: Record<string, string>
-  summary: ConfigurationSummaryEntry[]
-}
-function resolveLabels(ids: string[], choices: ResolvedChoice[]): string[] {
-  const choiceMap = new Map(choices.map((choice) => [choice.id, choice.label]))
-  return ids
-    .map((id) => choiceMap.get(id) ?? id)
-    .filter((label) => typeof label === 'string' && label.trim().length > 0)
-}
-function selectionKey(prefix: string, label: string): string {
-  return `${prefix}${label.replace(/\s/g, '_')}`
-}
-function readNumericPrice(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim().length > 0) {
-    const normalized = value.replace(',', '.').replace(/[^\d.-]/g, '')
-    const parsed = Number.parseFloat(normalized)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
-}
-export function buildPriceCalculationRequest(
-  productId: number | string,
-  form: ConfigFormState,
-  resolvedConfig: ResolvedCustomizerConfig,
-): PriceCalculationRequestBody {
-  return {
-    productId,
-    productType: resolvedConfig.productType,
-    unitSelector: resolvedConfig.unitSelector,
-    material: form.material,
-    color: form.color || undefined,
-    dimensions: {
-      lengthACm: form.lengthACm || undefined,
-      heightRightBCm: form.heightRightBCm || undefined,
-      heightLeftCCm: form.heightLeftCCm || undefined,
-      trailerWidthCm: form.trailerWidthCm || undefined,
-      trailerLengthCm: form.trailerLengthCm || undefined,
-      trailerHeightCm: form.trailerHeightCm || undefined,
-      rectangularLengthCm: form.rectangularLengthCm || undefined,
-      rectangularWidthCm: form.rectangularWidthCm || undefined,
-      rectangularHeightCm: form.rectangularHeightCm || undefined,
-      sideACm: form.sideACm || undefined,
-      sideBCm: form.sideBCm || undefined,
-      sideCCm: form.sideCCm || undefined,
-      sideFCm: form.sideFCm || undefined,
-      sideHCm: form.sideHCm || undefined,
-    },
-    selections: {
-      topSide: form.topSide || undefined,
-      leftSide: form.leftSide || undefined,
-      rightSide: form.rightSide || undefined,
-      bottomSide: form.bottomSide || undefined,
-      eyeletEdge: form.eyeletEdge || undefined,
-      closureType: form.closureType || undefined,
-      frontClosure: form.frontClosure || undefined,
-      backClosure: form.backClosure || undefined,
-      doorExtras: resolveLabels(form.doorExtras, resolvedConfig.options.doorExtras),
-      extrasSelected: resolveLabels(form.extrasSelected, resolvedConfig.options.extras),
-      frontClosureExtras: resolveLabels(form.frontClosureExtras, resolvedConfig.options.frontClosureExtras),
-      backClosureExtras: resolveLabels(form.backClosureExtras, resolvedConfig.options.backClosureExtras),
-    },
-    toggles: {
-      hasWindow: form.hasWindow === 'yes',
-      hasDoor: form.hasDoor === 'yes',
-      hasExtras: form.hasExtras === 'yes',
-      windowSplit: form.windowSplit === 'yes',
-    },
-    window: {
-      widthCm: form.windowWidthCm || undefined,
-      heightCm: form.windowHeightCm || undefined,
-      distanceSideCm: form.windowDistanceSideCm || undefined,
-      distanceBottomCm: form.windowDistanceBottomCm || undefined,
-      splitLeftWidthCm: form.windowSplitLeftWidthCm || undefined,
-      splitRightWidthCm: form.windowSplitRightWidthCm || undefined,
-      splitLeftHeightCm: form.windowSplitLeftHeightCm || undefined,
-      splitRightHeightCm: form.windowSplitRightHeightCm || undefined,
-      splitDistanceLeftCm: form.windowSplitLeftDistanceLeftCm || undefined,
-      splitDistanceRightCm: form.windowSplitRightDistanceRightCm || undefined,
-      splitLeftBottomCm: form.windowSplitLeftDistanceBottomCm || undefined,
-      splitRightBottomCm: form.windowSplitRightDistanceBottomCm || undefined,
-    },
-    door: {
-      widthCm: form.doorWidthCm || undefined,
-      heightCm: form.doorHeightCm || undefined,
-      distanceLeftCm: form.doorDistanceLeftCm || undefined,
-    },
-  }
-}
-export function buildWordPressPriceFormData(body: PriceCalculationRequestBody): URLSearchParams {
-  const params = new URLSearchParams()
-  params.set('action', 'prices_update_request')
-  params.set('product_id', String(body.productId))
-  params.set('fabric', body.material || '')
-  switch (body.productType) {
-    case 'lounge':
-      params.set('side_a', body.dimensions.sideACm || '0')
-      params.set('side_b', body.dimensions.sideBCm || '0')
-      params.set('side_c', body.dimensions.sideCCm || '0')
-      params.set('side_f', body.dimensions.sideFCm || '0')
-      params.set('side_h', body.dimensions.sideHCm || '0')
-      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Öse')
-      params.set('closureType', body.selections.closureType || 'Ohne Verschluss')
-      break
-    case 'trailer':
-      params.set('trailer_width', body.dimensions.trailerWidthCm || '0')
-      params.set('trailer_length', body.dimensions.trailerLengthCm || '0')
-      params.set('trailer_height', body.dimensions.trailerHeightCm || '0')
-      params.set('front_clouser', body.selections.frontClosure || 'Without front clouser')
-      params.set('back_clouser', body.selections.backClosure || 'Without back clouser')
-      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Ã–se')
-      params.set('front_clouser_accessories', '')
-      params.set('back_clouser_accessories', '')
-      for (const extra of body.selections.frontClosureExtras) {
-        params.set(selectionKey('Zubehör_für_den_Frontverschluss_', extra), extra)
-      }
-      for (const extra of body.selections.backClosureExtras) {
-        params.set(selectionKey('Zubehör_für_den_Rückenverschluss_', extra), extra)
-      }
-      break
-    case 'rectangular':
-      params.set('rectangular_length', body.dimensions.rectangularLengthCm || '0')
-      params.set('rectangular_width', body.dimensions.rectangularWidthCm || '0')
-      params.set('rectangular_height', body.dimensions.rectangularHeightCm || '0')
-      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Öse')
-      params.set('closureType', body.selections.closureType || 'Ohne Verschluss')
-      break
-    case 'tarpaulins':
-    default:
-      params.set('width', body.dimensions.lengthACm || '0')
-      params.set('height_right', body.dimensions.heightRightBCm || '0')
-      params.set('height_left', body.dimensions.heightLeftCCm || body.dimensions.heightRightBCm || '0')
-      params.set('has_top_edge', body.selections.topSide || 'Ohne Extras')
-      params.set('has_edge_left_0', body.selections.leftSide || 'Ohne Extras')
-      params.set('has_edge_right_0', body.selections.rightSide || 'Ohne Extras')
-      params.set('has_edge_bottom_0', body.selections.bottomSide || 'Ohne Extras')
-      if (body.toggles.hasWindow) {
-        if (body.toggles.windowSplit) {
-          params.set('window_split', '1')
-          params.set('window_split_num', '2')
-          params.set('window_split_offset', String(TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM))
-          if (body.window.splitLeftWidthCm) params.set('window_width_one', body.window.splitLeftWidthCm)
-          if (body.window.splitRightWidthCm) params.set('window_width_two', body.window.splitRightWidthCm)
-          if (body.window.splitLeftHeightCm) params.set('window_height_one', body.window.splitLeftHeightCm)
-          if (body.window.splitRightHeightCm) params.set('window_height_two', body.window.splitRightHeightCm)
-          if (body.window.splitDistanceLeftCm) params.set('window_left_margin', body.window.splitDistanceLeftCm)
-          if (body.window.splitDistanceRightCm) params.set('window_right_margin', body.window.splitDistanceRightCm)
-          if (body.window.splitLeftBottomCm) {
-            params.set('window_left_bottom_margin', body.window.splitLeftBottomCm)
-          }
-          if (body.window.splitRightBottomCm) {
-            params.set('window_right_bottom_margin', body.window.splitRightBottomCm)
-          }
-        } else {
-          if (body.window.widthCm) params.set('window_width', body.window.widthCm)
-          if (body.window.heightCm) params.set('window_height', body.window.heightCm)
-          if (body.window.distanceSideCm) params.set('window_offset_left', body.window.distanceSideCm)
-          if (body.window.distanceBottomCm) params.set('window_offset_bottom', body.window.distanceBottomCm)
-        }
-      }
-      if (body.toggles.hasDoor) {
-        if (body.door.widthCm) params.set('door_width', body.door.widthCm)
-        if (body.door.heightCm) params.set('door_height', body.door.heightCm)
-        if (body.door.distanceLeftCm) params.set('door_offset_left', body.door.distanceLeftCm)
-        for (const extra of body.selections.doorExtras) {
-          params.set(selectionKey('Door_Extra_', extra), extra)
-        }
-      }
-      break
-  }
-  if (body.toggles.hasExtras) {
-    for (const extra of body.selections.extrasSelected) {
-      params.set(selectionKey('Extra_', extra), extra)
-    }
-  }
-  return params
-}
-function addSummaryEntry(
-  entries: ConfigurationSummaryEntry[],
-  label: string,
-  value: string | string[] | undefined,
-) {
-  if (Array.isArray(value)) {
-    const normalized = value.map((entry) => entry.trim()).filter((entry) => entry.length > 0)
-    if (normalized.length === 0) return
-    entries.push({ label, value: normalized.join(', ') })
-    return
-  }
-  if (!value) return
-  const normalized = value.trim()
-  if (!normalized) return
-  entries.push({ label, value: normalized })
-}
-export function buildConfigurationSummary(
-  body: PriceCalculationRequestBody,
-  sketchFileName?: string,
-): ConfigurationSummaryEntry[] {
-  const entries: ConfigurationSummaryEntry[] = []
-  addSummaryEntry(entries, 'Material', body.material)
-  addSummaryEntry(entries, 'Farbe', body.color)
-  switch (body.productType) {
-    case 'lounge':
-      addSummaryEntry(entries, 'Seite A', body.dimensions.sideACm ? `${body.dimensions.sideACm} cm` : undefined)
-      addSummaryEntry(entries, 'Seite B', body.dimensions.sideBCm ? `${body.dimensions.sideBCm} cm` : undefined)
-      addSummaryEntry(entries, 'Seite C', body.dimensions.sideCCm ? `${body.dimensions.sideCCm} cm` : undefined)
-      addSummaryEntry(entries, 'Seite F', body.dimensions.sideFCm ? `${body.dimensions.sideFCm} cm` : undefined)
-      addSummaryEntry(entries, 'Hoehe H', body.dimensions.sideHCm ? `${body.dimensions.sideHCm} cm` : undefined)
-      break
-    case 'trailer':
-      addSummaryEntry(entries, 'Anhaengerbreite A', body.dimensions.trailerWidthCm ? `${body.dimensions.trailerWidthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Anhaengerlaenge B', body.dimensions.trailerLengthCm ? `${body.dimensions.trailerLengthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Planenhoehe C', body.dimensions.trailerHeightCm ? `${body.dimensions.trailerHeightCm} cm` : undefined)
-      break
-    case 'rectangular':
-      addSummaryEntry(entries, 'Laenge A', body.dimensions.rectangularLengthCm ? `${body.dimensions.rectangularLengthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Breite B', body.dimensions.rectangularWidthCm ? `${body.dimensions.rectangularWidthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Hoehe C', body.dimensions.rectangularHeightCm ? `${body.dimensions.rectangularHeightCm} cm` : undefined)
-      break
-    case 'tarpaulins':
-    default:
-      addSummaryEntry(entries, 'Laenge A', body.dimensions.lengthACm ? `${body.dimensions.lengthACm} cm` : undefined)
-      addSummaryEntry(entries, 'Hoehe rechts B', body.dimensions.heightRightBCm ? `${body.dimensions.heightRightBCm} cm` : undefined)
-      addSummaryEntry(entries, 'Hoehe links C', body.dimensions.heightLeftCCm ? `${body.dimensions.heightLeftCCm} cm` : undefined)
-      break
-  }
-  addSummaryEntry(entries, 'Obere Seite', body.selections.topSide)
-  addSummaryEntry(entries, 'Linke Seite', body.selections.leftSide)
-  addSummaryEntry(entries, 'Rechte Seite', body.selections.rightSide)
-  addSummaryEntry(entries, 'Untere Seite', body.selections.bottomSide)
-  addSummaryEntry(entries, 'Oesen', body.selections.eyeletEdge)
-  addSummaryEntry(entries, 'Verschlussart', body.selections.closureType)
-  addSummaryEntry(entries, 'Frontverschluss', body.selections.frontClosure)
-  addSummaryEntry(entries, 'Rueckenverschluss', body.selections.backClosure)
-  if (body.toggles.hasWindow) {
-    addSummaryEntry(entries, 'Fenster', 'Ja')
-    if (body.toggles.windowSplit) {
-      addSummaryEntry(entries, 'Fenster geteilt', 'Ja')
-      addSummaryEntry(
-        entries,
-        'Fensterabstand zueinander',
-        `${TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM} cm`,
-      )
-      addSummaryEntry(entries, 'Fensterbreite links', body.window.splitLeftWidthCm ? `${body.window.splitLeftWidthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Fensterbreite rechts', body.window.splitRightWidthCm ? `${body.window.splitRightWidthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Fensterhoehe links', body.window.splitLeftHeightCm ? `${body.window.splitLeftHeightCm} cm` : undefined)
-      addSummaryEntry(entries, 'Fensterhoehe rechts', body.window.splitRightHeightCm ? `${body.window.splitRightHeightCm} cm` : undefined)
-      addSummaryEntry(entries, 'Fenster Rand links', body.window.splitDistanceLeftCm ? `${body.window.splitDistanceLeftCm} cm` : undefined)
-      addSummaryEntry(entries, 'Fenster Rand rechts', body.window.splitDistanceRightCm ? `${body.window.splitDistanceRightCm} cm` : undefined)
-      addSummaryEntry(entries, 'Fenster unten links', body.window.splitLeftBottomCm ? `${body.window.splitLeftBottomCm} cm` : undefined)
-      addSummaryEntry(entries, 'Fenster unten rechts', body.window.splitRightBottomCm ? `${body.window.splitRightBottomCm} cm` : undefined)
-    } else {
-      addSummaryEntry(entries, 'Fensterbreite', body.window.widthCm ? `${body.window.widthCm} cm` : undefined)
-      addSummaryEntry(entries, 'Fensterhoehe', body.window.heightCm ? `${body.window.heightCm} cm` : undefined)
-      addSummaryEntry(entries, 'Fenster Abstand Seite', body.window.distanceSideCm ? `${body.window.distanceSideCm} cm` : undefined)
-      addSummaryEntry(entries, 'Fenster Abstand unten', body.window.distanceBottomCm ? `${body.window.distanceBottomCm} cm` : undefined)
-    }
-  }
-  if (body.toggles.hasDoor) {
-    addSummaryEntry(entries, 'Tuer', 'Ja')
-    addSummaryEntry(entries, 'Tuerbreite', body.door.widthCm ? `${body.door.widthCm} cm` : undefined)
-    addSummaryEntry(entries, 'Tuerhoehe', body.door.heightCm ? `${body.door.heightCm} cm` : undefined)
-    addSummaryEntry(entries, 'Tuerabstand links', body.door.distanceLeftCm ? `${body.door.distanceLeftCm} cm` : undefined)
-    addSummaryEntry(entries, 'Tuer-Extras', body.selections.doorExtras)
-  }
-  if (body.toggles.hasExtras) {
-    addSummaryEntry(entries, 'Extras', body.selections.extrasSelected)
-  }
-  addSummaryEntry(entries, 'Frontverschluss-Zubehoer', body.selections.frontClosureExtras)
-  addSummaryEntry(entries, 'Rueckenverschluss-Zubehoer', body.selections.backClosureExtras)
-  addSummaryEntry(entries, 'Skizze', sketchFileName)
-  return entries
-}
-export function buildConfiguredCartPayload(
-  body: PriceCalculationRequestBody,
-  uniqueKey: string,
-  sketchFileName?: string,
-): ConfiguredCartPayload {
-  const extraData = Object.fromEntries(buildWordPressPriceFormData(body).entries())
-  delete extraData.action
-  delete extraData.product_id
-  extraData.custom_option = 'configured'
-  extraData.unique_key = uniqueKey
-  extraData.planenadler_configuration_id = uniqueKey
-  const summary = buildConfigurationSummary(body, sketchFileName)
-  extraData.planenadler_configuration_summary = JSON.stringify(summary)
-  if (sketchFileName?.trim()) {
-    extraData.planenadler_sketch_file_name = sketchFileName.trim()
-  }
-  return {
-    extraData,
-    summary,
-  }
-}
-export function parsePriceCalculationResponse(rawPrice: unknown): PriceCalculationResult {
-  const total =
-    readNumericPrice(rawPrice) ??
-    (typeof rawPrice === 'object' && rawPrice !== null
-      ? readNumericPrice(
-          'price' in rawPrice
-            ? (rawPrice as { price?: unknown }).price
-            : 'total' in rawPrice
-              ? (rawPrice as { total?: unknown }).total
-              : 'data' in rawPrice
-                ? (rawPrice as { data?: unknown }).data
-                : undefined,
-        )
-      : null)
-  if (total === null || !Number.isFinite(total)) {
-    throw new Error('WordPress hat keinen gueltigen Preis zurueckgegeben.')
-  }
-  const formatted = `${total.toFixed(2).replace('.', ',')} €`
-  return {
-    total,
-    formatted,
-    price: formatted,
-  }
-}
-````
-
 ## File: src/lib/customizer-runtime.ts
 ````typescript
 export type ToggleState = '' | 'yes' | 'no'
@@ -29272,6 +28931,408 @@ export default async function BlogSlugPage({ params }: BlogSlugPageProps) {
       <Stickynav />
     </main>
   )
+}
+````
+
+## File: src/lib/customizer-pricing.ts
+````typescript
+import type {
+  ConfigFormState,
+  ResolvedChoice,
+  ResolvedCustomizerConfig,
+  SupportedProductType,
+  SupportedUnitSelector,
+} from '@/lib/customizer-runtime'
+import { TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM } from '@/lib/tarpaulin-constants'
+export interface PriceCalculationRequestBody {
+  productId: string | number
+  productType: SupportedProductType
+  unitSelector: SupportedUnitSelector
+  material: string
+  color?: string
+  dimensions: Partial<Record<
+    | 'lengthACm'
+    | 'heightRightBCm'
+    | 'heightLeftCCm'
+    | 'trailerWidthCm'
+    | 'trailerLengthCm'
+    | 'trailerHeightCm'
+    | 'rectangularLengthCm'
+    | 'rectangularWidthCm'
+    | 'rectangularHeightCm'
+    | 'sideACm'
+    | 'sideBCm'
+    | 'sideCCm'
+    | 'sideFCm'
+    | 'sideHCm',
+    string
+  >>
+  selections: {
+    topSide?: string
+    leftSide?: string
+    rightSide?: string
+    bottomSide?: string
+    eyeletEdge?: string
+    closureType?: string
+    frontClosure?: string
+    backClosure?: string
+    doorExtras: string[]
+    extrasSelected: string[]
+    frontClosureExtras: string[]
+    backClosureExtras: string[]
+  }
+  toggles: {
+    hasWindow: boolean
+    hasDoor: boolean
+    hasExtras: boolean
+    windowSplit: boolean
+  }
+  window: {
+    widthCm?: string
+    heightCm?: string
+    distanceSideCm?: string
+    distanceBottomCm?: string
+    splitLeftWidthCm?: string
+    splitRightWidthCm?: string
+    splitLeftHeightCm?: string
+    splitRightHeightCm?: string
+    splitDistanceLeftCm?: string
+    splitDistanceRightCm?: string
+    splitLeftBottomCm?: string
+    splitRightBottomCm?: string
+  }
+  door: {
+    widthCm?: string
+    heightCm?: string
+    distanceLeftCm?: string
+  }
+}
+export interface PriceCalculationResult {
+  total: number
+  formatted: string
+  price: string
+}
+export interface ConfigurationSummaryEntry {
+  label: string
+  value: string
+}
+export interface ConfiguredCartPayload {
+  extraData: Record<string, string>
+  summary: ConfigurationSummaryEntry[]
+}
+function resolveLabels(ids: string[], choices: ResolvedChoice[]): string[] {
+  const choiceMap = new Map(choices.map((choice) => [choice.id, choice.label]))
+  return ids
+    .map((id) => choiceMap.get(id) ?? id)
+    .filter((label) => typeof label === 'string' && label.trim().length > 0)
+}
+function selectionKey(prefix: string, label: string): string {
+  return `${prefix}${label.replace(/\s/g, '_')}`
+}
+function readNumericPrice(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const normalized = value.replace(',', '.').replace(/[^\d.-]/g, '')
+    const parsed = Number.parseFloat(normalized)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+export function buildPriceCalculationRequest(
+  productId: number | string,
+  form: ConfigFormState,
+  resolvedConfig: ResolvedCustomizerConfig,
+): PriceCalculationRequestBody {
+  return {
+    productId,
+    productType: resolvedConfig.productType,
+    unitSelector: resolvedConfig.unitSelector,
+    material: form.material,
+    color: form.color || undefined,
+    dimensions: {
+      lengthACm: form.lengthACm || undefined,
+      heightRightBCm: form.heightRightBCm || undefined,
+      heightLeftCCm: form.heightLeftCCm || undefined,
+      trailerWidthCm: form.trailerWidthCm || undefined,
+      trailerLengthCm: form.trailerLengthCm || undefined,
+      trailerHeightCm: form.trailerHeightCm || undefined,
+      rectangularLengthCm: form.rectangularLengthCm || undefined,
+      rectangularWidthCm: form.rectangularWidthCm || undefined,
+      rectangularHeightCm: form.rectangularHeightCm || undefined,
+      sideACm: form.sideACm || undefined,
+      sideBCm: form.sideBCm || undefined,
+      sideCCm: form.sideCCm || undefined,
+      sideFCm: form.sideFCm || undefined,
+      sideHCm: form.sideHCm || undefined,
+    },
+    selections: {
+      topSide: form.topSide || undefined,
+      leftSide: form.leftSide || undefined,
+      rightSide: form.rightSide || undefined,
+      bottomSide: form.bottomSide || undefined,
+      eyeletEdge: form.eyeletEdge || undefined,
+      closureType: form.closureType || undefined,
+      frontClosure: form.frontClosure || undefined,
+      backClosure: form.backClosure || undefined,
+      doorExtras: resolveLabels(form.doorExtras, resolvedConfig.options.doorExtras),
+      extrasSelected: resolveLabels(form.extrasSelected, resolvedConfig.options.extras),
+      frontClosureExtras: resolveLabels(form.frontClosureExtras, resolvedConfig.options.frontClosureExtras),
+      backClosureExtras: resolveLabels(form.backClosureExtras, resolvedConfig.options.backClosureExtras),
+    },
+    toggles: {
+      hasWindow: form.hasWindow === 'yes',
+      hasDoor: form.hasDoor === 'yes',
+      hasExtras: form.hasExtras === 'yes',
+      windowSplit: form.windowSplit === 'yes',
+    },
+    window: {
+      widthCm: form.windowWidthCm || undefined,
+      heightCm: form.windowHeightCm || undefined,
+      distanceSideCm: form.windowDistanceSideCm || undefined,
+      distanceBottomCm: form.windowDistanceBottomCm || undefined,
+      splitLeftWidthCm: form.windowSplitLeftWidthCm || undefined,
+      splitRightWidthCm: form.windowSplitRightWidthCm || undefined,
+      splitLeftHeightCm: form.windowSplitLeftHeightCm || undefined,
+      splitRightHeightCm: form.windowSplitRightHeightCm || undefined,
+      splitDistanceLeftCm: form.windowSplitLeftDistanceLeftCm || undefined,
+      splitDistanceRightCm: form.windowSplitRightDistanceRightCm || undefined,
+      splitLeftBottomCm: form.windowSplitLeftDistanceBottomCm || undefined,
+      splitRightBottomCm: form.windowSplitRightDistanceBottomCm || undefined,
+    },
+    door: {
+      widthCm: form.doorWidthCm || undefined,
+      heightCm: form.doorHeightCm || undefined,
+      distanceLeftCm: form.doorDistanceLeftCm || undefined,
+    },
+  }
+}
+export function buildWordPressPriceFormData(body: PriceCalculationRequestBody): URLSearchParams {
+  const params = new URLSearchParams()
+  params.set('action', 'prices_update_request')
+  params.set('product_id', String(body.productId))
+  params.set('fabric', body.material || '')
+  switch (body.productType) {
+    case 'lounge':
+      params.set('side_a', body.dimensions.sideACm || '0')
+      params.set('side_b', body.dimensions.sideBCm || '0')
+      params.set('side_c', body.dimensions.sideCCm || '0')
+      params.set('side_f', body.dimensions.sideFCm || '0')
+      params.set('side_h', body.dimensions.sideHCm || '0')
+      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Öse')
+      params.set('closureType', body.selections.closureType || 'Ohne Verschluss')
+      break
+    case 'trailer':
+      params.set('trailer_width', body.dimensions.trailerWidthCm || '0')
+      params.set('trailer_length', body.dimensions.trailerLengthCm || '0')
+      params.set('trailer_height', body.dimensions.trailerHeightCm || '0')
+      params.set('front_clouser', body.selections.frontClosure || 'Without front clouser')
+      params.set('back_clouser', body.selections.backClosure || 'Without back clouser')
+      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Ã–se')
+      params.set('front_clouser_accessories', '')
+      params.set('back_clouser_accessories', '')
+      for (const extra of body.selections.frontClosureExtras) {
+        params.set(selectionKey('Zubehör_für_den_Frontverschluss_', extra), extra)
+      }
+      for (const extra of body.selections.backClosureExtras) {
+        params.set(selectionKey('Zubehör_für_den_Rückenverschluss_', extra), extra)
+      }
+      break
+    case 'rectangular':
+      params.set('rectangular_length', body.dimensions.rectangularLengthCm || '0')
+      params.set('rectangular_width', body.dimensions.rectangularWidthCm || '0')
+      params.set('rectangular_height', body.dimensions.rectangularHeightCm || '0')
+      params.set('eyelet_edge', body.selections.eyeletEdge || 'Ohne Öse')
+      params.set('closureType', body.selections.closureType || 'Ohne Verschluss')
+      break
+    case 'tarpaulins':
+    default:
+      params.set('width', body.dimensions.lengthACm || '0')
+      params.set('height_right', body.dimensions.heightRightBCm || '0')
+      params.set('height_left', body.dimensions.heightLeftCCm || body.dimensions.heightRightBCm || '0')
+      params.set('has_top_edge', body.selections.topSide || 'Ohne Extras')
+      params.set('has_edge_left_0', body.selections.leftSide || 'Ohne Extras')
+      params.set('has_edge_right_0', body.selections.rightSide || 'Ohne Extras')
+      params.set('has_edge_bottom_0', body.selections.bottomSide || 'Ohne Extras')
+      if (body.toggles.hasWindow) {
+        if (body.toggles.windowSplit) {
+          params.set('window_split', '1')
+          params.set('window_split_num', '2')
+          params.set('window_split_offset', String(TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM))
+          if (body.window.splitLeftWidthCm) params.set('window_width_one', body.window.splitLeftWidthCm)
+          if (body.window.splitRightWidthCm) params.set('window_width_two', body.window.splitRightWidthCm)
+          if (body.window.splitLeftHeightCm) params.set('window_height_one', body.window.splitLeftHeightCm)
+          if (body.window.splitRightHeightCm) params.set('window_height_two', body.window.splitRightHeightCm)
+          if (body.window.splitDistanceLeftCm) params.set('window_left_margin', body.window.splitDistanceLeftCm)
+          if (body.window.splitDistanceRightCm) params.set('window_right_margin', body.window.splitDistanceRightCm)
+          if (body.window.splitLeftBottomCm) {
+            params.set('window_left_bottom_margin', body.window.splitLeftBottomCm)
+          }
+          if (body.window.splitRightBottomCm) {
+            params.set('window_right_bottom_margin', body.window.splitRightBottomCm)
+          }
+        } else {
+          if (body.window.widthCm) params.set('window_width', body.window.widthCm)
+          if (body.window.heightCm) params.set('window_height', body.window.heightCm)
+          if (body.window.distanceSideCm) params.set('window_offset_left', body.window.distanceSideCm)
+          if (body.window.distanceBottomCm) params.set('window_offset_bottom', body.window.distanceBottomCm)
+        }
+      }
+      if (body.toggles.hasDoor) {
+        if (body.door.widthCm) params.set('door_width', body.door.widthCm)
+        if (body.door.heightCm) params.set('door_height', body.door.heightCm)
+        if (body.door.distanceLeftCm) params.set('door_offset_left', body.door.distanceLeftCm)
+        for (const extra of body.selections.doorExtras) {
+          params.set(selectionKey('Door_Extra_', extra), extra)
+        }
+      }
+      break
+  }
+  if (body.toggles.hasExtras) {
+    for (const extra of body.selections.extrasSelected) {
+      params.set(selectionKey('Extra_', extra), extra)
+    }
+  }
+  return params
+}
+function addSummaryEntry(
+  entries: ConfigurationSummaryEntry[],
+  label: string,
+  value: string | string[] | undefined,
+) {
+  if (Array.isArray(value)) {
+    const normalized = value.map((entry) => entry.trim()).filter((entry) => entry.length > 0)
+    if (normalized.length === 0) return
+    entries.push({ label, value: normalized.join(', ') })
+    return
+  }
+  if (!value) return
+  const normalized = value.trim()
+  if (!normalized) return
+  entries.push({ label, value: normalized })
+}
+export function buildConfigurationSummary(
+  body: PriceCalculationRequestBody,
+  sketchFileName?: string,
+): ConfigurationSummaryEntry[] {
+  const entries: ConfigurationSummaryEntry[] = []
+  addSummaryEntry(entries, 'Material', body.material)
+  addSummaryEntry(entries, 'Farbe', body.color)
+  switch (body.productType) {
+    case 'lounge':
+      addSummaryEntry(entries, 'Seite A', body.dimensions.sideACm ? `${body.dimensions.sideACm} cm` : undefined)
+      addSummaryEntry(entries, 'Seite B', body.dimensions.sideBCm ? `${body.dimensions.sideBCm} cm` : undefined)
+      addSummaryEntry(entries, 'Seite C', body.dimensions.sideCCm ? `${body.dimensions.sideCCm} cm` : undefined)
+      addSummaryEntry(entries, 'Seite F', body.dimensions.sideFCm ? `${body.dimensions.sideFCm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe H', body.dimensions.sideHCm ? `${body.dimensions.sideHCm} cm` : undefined)
+      break
+    case 'trailer':
+      addSummaryEntry(entries, 'Anhaengerbreite A', body.dimensions.trailerWidthCm ? `${body.dimensions.trailerWidthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Anhaengerlaenge B', body.dimensions.trailerLengthCm ? `${body.dimensions.trailerLengthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Planenhoehe C', body.dimensions.trailerHeightCm ? `${body.dimensions.trailerHeightCm} cm` : undefined)
+      break
+    case 'rectangular':
+      addSummaryEntry(entries, 'Laenge A', body.dimensions.rectangularLengthCm ? `${body.dimensions.rectangularLengthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Breite B', body.dimensions.rectangularWidthCm ? `${body.dimensions.rectangularWidthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe C', body.dimensions.rectangularHeightCm ? `${body.dimensions.rectangularHeightCm} cm` : undefined)
+      break
+    case 'tarpaulins':
+    default:
+      addSummaryEntry(entries, 'Laenge A', body.dimensions.lengthACm ? `${body.dimensions.lengthACm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe rechts B', body.dimensions.heightRightBCm ? `${body.dimensions.heightRightBCm} cm` : undefined)
+      addSummaryEntry(entries, 'Hoehe links C', body.dimensions.heightLeftCCm ? `${body.dimensions.heightLeftCCm} cm` : undefined)
+      break
+  }
+  addSummaryEntry(entries, 'Obere Seite', body.selections.topSide)
+  addSummaryEntry(entries, 'Linke Seite', body.selections.leftSide)
+  addSummaryEntry(entries, 'Rechte Seite', body.selections.rightSide)
+  addSummaryEntry(entries, 'Untere Seite', body.selections.bottomSide)
+  addSummaryEntry(entries, 'Oesen', body.selections.eyeletEdge)
+  addSummaryEntry(entries, 'Verschlussart', body.selections.closureType)
+  addSummaryEntry(entries, 'Frontverschluss', body.selections.frontClosure)
+  addSummaryEntry(entries, 'Rueckenverschluss', body.selections.backClosure)
+  if (body.toggles.hasWindow) {
+    addSummaryEntry(entries, 'Fenster', 'Ja')
+    if (body.toggles.windowSplit) {
+      addSummaryEntry(entries, 'Fenster geteilt', 'Ja')
+      addSummaryEntry(
+        entries,
+        'Fensterabstand zueinander',
+        `${TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM} cm`,
+      )
+      addSummaryEntry(entries, 'Fensterbreite links', body.window.splitLeftWidthCm ? `${body.window.splitLeftWidthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fensterbreite rechts', body.window.splitRightWidthCm ? `${body.window.splitRightWidthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fensterhoehe links', body.window.splitLeftHeightCm ? `${body.window.splitLeftHeightCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fensterhoehe rechts', body.window.splitRightHeightCm ? `${body.window.splitRightHeightCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster Rand links', body.window.splitDistanceLeftCm ? `${body.window.splitDistanceLeftCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster Rand rechts', body.window.splitDistanceRightCm ? `${body.window.splitDistanceRightCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster unten links', body.window.splitLeftBottomCm ? `${body.window.splitLeftBottomCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster unten rechts', body.window.splitRightBottomCm ? `${body.window.splitRightBottomCm} cm` : undefined)
+    } else {
+      addSummaryEntry(entries, 'Fensterbreite', body.window.widthCm ? `${body.window.widthCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fensterhoehe', body.window.heightCm ? `${body.window.heightCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster Abstand Seite', body.window.distanceSideCm ? `${body.window.distanceSideCm} cm` : undefined)
+      addSummaryEntry(entries, 'Fenster Abstand unten', body.window.distanceBottomCm ? `${body.window.distanceBottomCm} cm` : undefined)
+    }
+  }
+  if (body.toggles.hasDoor) {
+    addSummaryEntry(entries, 'Tuer', 'Ja')
+    addSummaryEntry(entries, 'Tuerbreite', body.door.widthCm ? `${body.door.widthCm} cm` : undefined)
+    addSummaryEntry(entries, 'Tuerhoehe', body.door.heightCm ? `${body.door.heightCm} cm` : undefined)
+    addSummaryEntry(entries, 'Tuerabstand links', body.door.distanceLeftCm ? `${body.door.distanceLeftCm} cm` : undefined)
+    addSummaryEntry(entries, 'Tuer-Extras', body.selections.doorExtras)
+  }
+  if (body.toggles.hasExtras) {
+    addSummaryEntry(entries, 'Extras', body.selections.extrasSelected)
+  }
+  addSummaryEntry(entries, 'Frontverschluss-Zubehoer', body.selections.frontClosureExtras)
+  addSummaryEntry(entries, 'Rueckenverschluss-Zubehoer', body.selections.backClosureExtras)
+  addSummaryEntry(entries, 'Skizze', sketchFileName)
+  return entries
+}
+export function buildConfiguredCartPayload(
+  body: PriceCalculationRequestBody,
+  uniqueKey: string,
+  sketchFileName?: string,
+): ConfiguredCartPayload {
+  const extraData = Object.fromEntries(buildWordPressPriceFormData(body).entries())
+  delete extraData.action
+  delete extraData.product_id
+  extraData.custom_option = 'configured'
+  extraData.unique_key = uniqueKey
+  extraData.planenadler_configuration_id = uniqueKey
+  const summary = buildConfigurationSummary(body, sketchFileName)
+  extraData.planenadler_configuration_summary = JSON.stringify(summary)
+  if (sketchFileName?.trim()) {
+    extraData.planenadler_sketch_file_name = sketchFileName.trim()
+  }
+  return {
+    extraData,
+    summary,
+  }
+}
+export function parsePriceCalculationResponse(rawPrice: unknown): PriceCalculationResult {
+  const total =
+    readNumericPrice(rawPrice) ??
+    (typeof rawPrice === 'object' && rawPrice !== null
+      ? readNumericPrice(
+          'price' in rawPrice
+            ? (rawPrice as { price?: unknown }).price
+            : 'total' in rawPrice
+              ? (rawPrice as { total?: unknown }).total
+              : 'data' in rawPrice
+                ? (rawPrice as { data?: unknown }).data
+                : undefined,
+        )
+      : null)
+  if (total === null || !Number.isFinite(total)) {
+    throw new Error('WordPress hat keinen gueltigen Preis zurueckgegeben.')
+  }
+  const formatted = `${total.toFixed(2).replace('.', ',')} €`
+  return {
+    total,
+    formatted,
+    price: formatted,
+  }
 }
 ````
 
@@ -31083,11 +31144,8 @@ import type {
   StepId,
 } from '@/lib/customizer-runtime'
 import { emptyConfigFormState } from '@/lib/customizer-runtime'
-import {
-  getTarpaulinOpeningValidationIssues,
-  isTerraceTarpaulinLayout,
-  TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM,
-} from '@/lib/tarpaulin-opening-rules'
+import { TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM } from '@/lib/tarpaulin-constants'
+import { getTarpaulinOpeningValidationIssues, isTerraceTarpaulinLayout } from '@/lib/tarpaulin-opening-rules'
 import { cn } from '@/lib/utils'
 interface ProductConfiguratorProps {
   productId: number
@@ -31102,6 +31160,8 @@ interface ProductConfiguratorProps {
 interface GraphQLResponse<T> {
   data?: T
   errors?: Array<{ message?: string }>
+  /** Next-Proxy bei Konfigurationsfehler */
+  error?: string
 }
 const STEP_TITLES: Record<StepId, string> = {
   color: 'Material und Farbe',
@@ -31169,9 +31229,20 @@ async function postGraphQL<T>(
     credentials: 'include',
     body: JSON.stringify({ query, variables }),
   })
-  const json = (await response.json()) as GraphQLResponse<T>
+  const rawText = await response.text()
+  let json: GraphQLResponse<T> | null = null
+  try {
+    json = JSON.parse(rawText) as GraphQLResponse<T>
+  } catch {
+    const hint = rawText.slice(0, 200).replace(/\s+/g, ' ')
+    throw new Error(
+      `GraphQL HTTP ${response.status}: keine JSON-Antwort (WordPress/Upstream pruefen). ${hint}`,
+    )
+  }
   if (!response.ok || json.errors?.length) {
-    throw new Error(json.errors?.[0]?.message || 'GraphQL Anfrage fehlgeschlagen')
+    const topError = json.errors?.[0]?.message
+    const proxyError = typeof json.error === 'string' ? json.error : undefined
+    throw new Error(topError || proxyError || `GraphQL Anfrage fehlgeschlagen (HTTP ${response.status})`)
   }
   if (!json.data) {
     throw new Error('Leere GraphQL Antwort')
