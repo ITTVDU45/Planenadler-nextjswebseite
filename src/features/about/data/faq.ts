@@ -366,3 +366,30 @@ export const ABOUT_FAQ_SECTIONS: FaqSection[] = [
 ]
 
 export const ABOUT_FAQ_ITEMS: FaqItem[] = ABOUT_FAQ_SECTIONS.flatMap((section) => section.items)
+
+/** Eine Frage pro Thema fuer die Startseite (10 verschiedene FAQ-Kategorien). */
+const HOME_PAGE_FAQ_SECTION_PICKS: Array<{ sectionId: string; itemIndex: number }> = [
+  { sectionId: 'faq-allgemein', itemIndex: 0 },
+  { sectionId: 'faq-planen-allgemein', itemIndex: 0 },
+  { sectionId: 'faq-hauben-allgemein', itemIndex: 0 },
+  { sectionId: 'faq-anhaenger-allgemein', itemIndex: 0 },
+  { sectionId: 'faq-terrasse-sichtschutz', itemIndex: 0 },
+  { sectionId: 'faq-pool-allgemein', itemIndex: 0 },
+  { sectionId: 'material', itemIndex: 0 },
+  { sectionId: 'versand', itemIndex: 0 },
+  { sectionId: 'zahlungen', itemIndex: 0 },
+  { sectionId: 'wie-wir-arbeiten', itemIndex: 0 },
+]
+
+function pickHomePageFaqItems(sections: FaqSection[]): FaqItem[] {
+  return HOME_PAGE_FAQ_SECTION_PICKS.map(({ sectionId, itemIndex }) => {
+    const section = sections.find((s) => s.id === sectionId)
+    const item = section?.items[itemIndex]
+    if (!item) {
+      throw new Error(`Home FAQ pick missing: section "${sectionId}" itemIndex ${itemIndex}`)
+    }
+    return item
+  })
+}
+
+export const HOME_PAGE_FAQ_ITEMS: FaqItem[] = pickHomePageFaqItems(ABOUT_FAQ_SECTIONS)
