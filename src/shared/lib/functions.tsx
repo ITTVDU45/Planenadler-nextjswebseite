@@ -37,7 +37,7 @@ const CONFIGURATION_LABELS: Record<string, string> = {
   eyelet_edge: 'Oesen',
   closureType: 'Verschlussart',
   front_clouser: 'Frontverschluss',
-  back_clouser: 'Rueckenverschluss',
+  back_clouser: 'Rueckverschluss',
   window_width: 'Fensterbreite',
   window_height: 'Fensterhoehe',
   door_width: 'Tuerbreite',

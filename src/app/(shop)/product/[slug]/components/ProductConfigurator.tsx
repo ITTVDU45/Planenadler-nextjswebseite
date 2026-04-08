@@ -57,7 +57,7 @@ const STEP_TITLES: Record<StepId, string> = {
   eyelets: 'Ösen',
   closureType: 'Verschlussart',
   frontClosure: 'Frontverschluss',
-  backClosure: 'Rueckenverschluss',
+  backClosure: 'Rueckverschluss',
   extras: 'Extras',
   sketch: 'Skizze hochladen',
 }
@@ -364,7 +364,7 @@ const REQUIRED_FIELD_LABELS: Partial<Record<ConfigFormField, string>> = {
   eyeletEdge: 'Ösen',
   closureType: 'Verschlussart',
   frontClosure: 'Frontverschluss',
-  backClosure: 'Rueckenverschluss',
+  backClosure: 'Rueckverschluss',
   extrasSelected: 'Extras',
 }
 
@@ -938,7 +938,7 @@ export default function ProductConfigurator({
           eyelets: 'Waehlen Sie die Oesenkonfiguration.',
           closureType: 'Waehlen Sie die Verschlussart.',
           frontClosure: 'Waehlen Sie den Frontverschluss.',
-          backClosure: 'Waehlen Sie den Rueckenverschluss.',
+          backClosure: 'Waehlen Sie den Rueckverschluss.',
           extras: 'Definieren Sie zusaetzliche Ausstattungen und Sonderwuensche.',
           sketch: 'Laden Sie optional eine Skizze hoch.',
         },
@@ -1875,8 +1875,7 @@ export default function ProductConfigurator({
               </StepAccordionItem>
             ) : null}
 
-            {resolvedConfig.isPoolPlaneProduct &&
-            (resolvedConfig.productType === 'lounge' || resolvedConfig.productType === 'rectangular') ? (
+            {resolvedConfig.isPoolPlaneProduct ? (
               <>
                 {steps
                   .filter((id) => id === 'extras' || id === 'eyelets' || id === 'closureType')
@@ -1936,20 +1935,20 @@ export default function ProductConfigurator({
                 {resolvedConfig.options.backClosures.length > 0 ? (
                   <ChoiceGrid choices={resolvedConfig.options.backClosures} value={form.backClosure} onChange={(value) => setField('backClosure', value)} onPreview={setPreviewChoice} />
                 ) : (
-                  <p className="text-sm text-[#1F5CAB]">Es sind nur Rueckenverschluss-Extras verfuegbar.</p>
+                  <p className="text-sm text-[#1F5CAB]">Es sind nur Rueckverschluss-Extras verfuegbar.</p>
                 )}
                 {resolvedConfig.options.backClosureExtras.length > 0 ? (
                   <div className="mt-4">
-                    <NestedAccordion title="Zubehoer fuer den Rueckenverschluss" isOpen={backClosureExtrasOpen} onToggle={() => preserveConfiguratorScroll(() => setBackClosureExtrasOpen((prev) => !prev))}>
+                    <NestedAccordion title="Zubehoer fuer den Rueckverschluss" isOpen={backClosureExtrasOpen} onToggle={() => preserveConfiguratorScroll(() => setBackClosureExtrasOpen((prev) => !prev))}>
                       {!form.backClosure && hasConditionalClosureExtras(resolvedConfig.options.backClosureExtras) ? (
                         <p className="text-sm text-[#1F5CAB]">
-                          Bitte waehlen Sie zuerst einen Rueckenverschluss, damit das passende Zubehoer angezeigt wird.
+                          Bitte waehlen Sie zuerst einen Rueckverschluss, damit das passende Zubehoer angezeigt wird.
                         </p>
                       ) : filteredBackClosureExtras.length > 0 ? (
                         <MultiChoiceGrid choices={filteredBackClosureExtras} selectedIds={form.backClosureExtras} onToggle={(value) => toggleMultiValue('backClosureExtras', value)} onPreview={setPreviewChoice} />
                       ) : resolvedConfig.productType === 'trailer' && isTrailerEckenSenkrechtVerschweisstClosure(form.backClosure) ? null : (
                         <p className="text-sm text-[#1F5CAB]">
-                          Fuer den gewaehlten Rueckenverschluss ist kein Zubehoer hinterlegt.
+                          Fuer den gewaehlten Rueckverschluss ist kein Zubehoer hinterlegt.
                         </p>
                       )}
                     </NestedAccordion>

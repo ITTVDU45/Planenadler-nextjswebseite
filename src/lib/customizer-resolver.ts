@@ -43,7 +43,7 @@ const DEFAULT_HINTS: ResolvedConfiguratorHints = {
   eyelets: 'Waehlen Sie aus, ob und wie Oesen an diesem Produkt eingesetzt werden sollen.',
   closureType: 'Waehlen Sie den gewuenschten Verschlusstyp passend zur Konstruktion.',
   frontClosure: 'Waehlen Sie den Frontverschluss und optionales Zubehoer.',
-  backClosure: 'Waehlen Sie den Rueckenverschluss und optionales Zubehoer.',
+  backClosure: 'Waehlen Sie den Rueckverschluss und optionales Zubehoer.',
   extras: 'Hier koennen Sie zusaetzliche Ausstattungen und Sonderwuensche definieren.',
   sketch: 'Laden Sie optional eine Skizze hoch, damit Positionen und Masse eindeutig zugeordnet werden koennen.',
 }
@@ -532,13 +532,20 @@ function buildStepOrder(
   }
 
   if (productType === 'trailer') {
+    const poolExtrasBeforeEyelets =
+      Boolean(layout?.extrasBeforeEyeletsForPoolRectangular) && config.extras.length > 0
     if (config.frontClosures.length || config.frontClosureExtras.length) steps.push('frontClosure')
     if (config.backClosures.length || config.backClosureExtras.length) steps.push('backClosure')
+    if (poolExtrasBeforeEyelets) steps.push('extras')
     if (config.eyelets.length) steps.push('eyelets')
   }
 
   const extrasHandledInLoungeOrRectangular = productType === 'lounge' || productType === 'rectangular'
-  if (config.extras.length > 0 && !extrasHandledInLoungeOrRectangular) {
+  const extrasHandledInPoolTrailer =
+    productType === 'trailer' &&
+    Boolean(layout?.extrasBeforeEyeletsForPoolRectangular) &&
+    config.extras.length > 0
+  if (config.extras.length > 0 && !extrasHandledInLoungeOrRectangular && !extrasHandledInPoolTrailer) {
     steps.push('extras')
   }
   steps.push('sketch')
@@ -651,8 +658,8 @@ export function resolveCustomizerConfig(
       doorData: config.door_data,
     },
     {
-      extrasBeforeEyeletsForPoolRectangular:
-        isPoolPlaneProduct && (productType === 'rectangular' || productType === 'lounge'),
+      // Poolplane: Hohlsaum vor Oesen – gilt fuer alle WP-Produkttypen mit diesen Schritten (z. B. trailer).
+      extrasBeforeEyeletsForPoolRectangular: isPoolPlaneProduct,
     },
   )
 
