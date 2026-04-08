@@ -68,6 +68,9 @@ export type ConfigFormField =
   | 'closureType'
   | 'frontClosure'
   | 'backClosure'
+  /** Pflicht bei Anhaenger + bestimmten Verschluessen (alle gefilterten Zubehoer-IDs) */
+  | 'frontClosureExtras'
+  | 'backClosureExtras'
   /** Mehrfachauswahl main extras (Pflicht z. B. Poolplane / Hohlsaum) */
   | 'extrasSelected'
 

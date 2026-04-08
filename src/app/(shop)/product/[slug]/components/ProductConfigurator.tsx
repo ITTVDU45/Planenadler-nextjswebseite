@@ -161,7 +161,26 @@ function mergeHints(
   }
 }
 
-function isFilled(field: ConfigFormField, form: ConfigFormState): boolean {
+interface ClosureExtrasMandatoryContext {
+  mandatoryFrontClosureExtraIds: ReadonlySet<string>
+  mandatoryBackClosureExtraIds: ReadonlySet<string>
+}
+
+function isFilled(
+  field: ConfigFormField,
+  form: ConfigFormState,
+  closureMandatory?: ClosureExtrasMandatoryContext | null,
+): boolean {
+  if (field === 'frontClosureExtras') {
+    const mandatory = closureMandatory?.mandatoryFrontClosureExtraIds
+    if (!mandatory || mandatory.size === 0) return true
+    return [...mandatory].every((id) => form.frontClosureExtras.includes(id))
+  }
+  if (field === 'backClosureExtras') {
+    const mandatory = closureMandatory?.mandatoryBackClosureExtraIds
+    if (!mandatory || mandatory.size === 0) return true
+    return [...mandatory].every((id) => form.backClosureExtras.includes(id))
+  }
   const value = form[field]
   if (Array.isArray(value)) return value.length > 0
   return typeof value === 'string' ? value.trim().length > 0 : Boolean(value)
@@ -260,10 +279,15 @@ function normalizeClosureExtraSelector(value: string | null | undefined): string
     .replace(/ü/g, 'ue')
 }
 
-function isTrailerEckenSenkrechtVerschweisstClosure(label: string): boolean {
+/** Anhaenger: Verschluesse, bei denen alle zugeordneten Zubehoer-Pflicht sind (nicht abwaehlbar). */
+function isTrailerVerschlussWithMandatoryZubehoer(label: string): boolean {
   const n = normalizeClosureExtraSelector(label)
   if (!n) return false
-  return n.includes('ecken') && n.includes('senkrecht') && n.includes('versch')
+  const eckenSenkrecht = n.includes('ecken') && n.includes('senkrecht') && n.includes('versch')
+  const zoll =
+    n.includes('zollverschluss') || (n.includes('zoll') && n.includes('verschluss'))
+  const zickzack = n.includes('zickzack')
+  return eckenSenkrecht || zoll || zickzack
 }
 
 function filterClosureExtrasBySelection(
@@ -334,6 +358,33 @@ function getDynamicRequiredFields(
     dynamic.push('extrasSelected')
   }
 
+  if (resolvedConfig.productType === 'trailer') {
+    if (
+      resolvedConfig.steps.includes('frontClosure') &&
+      resolvedConfig.options.frontClosureExtras.length > 0 &&
+      form.frontClosure &&
+      isTrailerVerschlussWithMandatoryZubehoer(form.frontClosure)
+    ) {
+      const filteredFront = filterClosureExtrasBySelection(
+        resolvedConfig.options.frontClosureExtras,
+        form.frontClosure,
+      )
+      if (filteredFront.length > 0) dynamic.push('frontClosureExtras')
+    }
+    if (
+      resolvedConfig.steps.includes('backClosure') &&
+      resolvedConfig.options.backClosureExtras.length > 0 &&
+      form.backClosure &&
+      isTrailerVerschlussWithMandatoryZubehoer(form.backClosure)
+    ) {
+      const filteredBack = filterClosureExtrasBySelection(
+        resolvedConfig.options.backClosureExtras,
+        form.backClosure,
+      )
+      if (filteredBack.length > 0) dynamic.push('backClosureExtras')
+    }
+  }
+
   return dynamic
 }
 
@@ -365,6 +416,8 @@ const REQUIRED_FIELD_LABELS: Partial<Record<ConfigFormField, string>> = {
   closureType: 'Verschlussart',
   frontClosure: 'Frontverschluss',
   backClosure: 'Rueckverschluss',
+  frontClosureExtras: 'Zubehoer Frontverschluss',
+  backClosureExtras: 'Zubehoer Rueckverschluss',
   extrasSelected: 'Extras',
 }
 
@@ -425,6 +478,10 @@ function getStepIdForField(
     case 'frontClosure':
       return 'frontClosure'
     case 'backClosure':
+      return 'backClosure'
+    case 'frontClosureExtras':
+      return 'frontClosure'
+    case 'backClosureExtras':
       return 'backClosure'
     case 'extrasSelected':
       return 'extras'
@@ -805,32 +862,50 @@ function MultiChoiceGrid({
   selectedIds,
   onToggle,
   onPreview,
+  lockedIds,
 }: {
   choices: ResolvedChoice[]
   selectedIds: string[]
   onToggle: (value: string) => void
   onPreview?: (choice: ResolvedChoice) => void
+  /** IDs die bei Auswahl nicht wieder abgewaehlt werden duerfen (z. B. Anhaenger-Pflichtzubehoer). */
+  lockedIds?: ReadonlySet<string>
 }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {choices.map((choice) => {
         const isSelected = selectedIds.includes(choice.id)
+        const isLocked = Boolean(lockedIds?.has(choice.id) && isSelected)
         return (
           <div
             key={choice.id}
             className={cn(
               'group relative rounded-2xl border transition duration-200',
               isSelected ? choiceCardSelected : choiceCardUnselected,
+              isLocked ? 'opacity-[0.98]' : '',
             )}
           >
+            {isLocked ? (
+              <span className="absolute left-3 top-3 z-[1] rounded-full bg-[#0F2B52]/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                Pflicht
+              </span>
+            ) : null}
             {isValidImageUrl(choice.imageSrc) && onPreview ? (
               <PreviewBadge label={choice.label} onClick={() => onPreview(choice)} />
             ) : null}
             <button
               type="button"
-              onClick={() => onToggle(choice.id)}
+              onClick={() => {
+                if (isLocked) return
+                onToggle(choice.id)
+              }}
               aria-pressed={isSelected}
-              className="block w-full text-left"
+              aria-disabled={isLocked}
+              title={isLocked ? 'Pflichtzubehoer – nicht abwaehlbar' : undefined}
+              className={cn(
+                'block w-full text-left',
+                isLocked ? 'cursor-not-allowed' : '',
+              )}
             >
               <div className="relative h-24 w-full overflow-hidden rounded-t-2xl bg-[#F6FAFF]">
                 {isSelected ? <SelectionCheckBadge className="right-3 top-3" /> : null}
@@ -955,6 +1030,52 @@ export default function ProductConfigurator({
     [resolvedConfig],
   )
 
+  const filteredFrontClosureExtras = useMemo(
+    () =>
+      resolvedConfig
+        ? filterClosureExtrasBySelection(
+            resolvedConfig.options.frontClosureExtras,
+            form.frontClosure,
+          )
+        : [],
+    [form.frontClosure, resolvedConfig],
+  )
+
+  const filteredBackClosureExtras = useMemo(
+    () =>
+      resolvedConfig
+        ? filterClosureExtrasBySelection(
+            resolvedConfig.options.backClosureExtras,
+            form.backClosure,
+          )
+        : [],
+    [form.backClosure, resolvedConfig],
+  )
+
+  const mandatoryFrontClosureExtraIds = useMemo(() => {
+    if (!resolvedConfig || resolvedConfig.productType !== 'trailer') return new Set<string>()
+    if (!form.frontClosure || !isTrailerVerschlussWithMandatoryZubehoer(form.frontClosure))
+      return new Set<string>()
+    if (filteredFrontClosureExtras.length === 0) return new Set<string>()
+    return new Set(filteredFrontClosureExtras.map((c) => c.id))
+  }, [resolvedConfig, form.frontClosure, filteredFrontClosureExtras])
+
+  const mandatoryBackClosureExtraIds = useMemo(() => {
+    if (!resolvedConfig || resolvedConfig.productType !== 'trailer') return new Set<string>()
+    if (!form.backClosure || !isTrailerVerschlussWithMandatoryZubehoer(form.backClosure))
+      return new Set<string>()
+    if (filteredBackClosureExtras.length === 0) return new Set<string>()
+    return new Set(filteredBackClosureExtras.map((c) => c.id))
+  }, [resolvedConfig, form.backClosure, filteredBackClosureExtras])
+
+  const closureExtrasMandatoryContext = useMemo(
+    (): ClosureExtrasMandatoryContext => ({
+      mandatoryFrontClosureExtraIds,
+      mandatoryBackClosureExtraIds,
+    }),
+    [mandatoryFrontClosureExtraIds, mandatoryBackClosureExtraIds],
+  )
+
   useEffect(() => {
     setForm(initialFormState)
     setOpenStep(resolvedConfig?.steps[0] ?? null)
@@ -975,8 +1096,10 @@ export default function ProductConfigurator({
 
   const hasMinimumForPrice = useMemo(() => {
     if (!resolvedConfig) return false
-    return resolvedConfig.validationRules.minimumForPrice.every((field) => isFilled(field, form))
-  }, [form, resolvedConfig])
+    return resolvedConfig.validationRules.minimumForPrice.every((field) =>
+      isFilled(field, form, closureExtrasMandatoryContext),
+    )
+  }, [closureExtrasMandatoryContext, form, resolvedConfig])
 
   const dimensionDiagramSrc = useMemo(() => {
     if (!resolvedConfig) return undefined
@@ -1007,13 +1130,22 @@ export default function ProductConfigurator({
       return false
     }
     if (openingValidationIssues.length > 0) return false
-    return requiredFields.every((field) => isFilled(field, form))
-  }, [configuratorState?.status, requiredFields, resolvedConfig, form, openingValidationIssues.length])
+    return requiredFields.every((field) => isFilled(field, form, closureExtrasMandatoryContext))
+  }, [
+    closureExtrasMandatoryContext,
+    configuratorState?.status,
+    requiredFields,
+    resolvedConfig,
+    form,
+    openingValidationIssues.length,
+  ])
 
   const missingRequiredFields = useMemo(() => {
     if (!resolvedConfig) return []
-    return requiredFields.filter((field) => !isFilled(field, form))
-  }, [form, requiredFields, resolvedConfig])
+    return requiredFields.filter(
+      (field) => !isFilled(field, form, closureExtrasMandatoryContext),
+    )
+  }, [closureExtrasMandatoryContext, form, requiredFields, resolvedConfig])
 
   const missingFieldsMessage = useMemo(() => {
     if (!resolvedConfig || canSubmit || missingRequiredFields.length === 0) return null
@@ -1056,53 +1188,58 @@ export default function ProductConfigurator({
     terraceTarpaulin,
   ])
 
-  const filteredFrontClosureExtras = useMemo(
-    () =>
-      resolvedConfig
-        ? filterClosureExtrasBySelection(
-            resolvedConfig.options.frontClosureExtras,
-            form.frontClosure,
-          )
-        : [],
-    [form.frontClosure, resolvedConfig],
-  )
-
-  const filteredBackClosureExtras = useMemo(
-    () =>
-      resolvedConfig
-        ? filterClosureExtrasBySelection(
-            resolvedConfig.options.backClosureExtras,
-            form.backClosure,
-          )
-        : [],
-    [form.backClosure, resolvedConfig],
-  )
+  function sameIdSelection(a: string[], b: string[]): boolean {
+    if (a.length !== b.length) return false
+    const sa = [...a].sort().join('\0')
+    const sb = [...b].sort().join('\0')
+    return sa === sb
+  }
 
   useEffect(() => {
+    if (!resolvedConfig) return
+
     setForm((prev) => {
       const allowedIds = new Set(filteredFrontClosureExtras.map((choice) => choice.id))
-      const nextSelected = prev.frontClosureExtras.filter((id) => allowedIds.has(id))
+      let nextSelected = prev.frontClosureExtras.filter((id) => allowedIds.has(id))
 
-      if (nextSelected.length === prev.frontClosureExtras.length) {
-        return prev
+      if (
+        resolvedConfig.productType === 'trailer' &&
+        isTrailerVerschlussWithMandatoryZubehoer(prev.frontClosure) &&
+        filteredFrontClosureExtras.length > 0
+      ) {
+        const merged = new Set(nextSelected)
+        for (const c of filteredFrontClosureExtras) merged.add(c.id)
+        nextSelected = Array.from(merged)
       }
+
+      if (sameIdSelection(nextSelected, prev.frontClosureExtras)) return prev
 
       return { ...prev, frontClosureExtras: nextSelected }
     })
-  }, [filteredFrontClosureExtras])
+  }, [filteredFrontClosureExtras, resolvedConfig])
 
   useEffect(() => {
+    if (!resolvedConfig) return
+
     setForm((prev) => {
       const allowedIds = new Set(filteredBackClosureExtras.map((choice) => choice.id))
-      const nextSelected = prev.backClosureExtras.filter((id) => allowedIds.has(id))
+      let nextSelected = prev.backClosureExtras.filter((id) => allowedIds.has(id))
 
-      if (nextSelected.length === prev.backClosureExtras.length) {
-        return prev
+      if (
+        resolvedConfig.productType === 'trailer' &&
+        isTrailerVerschlussWithMandatoryZubehoer(prev.backClosure) &&
+        filteredBackClosureExtras.length > 0
+      ) {
+        const merged = new Set(nextSelected)
+        for (const c of filteredBackClosureExtras) merged.add(c.id)
+        nextSelected = Array.from(merged)
       }
+
+      if (sameIdSelection(nextSelected, prev.backClosureExtras)) return prev
 
       return { ...prev, backClosureExtras: nextSelected }
     })
-  }, [filteredBackClosureExtras])
+  }, [filteredBackClosureExtras, resolvedConfig])
 
   useEffect(() => {
     if (!resolvedConfig || !priceEndpoint?.trim()) return
@@ -1265,6 +1402,36 @@ export default function ProductConfigurator({
   ) => {
     setForm((prev) => {
       const exists = prev[field].includes(id)
+      if (exists && resolvedConfig?.productType === 'trailer') {
+        if (field === 'frontClosureExtras') {
+          const filtered = filterClosureExtrasBySelection(
+            resolvedConfig.options.frontClosureExtras,
+            prev.frontClosure,
+          )
+          if (
+            prev.frontClosure &&
+            isTrailerVerschlussWithMandatoryZubehoer(prev.frontClosure) &&
+            filtered.length > 0 &&
+            filtered.some((c) => c.id === id)
+          ) {
+            return prev
+          }
+        }
+        if (field === 'backClosureExtras') {
+          const filtered = filterClosureExtrasBySelection(
+            resolvedConfig.options.backClosureExtras,
+            prev.backClosure,
+          )
+          if (
+            prev.backClosure &&
+            isTrailerVerschlussWithMandatoryZubehoer(prev.backClosure) &&
+            filtered.length > 0 &&
+            filtered.some((c) => c.id === id)
+          ) {
+            return prev
+          }
+        }
+      }
       return {
         ...prev,
         [field]: exists ? prev[field].filter((value) => value !== id) : [...prev[field], id],
@@ -1899,9 +2066,7 @@ export default function ProductConfigurator({
 
             {steps.includes('frontClosure') ? (
               <StepAccordionItem id="frontClosure" title={STEP_TITLES.frontClosure} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('frontClosure')}>
-                {resolvedConfig.productType === 'trailer' && isTrailerEckenSenkrechtVerschweisstClosure(form.frontClosure) ? null : (
-                  <HintPanel text={effectiveHints.frontClosure} />
-                )}
+                <HintPanel text={effectiveHints.frontClosure} />
                 {resolvedConfig.options.frontClosures.length > 0 ? (
                   <ChoiceGrid choices={resolvedConfig.options.frontClosures} value={form.frontClosure} onChange={(value) => setField('frontClosure', value)} onPreview={setPreviewChoice} />
                 ) : (
@@ -1915,8 +2080,21 @@ export default function ProductConfigurator({
                           Bitte waehlen Sie zuerst einen Frontverschluss, damit das passende Zubehoer angezeigt wird.
                         </p>
                       ) : filteredFrontClosureExtras.length > 0 ? (
-                        <MultiChoiceGrid choices={filteredFrontClosureExtras} selectedIds={form.frontClosureExtras} onToggle={(value) => toggleMultiValue('frontClosureExtras', value)} onPreview={setPreviewChoice} />
-                      ) : resolvedConfig.productType === 'trailer' && isTrailerEckenSenkrechtVerschweisstClosure(form.frontClosure) ? null : (
+                        <>
+                          <MultiChoiceGrid
+                            choices={filteredFrontClosureExtras}
+                            selectedIds={form.frontClosureExtras}
+                            onToggle={(value) => toggleMultiValue('frontClosureExtras', value)}
+                            onPreview={setPreviewChoice}
+                            lockedIds={mandatoryFrontClosureExtraIds}
+                          />
+                          {mandatoryFrontClosureExtraIds.size > 0 ? (
+                            <p className="mt-2 text-xs text-[#1F5CAB]/85">
+                              Markierte Zubehoerteile sind fuer diesen Verschluss vorgeschrieben und bleiben gewaehlt.
+                            </p>
+                          ) : null}
+                        </>
+                      ) : (
                         <p className="text-sm text-[#1F5CAB]">
                           Fuer den gewaehlten Frontverschluss ist kein Zubehoer hinterlegt.
                         </p>
@@ -1929,9 +2107,7 @@ export default function ProductConfigurator({
 
             {steps.includes('backClosure') ? (
               <StepAccordionItem id="backClosure" title={STEP_TITLES.backClosure} openStep={openStep} onToggle={toggleStep} showWarning={stepsWithMissingFields.has('backClosure')}>
-                {resolvedConfig.productType === 'trailer' && isTrailerEckenSenkrechtVerschweisstClosure(form.backClosure) ? null : (
-                  <HintPanel text={effectiveHints.backClosure} />
-                )}
+                <HintPanel text={effectiveHints.backClosure} />
                 {resolvedConfig.options.backClosures.length > 0 ? (
                   <ChoiceGrid choices={resolvedConfig.options.backClosures} value={form.backClosure} onChange={(value) => setField('backClosure', value)} onPreview={setPreviewChoice} />
                 ) : (
@@ -1945,8 +2121,21 @@ export default function ProductConfigurator({
                           Bitte waehlen Sie zuerst einen Rueckverschluss, damit das passende Zubehoer angezeigt wird.
                         </p>
                       ) : filteredBackClosureExtras.length > 0 ? (
-                        <MultiChoiceGrid choices={filteredBackClosureExtras} selectedIds={form.backClosureExtras} onToggle={(value) => toggleMultiValue('backClosureExtras', value)} onPreview={setPreviewChoice} />
-                      ) : resolvedConfig.productType === 'trailer' && isTrailerEckenSenkrechtVerschweisstClosure(form.backClosure) ? null : (
+                        <>
+                          <MultiChoiceGrid
+                            choices={filteredBackClosureExtras}
+                            selectedIds={form.backClosureExtras}
+                            onToggle={(value) => toggleMultiValue('backClosureExtras', value)}
+                            onPreview={setPreviewChoice}
+                            lockedIds={mandatoryBackClosureExtraIds}
+                          />
+                          {mandatoryBackClosureExtraIds.size > 0 ? (
+                            <p className="mt-2 text-xs text-[#1F5CAB]/85">
+                              Markierte Zubehoerteile sind fuer diesen Verschluss vorgeschrieben und bleiben gewaehlt.
+                            </p>
+                          ) : null}
+                        </>
+                      ) : (
                         <p className="text-sm text-[#1F5CAB]">
                           Fuer den gewaehlten Rueckverschluss ist kein Zubehoer hinterlegt.
                         </p>
