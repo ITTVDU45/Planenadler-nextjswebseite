@@ -8,6 +8,7 @@ import {
 } from '@/lib/woo-session-cookie'
 import { validateSameOrigin } from '@/app/api/auth/wordpress/_lib'
 import { isRequestHttps } from '@/lib/request-is-https'
+import { fetchWithTransientRetry } from '@/lib/server-fetch-retry'
 
 const MAX_BODY_BYTES = 512 * 1024
 const UPSTREAM_TIMEOUT_MS = 30_000
@@ -69,13 +70,16 @@ export async function POST(request: NextRequest) {
 
   let wpRes: Response
   try {
-    wpRes = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: bodyText,
-      cache: 'no-store',
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-    })
+    wpRes = await fetchWithTransientRetry(
+      url,
+      {
+        method: 'POST',
+        headers,
+        body: bodyText,
+        cache: 'no-store',
+      },
+      { maxAttempts: 4, timeoutMs: UPSTREAM_TIMEOUT_MS, baseDelayMs: 500 },
+    )
   } catch {
     return NextResponse.json({ error: 'GraphQL-Upstream nicht erreichbar.' }, { status: 502 })
   }

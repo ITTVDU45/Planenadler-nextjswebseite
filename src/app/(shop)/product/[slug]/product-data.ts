@@ -8,6 +8,7 @@ import type {
 import type { CustomizerConfig, CustomizerApiResponse } from '@/lib/customizer-types'
 import { resolveCustomizerState } from '@/lib/customizer-resolver'
 import type { ConfiguratorState } from '@/lib/customizer-runtime'
+import { fetchWithTransientRetry } from '@/lib/server-fetch-retry'
 
 const DEFAULT_GRAPHQL_URL = 'https://wp.planenadler.de/graphql'
 const DEFAULT_CUSTOMIZER_API_BASE = 'https://wp.planenadler.de/wp-json/planenadler-customizer/v1/config'
@@ -56,12 +57,16 @@ function appendCustomizerAssetVersion<T>(value: T, version: string): T {
 }
 
 async function gqlFetch<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
-  const res = await fetch(GRAPHQL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
-    next: { revalidate: PRODUCT_PAGE_REVALIDATE_SECONDS },
-  })
+  const res = await fetchWithTransientRetry(
+    GRAPHQL_URL,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables }),
+      next: { revalidate: PRODUCT_PAGE_REVALIDATE_SECONDS },
+    },
+    { maxAttempts: 4, timeoutMs: 28_000, baseDelayMs: 500 },
+  )
 
   if (!res.ok) {
     throw new Error(`GraphQL-Antwort fehlgeschlagen (${res.status})`)
@@ -567,10 +572,14 @@ async function fetchCustomizerConfig(
     if (CUSTOMIZER_REST_API_KEY) {
       headers['X-Planenadler-Customizer-Key'] = CUSTOMIZER_REST_API_KEY
     }
-    const res = await fetch(url, {
-      headers,
-      next: { revalidate: PRODUCT_PAGE_REVALIDATE_SECONDS },
-    })
+    const res = await fetchWithTransientRetry(
+      url,
+      {
+        headers,
+        next: { revalidate: PRODUCT_PAGE_REVALIDATE_SECONDS },
+      },
+      { maxAttempts: 4, timeoutMs: 28_000, baseDelayMs: 500 },
+    )
     if (res.status === 404) {
       return {
         rawConfig: null,
