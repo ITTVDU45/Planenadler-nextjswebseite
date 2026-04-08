@@ -1379,20 +1379,59 @@ export default function ProductConfigurator({
                 />
               </button>
             </div>
-          ) : (
-            <p className="text-sm font-semibold text-[#0F2B52]">
-              Hohlsaum <span className="font-normal text-red-600">*</span>
-            </p>
-          )}
+          ) : null}
           {poolPlaneUi || form.hasExtras === 'yes' ? (
             <>
               {resolvedConfig.options.extras.length > 0 ? (
-                <MultiChoiceGrid
-                  choices={resolvedConfig.options.extras}
-                  selectedIds={form.extrasSelected}
-                  onToggle={(value) => toggleMultiValue('extrasSelected', value)}
-                  onPreview={setPreviewChoice}
-                />
+                poolPlaneUi ? (
+                  <div className="space-y-2">
+                    <label className="flex flex-col gap-2">
+                      <span className="text-sm font-semibold text-[#0F2B52]">
+                        Hohlsaum <span className="font-normal text-red-600">*</span>
+                      </span>
+                      <select
+                        value={form.extrasSelected[0] ?? ''}
+                        onChange={(event) => {
+                          const id = event.target.value
+                          setForm((prev) => ({
+                            ...prev,
+                            extrasSelected: id ? [id] : [],
+                          }))
+                        }}
+                        className="h-12 w-full rounded-xl border border-[#CFE0F5] bg-gradient-to-b from-white to-[#F8FBFF] px-3 text-sm text-[#0F2B52] outline-none transition focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                      >
+                        <option value="">Bitte Hohlsaum waehlen …</option>
+                        {resolvedConfig.options.extras.map((choice) => (
+                          <option key={choice.id} value={choice.id}>
+                            {choice.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {(() => {
+                      const selected = resolvedConfig.options.extras.find(
+                        (c) => c.id === form.extrasSelected[0],
+                      )
+                      if (!selected || !isValidImageUrl(selected.imageSrc)) return null
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewChoice(selected)}
+                          className="text-left text-sm font-semibold text-[#1F5CAB] underline underline-offset-4 hover:text-[#0F2B52]"
+                        >
+                          Vorschau: {selected.label}
+                        </button>
+                      )
+                    })()}
+                  </div>
+                ) : (
+                  <MultiChoiceGrid
+                    choices={resolvedConfig.options.extras}
+                    selectedIds={form.extrasSelected}
+                    onToggle={(value) => toggleMultiValue('extrasSelected', value)}
+                    onPreview={setPreviewChoice}
+                  />
+                )
               ) : null}
             </>
           ) : null}

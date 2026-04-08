@@ -516,14 +516,14 @@ function buildStepOrder(
   if (productType === 'lounge' || productType === 'rectangular') {
     const extrasEarly =
       Boolean(layout?.extrasBeforeEyeletsForPoolRectangular) &&
-      productType === 'rectangular' &&
+      (productType === 'rectangular' || productType === 'lounge') &&
       config.extras.length > 0
     if (extrasEarly) {
       steps.push('extras')
     }
     if (config.eyelets.length) steps.push('eyelets')
     if (config.closureTypes.length) steps.push('closureType')
-    if (productType === 'lounge' && config.extras.length > 0) {
+    if (productType === 'lounge' && config.extras.length > 0 && !extrasEarly) {
       steps.push('extras')
     }
     if (productType === 'rectangular' && config.extras.length > 0 && !extrasEarly) {

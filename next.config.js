@@ -29,6 +29,12 @@ const nextConfig = {
       },
     ]
   },
+  async rewrites() {
+    return [
+      // Browser fragen oft /favicon.ico an; statisches ICO entfernt – gleiche Grafik wie Markenlogo
+      { source: '/favicon.ico', destination: '/Planenadlerlogo.png' },
+    ]
+  },
   async redirects() {
     return [
       { source: '/warenkorb', destination: '/cart', permanent: true },

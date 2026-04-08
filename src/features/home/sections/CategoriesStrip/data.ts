@@ -44,9 +44,9 @@ export const POPULAR_CATEGORIES: Category[] = [
   },
   {
     id: 'gitterboxen',
-    name: 'Gitterboxen',
+    name: 'Gitterboxplanen',
     href: '/product/gitterboxen',
-    image: { src: '/images/Gitterboxplanenadler.png', alt: 'Gitterboxen' },
+    image: { src: '/images/Gitterboxplanenadler.png', alt: 'Gitterboxplanen' },
     bgColor: '#75AAE7',
   },
 ]
