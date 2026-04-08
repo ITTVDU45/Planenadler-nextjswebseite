@@ -939,7 +939,7 @@ export default function ProductConfigurator({
           closureType: 'Waehlen Sie die Verschlussart.',
           frontClosure: 'Waehlen Sie den Frontverschluss.',
           backClosure: 'Waehlen Sie den Rueckverschluss.',
-          extras: 'Definieren Sie zusaetzliche Ausstattungen und Sonderwuensche.',
+          extras: 'Definieren Sie zusaetzliche Ausstattungen.',
           sketch: 'Laden Sie optional eine Skizze hoch.',
         },
         hints,

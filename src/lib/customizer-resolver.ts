@@ -44,7 +44,7 @@ const DEFAULT_HINTS: ResolvedConfiguratorHints = {
   closureType: 'Waehlen Sie den gewuenschten Verschlusstyp passend zur Konstruktion.',
   frontClosure: 'Waehlen Sie den Frontverschluss und optionales Zubehoer.',
   backClosure: 'Waehlen Sie den Rueckverschluss und optionales Zubehoer.',
-  extras: 'Hier koennen Sie zusaetzliche Ausstattungen und Sonderwuensche definieren.',
+  extras: 'Hier koennen Sie zusaetzliche Ausstattungen definieren.',
   sketch: 'Laden Sie optional eine Skizze hoch, damit Positionen und Masse eindeutig zugeordnet werden koennen.',
 }
 
