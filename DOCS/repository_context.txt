@@ -887,6 +887,105 @@ jobs:
         retention-days: 30
 ````
 
+## File: .github/workflows/react-doctor.yml
+````yaml
+name: React Doctor
+on:
+  pull_request:
+    branches: [main, master]
+jobs:
+  react-doctor:
+    name: React Health Check
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm ci
+      - name: Run React Doctor
+        id: doctor
+        run: |
+          # Run react-doctor via local devDependency (avoids npx isolation issues with typescript)
+          npm run doctor 2>&1 | tee /tmp/react-doctor-raw.txt
+          # Strip ANSI escape codes for clean output
+          sed 's/\x1b\[[0-9;]*m//g; s/\x1b\[[0-9;]*[A-Za-z]//g' /tmp/react-doctor-raw.txt | tr -d '\r' > /tmp/react-doctor-output.txt
+          # Extract score from the cleaned output (matches "96 / 100" pattern)
+          SCORE=$(grep -oP '\d+ / 100' /tmp/react-doctor-output.txt | head -1 || echo "unknown")
+          echo "score=$SCORE" >> "$GITHUB_OUTPUT"
+          # Extract just the numeric score for threshold check
+          SCORE_NUM=$(echo "$SCORE" | grep -oP '^\d+' || echo "0")
+          echo "score_num=$SCORE_NUM" >> "$GITHUB_OUTPUT"
+          echo "Detected score: $SCORE (numeric: $SCORE_NUM)"
+      - name: Post PR comment with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('/tmp/react-doctor-output.txt', 'utf8');
+            const score = '${{ steps.doctor.outputs.score }}';
+            const body = [
+              `## 🩺 React Doctor — Score: ${score}`,
+              '',
+              '<details>',
+              '<summary>Full diagnostics</summary>',
+              '',
+              '```',
+              output.trim(),
+              '```',
+              '',
+              '</details>',
+              '',
+              '> Powered by [react-doctor](https://github.com/millionco/react-doctor)',
+            ].join('\n');
+            // Find existing comment to update instead of creating duplicates
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(
+              (c) => c.body?.includes('🩺 React Doctor')
+            );
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## 🩺 React Doctor — Score: ${{ steps.doctor.outputs.score }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/react-doctor-output.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Check score threshold
+        run: |
+          SCORE="${{ steps.doctor.outputs.score_num }}"
+          SCORE="${SCORE:-0}"
+          THRESHOLD=80
+          echo "React Doctor score: $SCORE (threshold: $THRESHOLD)"
+          if [ "$SCORE" -lt "$THRESHOLD" ]; then
+            echo "::error::React Doctor score $SCORE is below threshold $THRESHOLD"
+            exit 1
+          fi
+````
+
 ## File: .github/workflows/repomix.yml
 ````yaml
 name: Repository Documentation
@@ -3167,105 +3266,6 @@ These files are not imported by any other file in the project.
 - [ ] `IProduct`
 - [ ] `IProductRootObject`
 - [ ] `IVariationNodes`
-````
-
-## File: .github/workflows/react-doctor.yml
-````yaml
-name: React Doctor
-on:
-  pull_request:
-    branches: [main, master]
-jobs:
-  react-doctor:
-    name: React Health Check
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-      - name: Install dependencies
-        run: npm ci
-      - name: Run React Doctor
-        id: doctor
-        run: |
-          # Run react-doctor via local devDependency (avoids npx isolation issues with typescript)
-          npm run doctor 2>&1 | tee /tmp/react-doctor-raw.txt
-          # Strip ANSI escape codes for clean output
-          sed 's/\x1b\[[0-9;]*m//g; s/\x1b\[[0-9;]*[A-Za-z]//g' /tmp/react-doctor-raw.txt | tr -d '\r' > /tmp/react-doctor-output.txt
-          # Extract score from the cleaned output (matches "96 / 100" pattern)
-          SCORE=$(grep -oP '\d+ / 100' /tmp/react-doctor-output.txt | head -1 || echo "unknown")
-          echo "score=$SCORE" >> "$GITHUB_OUTPUT"
-          # Extract just the numeric score for threshold check
-          SCORE_NUM=$(echo "$SCORE" | grep -oP '^\d+' || echo "0")
-          echo "score_num=$SCORE_NUM" >> "$GITHUB_OUTPUT"
-          echo "Detected score: $SCORE (numeric: $SCORE_NUM)"
-      - name: Post PR comment with results
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const fs = require('fs');
-            const output = fs.readFileSync('/tmp/react-doctor-output.txt', 'utf8');
-            const score = '${{ steps.doctor.outputs.score }}';
-            const body = [
-              `## 🩺 React Doctor — Score: ${score}`,
-              '',
-              '<details>',
-              '<summary>Full diagnostics</summary>',
-              '',
-              '```',
-              output.trim(),
-              '```',
-              '',
-              '</details>',
-              '',
-              '> Powered by [react-doctor](https://github.com/millionco/react-doctor)',
-            ].join('\n');
-            // Find existing comment to update instead of creating duplicates
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const botComment = comments.find(
-              (c) => c.body?.includes('🩺 React Doctor')
-            );
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
-      - name: Write job summary
-        if: always()
-        run: |
-          echo "## 🩺 React Doctor — Score: ${{ steps.doctor.outputs.score }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat /tmp/react-doctor-output.txt >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-      - name: Check score threshold
-        run: |
-          SCORE="${{ steps.doctor.outputs.score_num }}"
-          SCORE="${SCORE:-0}"
-          THRESHOLD=80
-          echo "React Doctor score: $SCORE (threshold: $THRESHOLD)"
-          if [ "$SCORE" -lt "$THRESHOLD" ]; then
-            echo "::error::React Doctor score $SCORE is below threshold $THRESHOLD"
-            exit 1
-          fi
 ````
 
 ## File: DOCS/wordpress/planenadler-provider-add-payment-method-patch.php
@@ -26019,57 +26019,6 @@ export function ShippingForm({ onValidSubmit, submitLabel, initialData }: Shippi
 }
 ````
 
-## File: src/features/contact/data/contactContent.ts
-````typescript
-import type { ContactHeroContent, ContactInfoItem } from '../types'
-export const CONTACT_HERO_CONTENT: ContactHeroContent = {
-  subline: 'Fragen, Anfrage oder Beratung - wir helfen gern.',
-  image: { src: '/images/Planenadler1.jpg', alt: 'Planenadler Kontakt' },
-}
-const TEL_HREF = 'tel:+492037385985'
-const MAIL_HREF = 'mailto:post@planenadler.de'
-const MAPS_HREF =
-  'https://www.google.com/maps/search/?api=1&query=D%C3%BCsseldorfer+Str.+387,+47055+Duisburg'
-export const CONTACT_INFO_ITEMS: ContactInfoItem[] = [
-  {
-    id: 'phone',
-    type: 'tel',
-    title: 'Telefonnummer Buero oder Mobil',
-    value: '0203 73 85 985 - 0172 7436428',
-    href: TEL_HREF,
-    primaryAction: { label: 'Jetzt anrufen', href: TEL_HREF },
-    secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },
-    bgColor: '#1F5CAB',
-    textColor: 'text-white',
-    subTextColor: 'text-white/80',
-  },
-  {
-    id: 'email',
-    type: 'email',
-    title: 'E-Mail Adresse',
-    value: 'post@planenadler.de',
-    href: MAIL_HREF,
-    primaryAction: { label: 'E-Mail senden', href: MAIL_HREF },
-    secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },
-    bgColor: '#FFFFFF',
-    textColor: 'text-[#1F5CAB]',
-    subTextColor: 'text-[#3982DC]/80',
-  },
-  {
-    id: 'address',
-    type: 'address',
-    title: 'Adresse & Oeffnungszeiten',
-    value: 'Duesseldorfer Str. 387, 47055 Duisburg - Mo-Fr 08:00-17:00',
-    href: MAPS_HREF,
-    primaryAction: { label: 'Route planen', href: MAPS_HREF },
-    secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },
-    bgColor: '#3982DC',
-    textColor: 'text-white',
-    subTextColor: 'text-white/80',
-  },
-]
-````
-
 ## File: src/features/home/sections/Hero/components/HeroSlideCard/HeroSlideCard.component.tsx
 ````typescript
 import Image from 'next/image'
@@ -27204,6 +27153,57 @@ export default function ProductTabs({ tabs }: ProductTabsProps) {
     </section>
   )
 }
+````
+
+## File: src/features/contact/data/contactContent.ts
+````typescript
+import type { ContactHeroContent, ContactInfoItem } from '../types'
+export const CONTACT_HERO_CONTENT: ContactHeroContent = {
+  subline: 'Fragen, Anfrage oder Beratung - wir helfen gern.',
+  image: { src: '/images/Planenadler1.jpg', alt: 'Planenadler Kontakt' },
+}
+const TEL_HREF = 'tel:+492037385985'
+const MAIL_HREF = 'mailto:post@planenadler.de'
+const MAPS_HREF =
+  'https://www.google.com/maps/search/?api=1&query=D%C3%BCsseldorfer+Str.+387,+47055+Duisburg'
+export const CONTACT_INFO_ITEMS: ContactInfoItem[] = [
+  {
+    id: 'phone',
+    type: 'tel',
+    title: 'Telefonnummer Buero oder Mobil',
+    value: '0203 73 85 985 - 0172 7436428',
+    href: TEL_HREF,
+    primaryAction: { label: 'Jetzt anrufen', href: TEL_HREF },
+    secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },
+    bgColor: '#1F5CAB',
+    textColor: 'text-white',
+    subTextColor: 'text-white/80',
+  },
+  {
+    id: 'email',
+    type: 'email',
+    title: 'E-Mail Adresse',
+    value: 'post@planenadler.de',
+    href: MAIL_HREF,
+    primaryAction: { label: 'E-Mail senden', href: MAIL_HREF },
+    secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },
+    bgColor: '#FFFFFF',
+    textColor: 'text-[#1F5CAB]',
+    subTextColor: 'text-[#3982DC]/80',
+  },
+  {
+    id: 'address',
+    type: 'address',
+    title: 'Adresse & Öffnungszeiten',
+    value: 'Duesseldorfer Str. 387, 47055 Duisburg - Mo-Fr 07:00-17:00',
+    href: MAPS_HREF,
+    primaryAction: { label: 'Route planen', href: MAPS_HREF },
+    secondaryAction: { label: 'Kontaktseite', href: '/kontakt' },
+    bgColor: '#3982DC',
+    textColor: 'text-white',
+    subTextColor: 'text-white/80',
+  },
+]
 ````
 
 ## File: src/features/home/sections/BlogShowcase/mapBlogPostToArticle.ts
