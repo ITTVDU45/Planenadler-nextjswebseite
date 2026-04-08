@@ -19,16 +19,6 @@ const CUSTOMIZER_API_BASE = process.env.CUSTOMIZER_API_URL?.trim() || DEFAULT_CU
 const CUSTOMIZER_REST_API_KEY = process.env.CUSTOMIZER_REST_API_KEY?.trim() ?? ''
 const PRODUCT_PAGE_REVALIDATE_SECONDS = 60
 
-/** Anzeigetitel abweichend vom WooCommerce-Namen (Slug -> gewuenschte Shop-Bezeichnung). */
-const PRODUCT_PAGE_TITLE_BY_SLUG: Record<string, string> = {
-  gitterboxen: 'Gitterboxplanen',
-}
-
-function resolveProductDisplayTitle(slug: string, woocommerceName: string): string {
-  const key = slug.trim().toLowerCase()
-  return PRODUCT_PAGE_TITLE_BY_SLUG[key] ?? woocommerceName
-}
-
 /** Sollte mit PRODUCT_PAGE_REVALIDATE_SECONDS / product-page-cache.ts übereinstimmen */
 const PLACEHOLDER_IMAGE: ProductImage = {
   src: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iNDAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZTVlN2ViIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjI0IiBmaWxsPSIjOWNhM2FmIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5LZWluIEJpbGQ8L3RleHQ+PC9zdmc+',
@@ -635,27 +625,25 @@ async function fetchCustomizerConfig(
 }
 
 function mapToTruckTarpProduct(
-  slug: string,
   product: WpProductNode,
   allProducts: WpRelatedNode[],
   customizerData?: Awaited<ReturnType<typeof fetchCustomizerConfig>>,
 ): TruckTarpProduct {
-  const displayTitle = resolveProductDisplayTitle(slug, product.name)
-  const mainImage = toProductImage(product.image, displayTitle, product.modified)
+  const mainImage = toProductImage(product.image, product.name, product.modified)
 
   const gallery: ProductImage[] = (product.galleryImages?.nodes ?? [])
     .filter((img): img is WpImage => !!img?.sourceUrl)
-    .map((img) => toProductImage(img, displayTitle, product.modified))
+    .map((img) => toProductImage(img, product.name, product.modified))
 
   const subtitle =
     stripHtml(product.shortDescription) ||
-    `Hochwertige ${displayTitle} – individuell nach Maß gefertigt.`
+    `Hochwertige ${product.name} – individuell nach Maß gefertigt.`
 
   const relatedNodes = product.related?.nodes ?? []
 
   return {
     databaseId: product.databaseId,
-    title: displayTitle,
+    title: product.name,
     subtitle,
     price: decodePrice(product.price),
     ctaLabel: 'Jetzt konfigurieren',
@@ -699,7 +687,7 @@ export async function getProductPageData(slug: string): Promise<TruckTarpProduct
 
     const customizerData = await fetchCustomizerConfig(data.product.databaseId, slug)
 
-    return mapToTruckTarpProduct(slug, data.product, allProducts, customizerData)
+    return mapToTruckTarpProduct(data.product, allProducts, customizerData)
   } catch (error) {
     return fallbackProduct(
       slug,
@@ -714,12 +702,11 @@ function fallbackProduct(slug: string, dataErrorMessage?: string): TruckTarpProd
   const name = slug
     .replace(/-/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase())
-  const displayTitle = resolveProductDisplayTitle(slug, name)
 
   return {
     databaseId: 0,
-    title: displayTitle,
-    subtitle: `${displayTitle} – individuell konfigurierbar und in höchster Qualität gefertigt.`,
+    title: name,
+    subtitle: `${name} – individuell konfigurierbar und in höchster Qualität gefertigt.`,
     price: 'Preis auf Anfrage',
     ctaLabel: 'Jetzt konfigurieren',
     image: PLACEHOLDER_IMAGE,
@@ -729,7 +716,7 @@ function fallbackProduct(slug: string, dataErrorMessage?: string): TruckTarpProd
       {
         value: 'beschreibung',
         label: 'Beschreibung',
-        content: { intro: `${displayTitle} – Maßanfertigung aus hochwertigem PVC-Material.` },
+        content: { intro: `${name} – Maßanfertigung aus hochwertigem PVC-Material.` },
       },
     ],
     recommendations: [],
