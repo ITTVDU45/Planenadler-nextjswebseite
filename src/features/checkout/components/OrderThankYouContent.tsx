@@ -14,6 +14,7 @@ import {
   getAbsoluteImageUrl,
   parseCartPriceString,
 } from '@/shared/lib/functions'
+import { GoogleAdsPurchaseTracker } from '@/components/analytics/google-ads-purchase-tracker'
 
 const CART_PATH = '/cart'
 const THANK_YOU_MAX_AGE_MS = 48 * 60 * 60 * 1000
@@ -79,6 +80,19 @@ export function OrderThankYouContent() {
   const receipt = lastCompletedOrder?.receipt
   const formattedDate = formatOrderDate(lastCompletedOrder?.date)
 
+  const adsTransactionId =
+    lastCompletedOrder?.databaseId ??
+    (lastCompletedOrder?.orderNumber != null ? String(lastCompletedOrder.orderNumber) : null) ??
+    `session-${lastCompletedOrder?.completedAt ?? 0}`
+
+  const adsValueEuro =
+    receipt?.totals?.total != null
+      ? (() => {
+          const v = parseCartPriceString(receipt.totals.total)
+          return Number.isFinite(v) && v >= 0 ? v : undefined
+        })()
+      : undefined
+
   if (!hydrated) {
     return (
       <ContentShell className="py-12">
@@ -101,6 +115,7 @@ export function OrderThankYouContent() {
 
   return (
     <ContentShell className="py-8 lg:py-12">
+      <GoogleAdsPurchaseTracker transactionId={adsTransactionId} valueEuro={adsValueEuro} />
       <CheckoutSteps currentStep="order" />
 
       <div className="mx-auto mt-8 max-w-3xl space-y-8">
