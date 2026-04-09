@@ -1,6 +1,11 @@
 import type { OrderReceiptSnapshot } from '@/features/checkout/lib/build-order-receipt-snapshot'
+import {
+  normalizeTrackingCurrency,
+  pushToDataLayerOnce,
+  roundTrackingValue,
+  type DataLayerEcommerceEvent,
+} from '@/lib/tracking'
 
-const STORAGE_PREFIX = 'purchase_tracked_'
 const DEFAULT_CURRENCY = 'EUR'
 
 export interface PurchaseEventInput {
@@ -30,12 +35,7 @@ export interface PurchaseDataLayerEvent {
 }
 
 function roundCurrency(value: number): number {
-  return Math.round(value * 100) / 100
-}
-
-function normalizeCurrency(currency?: string): string {
-  const normalized = currency?.trim().toUpperCase()
-  return normalized || DEFAULT_CURRENCY
+  return roundTrackingValue(value)
 }
 
 function buildItemId(line: OrderReceiptSnapshot['lines'][number]): string {
@@ -69,32 +69,8 @@ export function buildPurchaseEcommercePayload(input: PurchaseEventInput): Purcha
   return {
     transaction_id: transactionId,
     value: roundCurrency(input.value),
-    currency: normalizeCurrency(input.currency),
+    currency: normalizeTrackingCurrency(input.currency ?? DEFAULT_CURRENCY),
     items,
-  }
-}
-
-function getStorageKey(transactionId: string): string {
-  return `${STORAGE_PREFIX}${transactionId}`
-}
-
-function hasTrackedPurchase(transactionId: string): boolean {
-  if (typeof window === 'undefined') return false
-
-  try {
-    return sessionStorage.getItem(getStorageKey(transactionId)) === '1'
-  } catch {
-    return false
-  }
-}
-
-function markPurchaseTracked(transactionId: string): void {
-  if (typeof window === 'undefined') return
-
-  try {
-    sessionStorage.setItem(getStorageKey(transactionId), '1')
-  } catch {
-    /* ignore */
   }
 }
 
@@ -103,16 +79,9 @@ export function pushPurchaseEvent(input: PurchaseEventInput): boolean {
 
   const payload = buildPurchaseEcommercePayload(input)
   if (!payload) return false
-  if (hasTrackedPurchase(payload.transaction_id)) return false
-
-  window.dataLayer = window.dataLayer || []
-
-  const event: PurchaseDataLayerEvent = {
+  const event: DataLayerEcommerceEvent = {
     event: 'purchase',
     ecommerce: payload,
   }
-
-  window.dataLayer.push(event)
-  markPurchaseTracked(payload.transaction_id)
-  return true
+  return pushToDataLayerOnce(`purchase_tracked_${payload.transaction_id}`, event)
 }

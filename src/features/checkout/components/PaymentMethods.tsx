@@ -4,6 +4,14 @@ import { useEffect } from 'react'
 import { useCheckoutStore } from '../store/checkout.store'
 import { PAYMENT_METHOD_IDS, type PaymentMethodId } from '../types/checkout.types'
 import type { CheckoutGatewayOption } from '../lib/payment-gateways'
+import { useCartStore } from '@/shared/lib/cartStore'
+import {
+  buildCartSignature,
+  mapCartToTrackingItems,
+  pushToDataLayerOnce,
+  type DataLayerEcommerceEvent,
+} from '@/lib/tracking'
+import { parseCartPriceString } from '@/shared/lib/functions'
 
 const ALL_PAYMENT_OPTIONS: CheckoutGatewayOption[] = [
   {
@@ -66,6 +74,7 @@ interface PaymentMethodsProps {
 export function PaymentMethods({ hideWallet = false, options, loading = false }: PaymentMethodsProps = {}) {
   const selectedPayment = useCheckoutStore((state) => state.selectedPayment)
   const setSelectedPayment = useCheckoutStore((state) => state.setSelectedPayment)
+  const cart = useCartStore((state) => state.cart)
 
   const resolvedOptions = (options ?? ALL_PAYMENT_OPTIONS).filter(
     (option) => option.available && (!hideWallet || option.id !== PAYMENT_METHOD_IDS.WALLET)
@@ -109,7 +118,27 @@ export function PaymentMethods({ hideWallet = false, options, loading = false }:
                 value={option.id}
                 checked={selectedPayment === option.id}
                 disabled={!option.available}
-                onChange={() => setSelectedPayment(option.id)}
+                onChange={() => {
+                  setSelectedPayment(option.id)
+
+                  const items = mapCartToTrackingItems(cart)
+                  const cartSignature = buildCartSignature(cart)
+                  const totalValue = parseCartPriceString(cart?.totals?.total)
+
+                  if (items.length === 0 || !cartSignature) return
+
+                  const paymentEvent: DataLayerEcommerceEvent = {
+                    event: 'add_payment_info',
+                    ecommerce: {
+                      value: totalValue,
+                      currency: 'EUR',
+                      payment_type: option.id,
+                      items,
+                    },
+                  }
+
+                  pushToDataLayerOnce(`add_payment_info_${option.id}_${cartSignature}`, paymentEvent)
+                }}
                 className="mt-1 h-4 w-4 border-[#DBE9F9] text-[#1F5CAB] focus:ring-[#1F5CAB]"
               />
               <div className="min-w-0 flex-1">

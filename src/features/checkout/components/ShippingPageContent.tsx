@@ -13,6 +13,13 @@ import { ShippingForm } from './ShippingForm'
 import { CheckoutOrderSummary } from './OrderSummary'
 import { ContentShell } from '@/shared/components/ContentShell.component'
 import type { CheckoutShippingInput } from '../lib/checkoutSchema'
+import {
+  buildCartSignature,
+  mapCartToTrackingItems,
+  pushToDataLayerOnce,
+  type DataLayerEcommerceEvent,
+} from '@/lib/tracking'
+import { parseCartPriceString } from '@/shared/lib/functions'
 
 const CART_PATH = '/cart'
 const PAYMENT_PATH = '/checkout/payment'
@@ -37,10 +44,45 @@ export function ShippingPageContent() {
   const hasItems = (cart?.products?.length ?? 0) > 0
 
   const handleValidSubmit = (formData: CheckoutShippingInput) => {
+    const cartSignature = buildCartSignature(cart)
+    const items = mapCartToTrackingItems(cart)
+    const totalValue = parseCartPriceString(cart?.totals?.total)
+    if (items.length > 0 && cartSignature) {
+      const shippingEvent: DataLayerEcommerceEvent = {
+        event: 'add_shipping_info',
+        ecommerce: {
+          value: totalValue,
+          currency: 'EUR',
+          shipping_tier: formData.shippingMethod,
+          items,
+        },
+      }
+      pushToDataLayerOnce(`add_shipping_info_${formData.shippingMethod}_${cartSignature}`, shippingEvent)
+    }
     setShippingData(formData)
     setSelectedShipping(formData.shippingMethod)
     router.push(PAYMENT_PATH)
   }
+
+  useEffect(() => {
+    const items = mapCartToTrackingItems(cart)
+    if (items.length === 0) return
+
+    const cartSignature = buildCartSignature(cart)
+    if (!cartSignature) return
+
+    const totalValue = parseCartPriceString(cart?.totals?.total)
+    const beginCheckoutEvent: DataLayerEcommerceEvent = {
+      event: 'begin_checkout',
+      ecommerce: {
+        value: totalValue,
+        currency: 'EUR',
+        items,
+      },
+    }
+
+    pushToDataLayerOnce(`begin_checkout_${cartSignature}`, beginCheckoutEvent)
+  }, [cart])
 
   if (!hasItems) {
     return (

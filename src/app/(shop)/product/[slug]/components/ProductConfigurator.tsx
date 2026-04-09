@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { GET_CART } from '@/features/cart/api/queries'
 import { AddToCartSuccessModal } from '@/shared/components/AddToCartSuccessModal'
+import { parseCartPriceString } from '@/shared/lib/functions'
 import type { ConfiguratorHints, ConfiguratorOptionsFromBackend } from './types'
 import {
   buildConfiguredCartPayload,
@@ -31,6 +32,7 @@ import {
   TERRACE_OPENING_CLAMP_FIELD_KEYS,
 } from '@/lib/tarpaulin-opening-rules'
 import { cn } from '@/lib/utils'
+import { pushToDataLayer, roundTrackingValue, type DataLayerEcommerceEvent } from '@/lib/tracking'
 
 interface ProductConfiguratorProps {
   productId: number
@@ -1507,6 +1509,24 @@ export default function ProductConfigurator({
 
       applySessionFromResponse(response)
       await apolloClient.refetchQueries({ include: [GET_CART] })
+
+      const addToCartEvent: DataLayerEcommerceEvent = {
+        event: 'add_to_cart',
+        ecommerce: {
+          currency: 'EUR',
+          items: [
+            {
+              item_id: String(productId),
+              item_name: productName,
+              price: calculatedPrice
+                ? roundTrackingValue(parseCartPriceString(calculatedPrice))
+                : undefined,
+              quantity: 1,
+            },
+          ],
+        },
+      }
+      pushToDataLayer(addToCartEvent)
 
       setSuccess('Konfiguration wurde gespeichert und in den Warenkorb gelegt.')
       setSuccessModalOpen(true)

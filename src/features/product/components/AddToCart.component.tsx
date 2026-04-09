@@ -12,6 +12,7 @@ import { useCartStore } from '@/shared/lib/cartStore';
 
 // Utils
 import { getFormattedCart } from '@/shared/lib/functions';
+import { pushToDataLayer, roundTrackingValue, type DataLayerEcommerceEvent } from '@/lib/tracking';
 
 // Types
 import type {
@@ -71,6 +72,26 @@ const AddToCart = ({
     refetchQueries: [{ query: GET_CART }],
     onCompleted: () => {
       void refetch();
+      const priceValue = typeof product?.salePrice === 'string'
+        ? Number.parseFloat(product.salePrice.replace(/[^0-9,.-]/g, '').replace(/\./g, '').replace(',', '.'))
+        : typeof product?.price === 'string'
+          ? Number.parseFloat(product.price.replace(/[^0-9,.-]/g, '').replace(/\./g, '').replace(',', '.'))
+          : undefined
+      const event: DataLayerEcommerceEvent = {
+        event: 'add_to_cart',
+        ecommerce: {
+          currency: 'EUR',
+          items: [
+            {
+              item_id: String(productId),
+              item_name: product?.name ?? 'Produkt',
+              price: Number.isFinite(priceValue) ? roundTrackingValue(priceValue as number) : undefined,
+              quantity: 1,
+            },
+          ],
+        },
+      }
+      pushToDataLayer(event);
       setSuccessModalOpen(true);
     },
 
