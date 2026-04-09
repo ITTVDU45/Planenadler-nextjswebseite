@@ -1,10 +1,14 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { Playfair_Display } from 'next/font/google'
 import Image from 'next/image'
 import Script from 'next/script'
+import { GoogleAnalyticsAppTracker } from '@/components/analytics/google-analytics-app-tracker'
+import { GoogleAnalyticsScripts } from '@/components/analytics/google-analytics-scripts'
 import '@/shared/styles/globals.css'
 import { Providers } from './Providers'
 import { DEFAULT_DESCRIPTION, GOOGLE_SITE_VERIFICATION, SITE_NAME, SITE_URL } from '@/lib/seo'
+import { getGtmBootstrapScript, getGtmId } from '@/lib/gtm'
 import { getLocalBusinessJsonLd, getOrganizationJsonLd, getWebSiteJsonLd } from '@/lib/seo-schema'
 
 const playfair = Playfair_Display({
@@ -60,15 +64,6 @@ export const metadata: Metadata = {
   },
 }
 
-const GTM_ID_FALLBACK = 'GTM-M33MB2FV'
-
-function getGtmId(): string | null {
-  const fromEnv = process.env.NEXT_PUBLIC_GTM_ID?.trim()
-  if (fromEnv === '') return null
-  const raw = fromEnv || GTM_ID_FALLBACK
-  return /^GTM-[A-Z0-9]+$/i.test(raw) ? raw : null
-}
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const gtmId = getGtmId()
   const whatsappHref = 'https://wa.me/491727436428'
@@ -84,10 +79,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             id="google-tag-manager"
             strategy="beforeInteractive"
             dangerouslySetInnerHTML={{
-              __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${gtmId}');`,
+              __html: getGtmBootstrapScript(gtmId),
             }}
           />
         ) : null}
+        <GoogleAnalyticsScripts />
       </head>
       <body className={playfair.variable}>
         {gtmId ? (
@@ -113,6 +109,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }}
         />
+        <Suspense fallback={null}>
+          <GoogleAnalyticsAppTracker />
+        </Suspense>
         <Providers>{children}</Providers>
         <a
           href={whatsappHref}

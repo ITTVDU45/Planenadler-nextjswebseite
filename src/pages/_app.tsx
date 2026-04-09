@@ -5,6 +5,8 @@ import NProgress from 'nprogress'
 import { ApolloProvider } from '@apollo/client'
 import { Playfair_Display } from 'next/font/google'
 
+import { GoogleAnalyticsPagesTracker } from '@/components/analytics/google-analytics-pages-tracker'
+import { GoogleAnalyticsScripts } from '@/components/analytics/google-analytics-scripts'
 import client from '@/config/apollo/ApolloClient'
 import CartInitializer from '@/features/cart/components/CartInitializer.component'
 import { PwaManager } from '@/components/pwa/PwaManager'
@@ -33,6 +35,8 @@ function MyApp({ Component, pageProps }: AppProps) {
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
+      <GoogleAnalyticsScripts />
+      <GoogleAnalyticsPagesTracker />
       <CartInitializer />
       <PwaManager />
       <div className={playfair.variable}>
