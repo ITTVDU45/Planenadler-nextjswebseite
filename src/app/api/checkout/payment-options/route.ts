@@ -108,7 +108,10 @@ export async function GET(request: NextRequest) {
       normalizeStoreApiPaymentMethods(experimentalCart?.payment_methods)
     )
 
-    if (process.env.NEXT_PUBLIC_ALWAYS_OFFER_BANK_TRANSFER?.trim() === '1') {
+    // Headless: Store API listet „bacs“ oft nicht, WooGraphQL-Checkout unterstützt ihn trotzdem.
+    // Opt-out (z. B. wenn Banküberweisung in Woo wirklich deaktiviert): CHECKOUT_SUPPLEMENT_BACS=0
+    const supplementBacs = process.env.CHECKOUT_SUPPLEMENT_BACS?.trim() !== '0'
+    if (supplementBacs) {
       availablePaymentMethods = mergeUniquePaymentMethodIds(availablePaymentMethods, ['bacs'])
     }
     const paymentRequirements = Array.isArray(cartData.payment_requirements)
