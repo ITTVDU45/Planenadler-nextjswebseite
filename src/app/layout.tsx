@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Playfair_Display } from 'next/font/google'
 import Image from 'next/image'
+import Script from 'next/script'
 import '@/shared/styles/globals.css'
 import { Providers } from './Providers'
 import { DEFAULT_DESCRIPTION, GOOGLE_SITE_VERIFICATION, SITE_NAME, SITE_URL } from '@/lib/seo'
@@ -59,7 +60,17 @@ export const metadata: Metadata = {
   },
 }
 
+const GTM_ID_FALLBACK = 'GTM-M33MB2FV'
+
+function getGtmId(): string | null {
+  const fromEnv = process.env.NEXT_PUBLIC_GTM_ID?.trim()
+  if (fromEnv === '') return null
+  const raw = fromEnv || GTM_ID_FALLBACK
+  return /^GTM-[A-Z0-9]+$/i.test(raw) ? raw : null
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const gtmId = getGtmId()
   const whatsappHref = 'https://wa.me/491727436428'
   const organizationJsonLd = getOrganizationJsonLd()
   const websiteJsonLd = getWebSiteJsonLd()
@@ -67,7 +78,29 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="de">
+      <head>
+        {gtmId ? (
+          <Script
+            id="google-tag-manager"
+            strategy="beforeInteractive"
+            dangerouslySetInnerHTML={{
+              __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${gtmId}');`,
+            }}
+          />
+        ) : null}
+      </head>
       <body className={playfair.variable}>
+        {gtmId ? (
+          <noscript>
+            <iframe
+              src={`https://www.googletagmanager.com/ns.html?id=${gtmId}`}
+              height={0}
+              width={0}
+              style={{ display: 'none', visibility: 'hidden' }}
+              title="Google Tag Manager"
+            />
+          </noscript>
+        ) : null}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
