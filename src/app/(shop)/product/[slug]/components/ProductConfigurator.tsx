@@ -24,7 +24,12 @@ import type {
 } from '@/lib/customizer-runtime'
 import { emptyConfigFormState } from '@/lib/customizer-runtime'
 import { TARPAULIN_MIN_GAP_BETWEEN_OPENINGS_CM } from '@/lib/tarpaulin-constants'
-import { getTarpaulinOpeningValidationIssues, isTerraceTarpaulinLayout } from '@/lib/tarpaulin-opening-rules'
+import {
+  applyTerraceTarpaulinOpeningClamps,
+  getTarpaulinOpeningValidationIssues,
+  isTerraceTarpaulinLayout,
+  TERRACE_OPENING_CLAMP_FIELD_KEYS,
+} from '@/lib/tarpaulin-opening-rules'
 import { cn } from '@/lib/utils'
 
 interface ProductConfiguratorProps {
@@ -77,6 +82,8 @@ const ADD_TO_CART_MUTATION = /* GraphQL */ `
 `
 
 const PRICE_DEBOUNCE_MS = 200
+
+const TERRACE_OPENING_CLAMP_KEY_SET = new Set<keyof ConfigFormState>(TERRACE_OPENING_CLAMP_FIELD_KEYS)
 
 function createInitialFormState(
   resolvedConfig: ResolvedCustomizerConfig | null,
@@ -1310,7 +1317,17 @@ export default function ProductConfigurator({
   const formId = `product-configurator-form-${productId}`
 
   const setField = <K extends keyof ConfigFormState>(key: K, value: ConfigFormState[K]) => {
-    setForm((prev) => ({ ...prev, [key]: value }))
+    setForm((prev) => {
+      let next: ConfigFormState = { ...prev, [key]: value }
+      if (
+        terraceTarpaulin &&
+        resolvedConfig &&
+        TERRACE_OPENING_CLAMP_KEY_SET.has(key)
+      ) {
+        next = applyTerraceTarpaulinOpeningClamps(next, resolvedConfig)
+      }
+      return next
+    })
   }
 
   const clearSingleWindowFields = (state: ConfigFormState): ConfigFormState => ({
