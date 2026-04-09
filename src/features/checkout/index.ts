@@ -1,4 +1,5 @@
 export { useCheckoutStore } from './store/checkout.store'
+export type { LastCompletedOrderSnapshot } from './store/checkout.store'
 export type {
   CheckoutStepId,
   CheckoutFormValues,

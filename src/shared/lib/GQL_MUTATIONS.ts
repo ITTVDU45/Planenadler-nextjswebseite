@@ -162,11 +162,19 @@ export const ADD_TO_CART = gql`
   }
 `;
 
+/** WooGraphQL: checkout.order-Felder an euer Schema anpassen (z. B. databaseId weglassen, falls nicht vorhanden). */
 export const CHECKOUT_MUTATION = gql`
   mutation CHECKOUT_MUTATION($input: CheckoutInput!) {
     checkout(input: $input) {
       result
       redirect
+      order {
+        id
+        databaseId
+        orderNumber
+        date
+        status
+      }
     }
   }
 `;

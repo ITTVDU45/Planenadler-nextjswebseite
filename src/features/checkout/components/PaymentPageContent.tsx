@@ -31,6 +31,13 @@ interface CheckoutMutationResponse {
   checkout?: {
     result?: string | null
     redirect?: string | null
+    order?: {
+      id?: string | null
+      databaseId?: string | number | null
+      orderNumber?: number | string | null
+      date?: string | null
+      status?: string | null
+    } | null
   } | null
 }
 
@@ -68,7 +75,8 @@ function toCheckoutDataProps(data: CheckoutFormShipping, paymentMethod: string):
 export function PaymentPageContent() {
   const router = useRouter()
   const { syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
-  const { shippingData, selectedPayment, setSelectedPayment, setOrderCompleted } = useCheckoutStore()
+  const { shippingData, selectedPayment, setSelectedPayment, setOrderCompleted, setLastCompletedOrder } =
+    useCheckoutStore()
 
   const { data } = useQuery(GET_CART, { notifyOnNetworkStatusChange: true })
   const {
@@ -167,6 +175,21 @@ export function PaymentPageContent() {
           window.location.assign(redirectUrl)
           return
         }
+        const order = mutationData?.checkout?.order
+        setLastCompletedOrder(
+          order
+            ? {
+                orderNumber: order.orderNumber ?? null,
+                databaseId:
+                  order.databaseId !== undefined && order.databaseId !== null
+                    ? String(order.databaseId)
+                    : null,
+                date: order.date ?? null,
+                status: order.status ?? null,
+                completedAt: Date.now(),
+              }
+            : { completedAt: Date.now() },
+        )
         setOrderCompleted(true)
         clearWooCommerceSession()
         router.push(CONFIRMATION_PATH)
