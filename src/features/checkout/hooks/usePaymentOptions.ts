@@ -26,6 +26,7 @@ export function usePaymentOptions(): PaymentOptionsState {
       try {
         const response = await fetch('/api/checkout/payment-options', {
           method: 'GET',
+          credentials: 'include',
           cache: 'no-store',
           signal: controller.signal,
         })

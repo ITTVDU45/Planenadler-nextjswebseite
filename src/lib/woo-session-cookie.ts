@@ -40,3 +40,16 @@ export function readWooSessionTokenFromRequest(request: NextRequest): string | n
     return raw
   }
 }
+
+/**
+ * Gleiche Session wie GraphQL-Proxy: Cookie + woocommerce-session-Header.
+ * Ohne Header kann die Store API einen anderen/leeren Warenkorb sehen als WPGraphQL → falsche payment_methods / „invalid payment method“.
+ */
+export function buildWooStoreApiHeaders(request: NextRequest): Record<string, string> {
+  const headers: Record<string, string> = {}
+  const cookie = request.headers.get('cookie')
+  if (cookie) headers.cookie = cookie
+  const sessionToken = readWooSessionTokenFromRequest(request)
+  if (sessionToken) headers['woocommerce-session'] = `Session ${sessionToken}`
+  return headers
+}

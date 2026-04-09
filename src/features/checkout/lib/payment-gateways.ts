@@ -19,6 +19,8 @@ export interface CheckoutGatewayDiagnostics {
   cartFetchOk: boolean
   checkoutBootstrapOk: boolean
   cookiePresent: boolean
+  /** Woo-Session-Header an Store API gesendet (wie /api/graphql) */
+  wooSessionHeaderSent: boolean
   cartItemCount: number
   availablePaymentMethods: string[]
   paymentRequirements: string[]

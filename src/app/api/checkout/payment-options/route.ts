@@ -7,6 +7,7 @@ import {
   mergeUniquePaymentMethodIds,
   normalizeStoreApiPaymentMethods,
 } from '@/features/checkout/lib/store-api-payment-methods'
+import { buildWooStoreApiHeaders, readWooSessionTokenFromRequest } from '@/lib/woo-session-cookie'
 
 function resolveWordPressOrigin(): string {
   const candidates = [
@@ -65,19 +66,21 @@ export async function GET(request: NextRequest) {
 
   const cartUrl = toStoreApiCartUrl(upstreamUrl)
   const cookie = request.headers.get('cookie') ?? ''
+  const storeHeaders = buildWooStoreApiHeaders(request)
+  const sessionToken = readWooSessionTokenFromRequest(request)
   const errors: string[] = []
 
   try {
     const cartResponse = await fetch(cartUrl, {
       method: 'GET',
-      headers: cookie ? { cookie } : undefined,
+      headers: Object.keys(storeHeaders).length > 0 ? storeHeaders : undefined,
       cache: 'no-store',
     })
     const cartData = await parseJsonSafe(cartResponse)
 
     const checkoutResponse = await fetch(upstreamUrl, {
       method: 'GET',
-      headers: cookie ? { cookie } : undefined,
+      headers: Object.keys(storeHeaders).length > 0 ? storeHeaders : undefined,
       cache: 'no-store',
     })
     const checkoutBootstrapOk = checkoutResponse.ok || checkoutResponse.status === 401
@@ -120,14 +123,32 @@ export async function GET(request: NextRequest) {
     const cartItems = Array.isArray(cartData.items) ? cartData.items : []
     const hasStripeKey = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim())
 
+    let gateways = resolveCheckoutGateways(availablePaymentMethods, hasStripeKey)
+
+    const explicitBankId = process.env.WC_CHECKOUT_BANK_PAYMENT_METHOD_ID?.trim()
+    if (explicitBankId) {
+      gateways = gateways.map((g) =>
+        g.id === 'bacs'
+          ? {
+              ...g,
+              wcPaymentMethodId: explicitBankId,
+              available: true,
+              frontendReady: true,
+              expressEligible: false,
+            }
+          : g,
+      )
+    }
+
     const payload: PaymentOptionsResponse = {
-      gateways: resolveCheckoutGateways(availablePaymentMethods, hasStripeKey),
+      gateways,
       diagnostics: {
         upstreamUrl,
         cartUrl,
         cartFetchOk: cartResponse.ok,
         checkoutBootstrapOk,
         cookiePresent: cookie.length > 0,
+        wooSessionHeaderSent: Boolean(sessionToken),
         cartItemCount: cartItems.length,
         availablePaymentMethods,
         paymentRequirements,
