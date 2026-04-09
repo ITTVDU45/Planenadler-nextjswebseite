@@ -15,6 +15,18 @@ const serwist = new Serwist({
   navigationPreload: true,
   runtimeCaching: [
     {
+      matcher: ({ url }) => url.pathname.startsWith('/_next/static/'),
+      handler: new StaleWhileRevalidate({
+        cacheName: 'next-static',
+        plugins: [
+          new ExpirationPlugin({
+            maxEntries: 120,
+            maxAgeSeconds: 60 * 60 * 24 * 30,
+          }),
+        ],
+      }),
+    },
+    {
       matcher: ({ request, url }) =>
         request.mode === 'navigate' &&
         !url.pathname.startsWith('/product/') &&
