@@ -3,8 +3,11 @@ import type { CheckoutFormShipping } from '../types/checkout.types'
 
 export interface OrderReceiptLineSnapshot {
   cartKey: string
+  productId: number
+  slug?: string
   name: string
   qty: number
+  unitPrice: number
   unitPriceDisplay: string
   totalDisplay: string
   imageSourceUrl?: string
@@ -32,8 +35,11 @@ export function buildOrderReceiptSnapshot(
 ): OrderReceiptSnapshot {
   const lines: OrderReceiptLineSnapshot[] = cart.products.map((p) => ({
     cartKey: p.cartKey,
+    productId: p.productId,
+    slug: p.slug,
     name: p.name,
     qty: p.qty,
+    unitPrice: p.price,
     unitPriceDisplay: p.unitPriceDisplay,
     totalDisplay: p.totalDisplay,
     imageSourceUrl: p.image?.sourceUrl,

@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useCheckoutStore, type LastCompletedOrderSnapshot } from '../store/checkout.store'
 import { CheckoutSteps } from './CheckoutSteps'
 import { ContentShell } from '@/shared/components/ContentShell.component'
@@ -15,6 +15,7 @@ import {
   parseCartPriceString,
 } from '@/shared/lib/functions'
 import { GoogleAdsPurchaseTracker } from '@/components/analytics/google-ads-purchase-tracker'
+import { pushPurchaseEvent } from '@/lib/tracking/purchase'
 
 const CART_PATH = '/cart'
 const THANK_YOU_MAX_AGE_MS = 48 * 60 * 60 * 1000
@@ -47,6 +48,7 @@ export function OrderThankYouContent() {
   const reset = useCheckoutStore((s) => s.reset)
 
   const [hydrated, setHydrated] = useState(false)
+  const purchasePushAttempted = useRef(false)
 
   useEffect(() => {
     const api = useCheckoutStore.persist
@@ -92,6 +94,24 @@ export function OrderThankYouContent() {
           return Number.isFinite(v) && v >= 0 ? v : undefined
         })()
       : undefined
+
+  useEffect(() => {
+    if (!hydrated) return
+    if (!isThankYouEligible(orderCompleted, lastCompletedOrder)) return
+    if (purchasePushAttempted.current) return
+    if (!receipt || receipt.lines.length === 0) return
+    if (!adsTransactionId || adsValueEuro == null) return
+
+    purchasePushAttempted.current = true
+
+    // Pushes the GTM/GA4 purchase event once per order on the real thank-you page.
+    pushPurchaseEvent({
+      transactionId: adsTransactionId,
+      value: adsValueEuro,
+      currency: 'EUR',
+      receipt,
+    })
+  }, [adsTransactionId, adsValueEuro, hydrated, lastCompletedOrder, orderCompleted, receipt])
 
   if (!hydrated) {
     return (
