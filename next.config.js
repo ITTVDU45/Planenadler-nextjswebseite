@@ -50,6 +50,8 @@ const nextConfig = {
       { source: '/kategorier', destination: '/shop', permanent: true },
       // Kategorieseiten nicht anzeigen – direkt auf Produktseite weiterleiten
       { source: '/shop/:slug', destination: '/product/:slug', permanent: true },
+      { source: '/ThankYou', destination: '/thank-you', permanent: false },
+      { source: '/thankyou', destination: '/thank-you', permanent: false },
     ]
   },
   images: {

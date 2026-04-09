@@ -8,12 +8,17 @@ import type {
   PaymentMethodId,
   CheckoutFormShipping,
 } from '../types/checkout.types'
+import type { OrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
+
+export type { OrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
 
 export interface LastCompletedOrderSnapshot {
   orderNumber?: number | string | null
   databaseId?: string | null
   date?: string | null
   status?: string | null
+  orderKey?: string | null
+  receipt?: OrderReceiptSnapshot | null
   completedAt: number
 }
 

@@ -23,9 +23,14 @@ import type { PaymentMethodId } from '../types/checkout.types'
 import { ExpressCheckout } from './ExpressCheckout'
 import { usePaymentOptions } from '../hooks/usePaymentOptions'
 import { buildBankTransferCheckoutCandidates } from '../lib/payment-gateways'
+import { buildOrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
+import {
+  isWooCommerceOrderReceivedRedirect,
+  parseWooOrderReceivedUrl,
+} from '../lib/woo-order-received-redirect'
 
 const SHIPPING_PATH = '/checkout/shipping'
-const CONFIRMATION_PATH = '/checkout/confirmation'
+const THANK_YOU_PATH = '/thank-you'
 
 interface CheckoutMutationResponse {
   checkout?: {
@@ -130,8 +135,11 @@ export function PaymentPageContent() {
 
   const tryProviderCheckoutMutation = async (
     paymentMethod: 'paypal' | 'klarna',
-    formData: CheckoutFormShipping
-  ): Promise<string | null> => {
+    formData: CheckoutFormShipping,
+  ): Promise<{
+    redirectUrl: string | null
+    checkout: CheckoutMutationResponse['checkout'] | null
+  }> => {
     const methodCandidates = PROVIDER_PAYMENT_METHOD_CANDIDATES[paymentMethod]
 
     for (const wcPaymentMethod of methodCandidates) {
@@ -139,16 +147,56 @@ export function PaymentPageContent() {
         const orderProps = toCheckoutDataProps(formData, wcPaymentMethod)
         const input = createCheckoutData(orderProps)
         const { data: mutationData } = await checkoutMutation({ variables: { input } })
-        const redirectUrl = mutationData?.checkout?.redirect
+        const checkout = mutationData?.checkout ?? null
+        const redirectUrl = checkout?.redirect ?? null
         if (redirectUrl) {
-          return redirectUrl
+          return { redirectUrl, checkout }
         }
       } catch {
         // Continue with next gateway candidate.
       }
     }
 
-    return null
+    return { redirectUrl: null, checkout: null }
+  }
+
+  const finalizeSuccessfulOrder = (
+    checkout: CheckoutMutationResponse['checkout'] | null | undefined,
+    redirectUrl: string | null,
+  ) => {
+    if (!shippingData) return
+
+    const order = checkout?.order
+    const parsedFromWoo =
+      redirectUrl && isWooCommerceOrderReceivedRedirect(redirectUrl)
+        ? parseWooOrderReceivedUrl(redirectUrl)
+        : { orderId: null, orderKey: null }
+
+    const paymentLabel =
+      paymentOptions?.gateways?.find((g) => g.id === selectedPayment)?.label?.trim() ||
+      (selectedPayment === PAYMENT_METHOD_IDS.BANK ? 'Direkte Banküberweisung' : 'Onlinezahlung')
+
+    const cartSnapshot = useCartStore.getState().cart
+    const receipt =
+      cartSnapshot && cartSnapshot.products.length > 0
+        ? buildOrderReceiptSnapshot(cartSnapshot, shippingData, paymentLabel)
+        : null
+
+    const dbFromGraphql =
+      order?.databaseId !== undefined && order?.databaseId !== null ? String(order.databaseId) : null
+
+    setLastCompletedOrder({
+      orderNumber: order?.orderNumber ?? parsedFromWoo.orderId,
+      databaseId: dbFromGraphql ?? parsedFromWoo.orderId,
+      date: order?.date ?? null,
+      status: order?.status ?? null,
+      orderKey: parsedFromWoo.orderKey,
+      completedAt: Date.now(),
+      receipt,
+    })
+    setOrderCompleted(true)
+    clearWooCommerceSession()
+    router.push(THANK_YOU_PATH)
   }
 
   const handlePlaceOrder = async () => {
@@ -170,29 +218,12 @@ export function PaymentPageContent() {
           continue
         }
         const mutationData = result.data
-        const redirectUrl = mutationData?.checkout?.redirect
-        if (redirectUrl) {
+        const redirectUrl = mutationData?.checkout?.redirect ?? null
+        if (redirectUrl && !isWooCommerceOrderReceivedRedirect(redirectUrl)) {
           window.location.assign(redirectUrl)
           return
         }
-        const order = mutationData?.checkout?.order
-        setLastCompletedOrder(
-          order
-            ? {
-                orderNumber: order.orderNumber ?? null,
-                databaseId:
-                  order.databaseId !== undefined && order.databaseId !== null
-                    ? String(order.databaseId)
-                    : null,
-                date: order.date ?? null,
-                status: order.status ?? null,
-                completedAt: Date.now(),
-              }
-            : { completedAt: Date.now() },
-        )
-        setOrderCompleted(true)
-        clearWooCommerceSession()
-        router.push(CONFIRMATION_PATH)
+        finalizeSuccessfulOrder(mutationData?.checkout, redirectUrl)
         return
       } catch (error) {
         lastErrorMessage =
@@ -210,8 +241,13 @@ export function PaymentPageContent() {
     setSelectedPayment(paymentMethod)
 
     try {
-      const directRedirectUrl = await tryProviderCheckoutMutation(paymentMethod, shippingData)
+      const { redirectUrl: directRedirectUrl, checkout: directCheckout } =
+        await tryProviderCheckoutMutation(paymentMethod, shippingData)
       if (directRedirectUrl) {
+        if (isWooCommerceOrderReceivedRedirect(directRedirectUrl)) {
+          finalizeSuccessfulOrder(directCheckout, directRedirectUrl)
+          return
+        }
         window.location.assign(directRedirectUrl)
         return
       }
