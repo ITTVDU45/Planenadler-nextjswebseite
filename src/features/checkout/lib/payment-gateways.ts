@@ -50,7 +50,17 @@ const CARD_ALIASES = [
   'stripe_credit_card',
   'credit_card',
 ]
-const BANK_ALIASES = ['bacs', 'bank_transfer', 'direct_bank_transfer']
+/** Häufige WooCommerce- und Plugin-IDs für Überweisung / Vorkasse */
+const BANK_ALIASES = [
+  'bacs',
+  'bank_transfer',
+  'direct_bank_transfer',
+  'woocommerce_bacs',
+  'woocommerce-bacs',
+  'wc-bacs',
+  'prepayment',
+  'vorkasse',
+]
 
 function hasAlias(availableMethodIds: string[], aliases: string[]): boolean {
   if (!availableMethodIds.length) return false
@@ -120,6 +130,20 @@ export function getGatewayDefinitions(hasStripePublishableKey: boolean): Gateway
       frontendReady: () => true,
     },
   ]
+}
+
+/**
+ * Reihenfolge: zuerst vom Store gematchte WC-ID, dann typische Fallback-IDs für GraphQL-Checkout.
+ */
+export function buildBankTransferCheckoutCandidates(gateway: CheckoutGatewayOption | undefined): string[] {
+  const ordered: string[] = []
+  const add = (id: string | undefined) => {
+    const t = id?.trim()
+    if (t && !ordered.includes(t)) ordered.push(t)
+  }
+  add(gateway?.wcPaymentMethodId)
+  for (const alias of BANK_ALIASES) add(alias)
+  return ordered
 }
 
 export function resolveCheckoutGateways(

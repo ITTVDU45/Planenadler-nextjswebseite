@@ -22,6 +22,7 @@ import { PAYMENT_METHOD_IDS } from '../types/checkout.types'
 import type { PaymentMethodId } from '../types/checkout.types'
 import { ExpressCheckout } from './ExpressCheckout'
 import { usePaymentOptions } from '../hooks/usePaymentOptions'
+import { buildBankTransferCheckoutCandidates } from '../lib/payment-gateways'
 
 const SHIPPING_PATH = '/checkout/shipping'
 const CONFIRMATION_PATH = '/checkout/confirmation'
@@ -145,21 +146,38 @@ export function PaymentPageContent() {
   const handlePlaceOrder = async () => {
     if (!shippingData) return
     setSubmitError(null)
-    try {
-      const orderProps = toCheckoutDataProps(shippingData, 'bacs')
-      const input = createCheckoutData(orderProps)
-      const { data: mutationData } = await checkoutMutation({ variables: { input } })
-      const redirectUrl = mutationData?.checkout?.redirect
-      if (redirectUrl) {
-        window.location.assign(redirectUrl)
+
+    const bankGateway = paymentOptions?.gateways?.find((gateway) => gateway.id === PAYMENT_METHOD_IDS.BANK)
+    const wcMethodCandidates = buildBankTransferCheckoutCandidates(bankGateway)
+
+    let lastErrorMessage = 'Bestellung konnte nicht abgeschlossen werden. Bitte erneut versuchen.'
+
+    for (const wcMethod of wcMethodCandidates) {
+      try {
+        const orderProps = toCheckoutDataProps(shippingData, wcMethod)
+        const input = createCheckoutData(orderProps)
+        const result = await checkoutMutation({ variables: { input } })
+        if (result.errors?.length) {
+          lastErrorMessage = result.errors.map((e) => e.message).filter(Boolean).join(' ') || lastErrorMessage
+          continue
+        }
+        const mutationData = result.data
+        const redirectUrl = mutationData?.checkout?.redirect
+        if (redirectUrl) {
+          window.location.assign(redirectUrl)
+          return
+        }
+        setOrderCompleted(true)
+        clearWooCommerceSession()
+        router.push(CONFIRMATION_PATH)
         return
+      } catch (error) {
+        lastErrorMessage =
+          error instanceof Error && error.message.trim() ? error.message.trim() : lastErrorMessage
       }
-      setOrderCompleted(true)
-      clearWooCommerceSession()
-      router.push(CONFIRMATION_PATH)
-    } catch {
-      setSubmitError('Bestellung konnte nicht abgeschlossen werden. Bitte erneut versuchen.')
     }
+
+    setSubmitError(lastErrorMessage)
   }
 
   const handleProviderRedirect = async (paymentMethod: 'paypal' | 'klarna') => {

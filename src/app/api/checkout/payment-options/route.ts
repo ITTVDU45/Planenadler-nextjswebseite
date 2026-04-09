@@ -3,6 +3,10 @@ import {
   resolveCheckoutGateways,
   type PaymentOptionsResponse,
 } from '@/features/checkout/lib/payment-gateways'
+import {
+  mergeUniquePaymentMethodIds,
+  normalizeStoreApiPaymentMethods,
+} from '@/features/checkout/lib/store-api-payment-methods'
 
 function resolveWordPressOrigin(): string {
   const candidates = [
@@ -88,9 +92,25 @@ export async function GET(request: NextRequest) {
       errors.push('Store API Checkout-Bootstrap konnte nicht geladen werden.')
     }
 
-    const availablePaymentMethods = Array.isArray(cartData.payment_methods)
-      ? cartData.payment_methods.filter((method): method is string => typeof method === 'string')
-      : []
+    const checkoutData = checkoutBootstrapOk ? await parseJsonSafe(checkoutResponse) : {}
+    const experimentalCart =
+      checkoutData && typeof checkoutData === 'object' && '__experimentalCart' in checkoutData
+        ? (checkoutData as { __experimentalCart?: Record<string, unknown> }).__experimentalCart
+        : undefined
+
+    let availablePaymentMethods = mergeUniquePaymentMethodIds(
+      normalizeStoreApiPaymentMethods(cartData.payment_methods),
+      normalizeStoreApiPaymentMethods(
+        checkoutData && typeof checkoutData === 'object' && 'payment_methods' in checkoutData
+          ? (checkoutData as { payment_methods?: unknown }).payment_methods
+          : undefined
+      ),
+      normalizeStoreApiPaymentMethods(experimentalCart?.payment_methods)
+    )
+
+    if (process.env.NEXT_PUBLIC_ALWAYS_OFFER_BANK_TRANSFER?.trim() === '1') {
+      availablePaymentMethods = mergeUniquePaymentMethodIds(availablePaymentMethods, ['bacs'])
+    }
     const paymentRequirements = Array.isArray(cartData.payment_requirements)
       ? cartData.payment_requirements.filter((entry): entry is string => typeof entry === 'string')
       : []
