@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { paddedPrice, decodePriceDisplay } from '@/shared/lib/functions';
+import { decodePriceDisplay } from '@/shared/lib/functions';
 
 interface ProductCardProps {
   databaseId: number;

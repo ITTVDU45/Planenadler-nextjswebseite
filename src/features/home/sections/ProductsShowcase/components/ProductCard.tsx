@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { decodePriceDisplay } from '@/shared/lib/functions'
@@ -85,14 +85,6 @@ export function ProductCard({ product }: ProductCardProps) {
   const technicalSpecs = product.attributes.length ? product.attributes : DEFAULT_TECHNICAL_SPECS
   const [activeImageSrc, setActiveImageSrc] = useState(galleryImages[0]?.src ?? product.image.src)
   const [activeTab, setActiveTab] = useState<ProductTabKey>('beschreibung')
-
-  useEffect(() => {
-    setActiveImageSrc(galleryImages[0]?.src ?? product.image.src)
-  }, [galleryImages, product.image.src])
-
-  useEffect(() => {
-    setActiveTab('beschreibung')
-  }, [product.id])
 
   return (
     <div className="rounded-[1.5rem] bg-white p-3 shadow-[0_10px_30px_rgba(31,92,171,0.08)] transition hover:-translate-y-1 sm:rounded-[2rem] sm:p-5">

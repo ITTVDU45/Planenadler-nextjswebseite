@@ -10,7 +10,6 @@ import {
   getBlogPosts,
   getPostBySlug,
   getUniqueCategoriesFromPosts,
-  BlogMeta,
   BlogContent,
   BlogSidebar,
   RelatedPosts,

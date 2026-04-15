@@ -19,6 +19,8 @@ export interface CheckoutGatewayDiagnostics {
   cartFetchOk: boolean
   checkoutBootstrapOk: boolean
   cookiePresent: boolean
+  /** Woo-Session-Header an Store API gesendet (wie /api/graphql) */
+  wooSessionHeaderSent: boolean
   cartItemCount: number
   availablePaymentMethods: string[]
   paymentRequirements: string[]
@@ -42,7 +44,7 @@ interface GatewayDefinition {
 
 const PAYPAL_ALIASES = ['ppcp', 'ppcp-gateway', 'paypal', 'paypal_checkout', 'ppec_paypal']
 const KLARNA_ALIASES = ['stripe_klarna', 'woocommerce_payments_klarna', 'klarna_payments', 'klarna', 'kco']
-const CARD_ALIASES = [
+export const CARD_ALIASES = [
   'woocommerce_payments',
   'wcpay',
   'stripe',
@@ -50,7 +52,17 @@ const CARD_ALIASES = [
   'stripe_credit_card',
   'credit_card',
 ]
-const BANK_ALIASES = ['bacs', 'bank_transfer', 'direct_bank_transfer']
+/** Häufige WooCommerce- und Plugin-IDs für Überweisung / Vorkasse */
+const BANK_ALIASES = [
+  'bacs',
+  'bank_transfer',
+  'direct_bank_transfer',
+  'woocommerce_bacs',
+  'woocommerce-bacs',
+  'wc-bacs',
+  'prepayment',
+  'vorkasse',
+]
 
 function hasAlias(availableMethodIds: string[], aliases: string[]): boolean {
   if (!availableMethodIds.length) return false
@@ -91,10 +103,10 @@ export function getGatewayDefinitions(hasStripePublishableKey: boolean): Gateway
       description: 'VISA, Mastercard, AMEX',
       aliases: CARD_ALIASES,
       action: 'select',
-      frontendReady: () => false,
+      frontendReady: () => true,
       helperText: (available) =>
         available
-          ? 'Backend erkennt Karte, aber der direkte Karten-Flow ist in Next.js noch nicht live.'
+          ? 'Kartenzahlung wird sicher ueber WooCommerce/Stripe weitergeleitet.'
           : undefined,
     },
     {
@@ -122,6 +134,31 @@ export function getGatewayDefinitions(hasStripePublishableKey: boolean): Gateway
   ]
 }
 
+/**
+ * Reihenfolge: zuerst vom Store gematchte WC-ID, dann typische Fallback-IDs für GraphQL-Checkout.
+ */
+export function buildBankTransferCheckoutCandidates(gateway: CheckoutGatewayOption | undefined): string[] {
+  const ordered: string[] = []
+  const add = (id: string | undefined) => {
+    const t = id?.trim()
+    if (t && !ordered.includes(t)) ordered.push(t)
+  }
+  add(gateway?.wcPaymentMethodId)
+  for (const alias of BANK_ALIASES) add(alias)
+  return ordered
+}
+
+export function buildCardCheckoutCandidates(gateway: CheckoutGatewayOption | undefined): string[] {
+  const ordered: string[] = []
+  const add = (id: string | undefined) => {
+    const t = id?.trim()
+    if (t && !ordered.includes(t)) ordered.push(t)
+  }
+  add(gateway?.wcPaymentMethodId)
+  for (const alias of CARD_ALIASES) add(alias)
+  return ordered
+}
+
 export function resolveCheckoutGateways(
   availableMethodIds: string[],
   hasStripePublishableKey: boolean
@@ -143,4 +180,3 @@ export function resolveCheckoutGateways(
     }
   })
 }
-

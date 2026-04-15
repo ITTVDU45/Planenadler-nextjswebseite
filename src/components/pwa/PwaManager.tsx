@@ -49,14 +49,14 @@ export function PwaManager() {
     const register = async () => {
       if (process.env.NODE_ENV !== 'production') return
       try {
-        const response = await fetch('/sw.js', { method: 'HEAD' })
+        const response = await fetch('/sw.js', { method: 'HEAD', cache: 'no-store' })
         if (!response.ok) return
       } catch {
         return
       }
 
       navigator.serviceWorker
-        .register('/sw.js')
+        .register('/sw.js', { updateViaCache: 'none' })
         .then(async (reg) => {
           setRegistration(reg)
 

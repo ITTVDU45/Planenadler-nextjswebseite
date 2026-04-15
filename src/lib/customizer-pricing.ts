@@ -333,7 +333,7 @@ export function buildConfigurationSummary(
   addSummaryEntry(entries, 'Oesen', body.selections.eyeletEdge)
   addSummaryEntry(entries, 'Verschlussart', body.selections.closureType)
   addSummaryEntry(entries, 'Frontverschluss', body.selections.frontClosure)
-  addSummaryEntry(entries, 'Rueckenverschluss', body.selections.backClosure)
+  addSummaryEntry(entries, 'Rueckverschluss', body.selections.backClosure)
 
   if (body.toggles.hasWindow) {
     addSummaryEntry(entries, 'Fenster', 'Ja')
@@ -373,7 +373,7 @@ export function buildConfigurationSummary(
   }
 
   addSummaryEntry(entries, 'Frontverschluss-Zubehoer', body.selections.frontClosureExtras)
-  addSummaryEntry(entries, 'Rueckenverschluss-Zubehoer', body.selections.backClosureExtras)
+  addSummaryEntry(entries, 'Rueckverschluss-Zubehoer', body.selections.backClosureExtras)
   addSummaryEntry(entries, 'Skizze', sketchFileName)
 
   return entries

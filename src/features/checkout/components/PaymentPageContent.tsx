@@ -22,18 +22,35 @@ import { PAYMENT_METHOD_IDS } from '../types/checkout.types'
 import type { PaymentMethodId } from '../types/checkout.types'
 import { ExpressCheckout } from './ExpressCheckout'
 import { usePaymentOptions } from '../hooks/usePaymentOptions'
+import {
+  buildBankTransferCheckoutCandidates,
+  buildCardCheckoutCandidates,
+} from '../lib/payment-gateways'
+import { buildOrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
+import {
+  isWooCommerceOrderReceivedRedirect,
+  parseWooOrderReceivedUrl,
+} from '../lib/woo-order-received-redirect'
 
 const SHIPPING_PATH = '/checkout/shipping'
-const CONFIRMATION_PATH = '/checkout/confirmation'
+const THANK_YOU_PATH = '/thank-you'
 
 interface CheckoutMutationResponse {
   checkout?: {
     result?: string | null
     redirect?: string | null
+    order?: {
+      id?: string | null
+      databaseId?: string | number | null
+      orderNumber?: number | string | null
+      date?: string | null
+      status?: string | null
+    } | null
   } | null
 }
 
-const PROVIDER_PAYMENT_METHOD_CANDIDATES: Record<'paypal' | 'klarna', string[]> = {
+const PROVIDER_PAYMENT_METHOD_CANDIDATES: Record<'card' | 'paypal' | 'klarna', string[]> = {
+  card: ['woocommerce_payments', 'wcpay', 'stripe', 'stripe_cc', 'stripe_credit_card', 'credit_card'],
   paypal: ['ppcp', 'ppcp-gateway', 'paypal'],
   klarna: ['stripe_klarna', 'woocommerce_payments_klarna', 'klarna_payments', 'klarna'],
 }
@@ -67,7 +84,8 @@ function toCheckoutDataProps(data: CheckoutFormShipping, paymentMethod: string):
 export function PaymentPageContent() {
   const router = useRouter()
   const { syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
-  const { shippingData, selectedPayment, setSelectedPayment, setOrderCompleted } = useCheckoutStore()
+  const { shippingData, selectedPayment, setSelectedPayment, setOrderCompleted, setLastCompletedOrder } =
+    useCheckoutStore()
 
   const { data } = useQuery(GET_CART, { notifyOnNetworkStatusChange: true })
   const {
@@ -120,9 +138,12 @@ export function PaymentPageContent() {
   const [checkoutMutation, { loading: checkoutLoading }] = useMutation<CheckoutMutationResponse>(CHECKOUT_MUTATION)
 
   const tryProviderCheckoutMutation = async (
-    paymentMethod: 'paypal' | 'klarna',
-    formData: CheckoutFormShipping
-  ): Promise<string | null> => {
+    paymentMethod: 'card' | 'paypal' | 'klarna',
+    formData: CheckoutFormShipping,
+  ): Promise<{
+    redirectUrl: string | null
+    checkout: CheckoutMutationResponse['checkout'] | null
+  }> => {
     const methodCandidates = PROVIDER_PAYMENT_METHOD_CANDIDATES[paymentMethod]
 
     for (const wcPaymentMethod of methodCandidates) {
@@ -130,52 +151,120 @@ export function PaymentPageContent() {
         const orderProps = toCheckoutDataProps(formData, wcPaymentMethod)
         const input = createCheckoutData(orderProps)
         const { data: mutationData } = await checkoutMutation({ variables: { input } })
-        const redirectUrl = mutationData?.checkout?.redirect
+        const checkout = mutationData?.checkout ?? null
+        const redirectUrl = checkout?.redirect ?? null
         if (redirectUrl) {
-          return redirectUrl
+          return { redirectUrl, checkout }
         }
       } catch {
         // Continue with next gateway candidate.
       }
     }
 
-    return null
+    return { redirectUrl: null, checkout: null }
+  }
+
+  const finalizeSuccessfulOrder = (
+    checkout: CheckoutMutationResponse['checkout'] | null | undefined,
+    redirectUrl: string | null,
+  ) => {
+    if (!shippingData) return
+
+    const order = checkout?.order
+    const parsedFromWoo =
+      redirectUrl && isWooCommerceOrderReceivedRedirect(redirectUrl)
+        ? parseWooOrderReceivedUrl(redirectUrl)
+        : { orderId: null, orderKey: null }
+
+    const paymentLabel =
+      paymentOptions?.gateways?.find((g) => g.id === selectedPayment)?.label?.trim() ||
+      (selectedPayment === PAYMENT_METHOD_IDS.BANK ? 'Direkte Banküberweisung' : 'Onlinezahlung')
+
+    const cartSnapshot = useCartStore.getState().cart
+    const receipt =
+      cartSnapshot && cartSnapshot.products.length > 0
+        ? buildOrderReceiptSnapshot(cartSnapshot, shippingData, paymentLabel)
+        : null
+
+    const dbFromGraphql =
+      order?.databaseId !== undefined && order?.databaseId !== null ? String(order.databaseId) : null
+
+    setLastCompletedOrder({
+      orderNumber: order?.orderNumber ?? parsedFromWoo.orderId,
+      databaseId: dbFromGraphql ?? parsedFromWoo.orderId,
+      date: order?.date ?? null,
+      status: order?.status ?? null,
+      orderKey: parsedFromWoo.orderKey,
+      completedAt: Date.now(),
+      receipt,
+    })
+    setOrderCompleted(true)
+    clearWooCommerceSession()
+    router.push(THANK_YOU_PATH)
   }
 
   const handlePlaceOrder = async () => {
     if (!shippingData) return
     setSubmitError(null)
-    try {
-      const orderProps = toCheckoutDataProps(shippingData, 'bacs')
-      const input = createCheckoutData(orderProps)
-      const { data: mutationData } = await checkoutMutation({ variables: { input } })
-      const redirectUrl = mutationData?.checkout?.redirect
-      if (redirectUrl) {
-        window.location.assign(redirectUrl)
+
+    const bankGateway = paymentOptions?.gateways?.find((gateway) => gateway.id === PAYMENT_METHOD_IDS.BANK)
+    const wcMethodCandidates = buildBankTransferCheckoutCandidates(bankGateway)
+
+    let lastErrorMessage = 'Bestellung konnte nicht abgeschlossen werden. Bitte erneut versuchen.'
+
+    for (const wcMethod of wcMethodCandidates) {
+      try {
+        const orderProps = toCheckoutDataProps(shippingData, wcMethod)
+        const input = createCheckoutData(orderProps)
+        const result = await checkoutMutation({ variables: { input } })
+        if (result.errors?.length) {
+          lastErrorMessage = result.errors.map((e) => e.message).filter(Boolean).join(' ') || lastErrorMessage
+          continue
+        }
+        const mutationData = result.data
+        const redirectUrl = mutationData?.checkout?.redirect ?? null
+        if (redirectUrl && !isWooCommerceOrderReceivedRedirect(redirectUrl)) {
+          window.location.assign(redirectUrl)
+          return
+        }
+        finalizeSuccessfulOrder(mutationData?.checkout, redirectUrl)
         return
+      } catch (error) {
+        lastErrorMessage =
+          error instanceof Error && error.message.trim() ? error.message.trim() : lastErrorMessage
       }
-      setOrderCompleted(true)
-      clearWooCommerceSession()
-      router.push(CONFIRMATION_PATH)
-    } catch {
-      setSubmitError('Bestellung konnte nicht abgeschlossen werden. Bitte erneut versuchen.')
     }
+
+    setSubmitError(lastErrorMessage)
   }
 
-  const handleProviderRedirect = async (paymentMethod: 'paypal' | 'klarna') => {
+  const handleProviderRedirect = async (paymentMethod: 'card' | 'paypal' | 'klarna') => {
     if (!shippingData) return
     setSubmitError(null)
     setProviderLoading(paymentMethod)
     setSelectedPayment(paymentMethod)
 
     try {
-      const directRedirectUrl = await tryProviderCheckoutMutation(paymentMethod, shippingData)
+      const { redirectUrl: directRedirectUrl, checkout: directCheckout } =
+        await tryProviderCheckoutMutation(paymentMethod, shippingData)
       if (directRedirectUrl) {
+        if (isWooCommerceOrderReceivedRedirect(directRedirectUrl)) {
+          finalizeSuccessfulOrder(directCheckout, directRedirectUrl)
+          return
+        }
         window.location.assign(directRedirectUrl)
         return
       }
 
-      const orderProps = toCheckoutDataProps(shippingData, paymentMethod)
+      const gateway =
+        paymentMethod === PAYMENT_METHOD_IDS.CARD
+          ? paymentOptions?.gateways?.find((candidate) => candidate.id === PAYMENT_METHOD_IDS.CARD)
+          : undefined
+      const checkoutMethod =
+        paymentMethod === PAYMENT_METHOD_IDS.CARD
+          ? buildCardCheckoutCandidates(gateway)[0] ?? PAYMENT_METHOD_IDS.CARD
+          : paymentMethod
+      const orderProps = toCheckoutDataProps(shippingData, checkoutMethod)
       const checkoutInput = createCheckoutData(orderProps)
       const response = await fetch('/api/checkout/provider-redirect', {
         method: 'POST',
@@ -208,6 +297,10 @@ export function PaymentPageContent() {
   }
 
   const handleExpressActivation = (gatewayId: PaymentMethodId) => {
+    if (gatewayId === PAYMENT_METHOD_IDS.CARD) {
+      void handleProviderRedirect('card')
+      return
+    }
     if (gatewayId === PAYMENT_METHOD_IDS.PAYPAL) {
       void handleProviderRedirect('paypal')
       return
@@ -261,7 +354,15 @@ export function PaymentPageContent() {
             loading={paymentOptionsLoading}
           />
 
-          {selectedPayment === PAYMENT_METHOD_IDS.CARD ? <CardPaymentForm /> : null}
+          {selectedPayment === PAYMENT_METHOD_IDS.CARD ? (
+            <CardPaymentForm
+              onContinue={() => {
+                void handleProviderRedirect('card')
+              }}
+              isSubmitting={providerLoading === PAYMENT_METHOD_IDS.CARD}
+              helperText={selectedGateway?.helperText}
+            />
+          ) : null}
           {selectedPayment === PAYMENT_METHOD_IDS.PAYPAL ? (
             <PayPalPanel
               onContinue={() => {

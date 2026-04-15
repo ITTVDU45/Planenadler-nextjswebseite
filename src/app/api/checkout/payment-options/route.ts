@@ -3,12 +3,18 @@ import {
   resolveCheckoutGateways,
   type PaymentOptionsResponse,
 } from '@/features/checkout/lib/payment-gateways'
+import {
+  mergeUniquePaymentMethodIds,
+  normalizeStoreApiPaymentMethods,
+} from '@/features/checkout/lib/store-api-payment-methods'
+import { buildWooStoreApiHeaders, readWooSessionTokenFromRequest } from '@/lib/woo-session-cookie'
 
 function resolveWordPressOrigin(): string {
   const candidates = [
     process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim(),
     process.env.CUSTOMIZER_API_URL?.trim(),
     process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
+    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim(),
     process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
     process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
   ].filter((value): value is string => Boolean(value))
@@ -31,6 +37,7 @@ function resolveWordPressOrigin(): string {
 function resolveStoreApiCheckoutUrl(): string {
   const explicit =
     process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim() ??
+    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim() ??
     process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim() ??
     process.env.WC_KLARNA_CHECKOUT_API_URL?.trim() ??
     ''
@@ -61,19 +68,21 @@ export async function GET(request: NextRequest) {
 
   const cartUrl = toStoreApiCartUrl(upstreamUrl)
   const cookie = request.headers.get('cookie') ?? ''
+  const storeHeaders = buildWooStoreApiHeaders(request)
+  const sessionToken = readWooSessionTokenFromRequest(request)
   const errors: string[] = []
 
   try {
     const cartResponse = await fetch(cartUrl, {
       method: 'GET',
-      headers: cookie ? { cookie } : undefined,
+      headers: Object.keys(storeHeaders).length > 0 ? storeHeaders : undefined,
       cache: 'no-store',
     })
     const cartData = await parseJsonSafe(cartResponse)
 
     const checkoutResponse = await fetch(upstreamUrl, {
       method: 'GET',
-      headers: cookie ? { cookie } : undefined,
+      headers: Object.keys(storeHeaders).length > 0 ? storeHeaders : undefined,
       cache: 'no-store',
     })
     const checkoutBootstrapOk = checkoutResponse.ok || checkoutResponse.status === 401
@@ -88,23 +97,60 @@ export async function GET(request: NextRequest) {
       errors.push('Store API Checkout-Bootstrap konnte nicht geladen werden.')
     }
 
-    const availablePaymentMethods = Array.isArray(cartData.payment_methods)
-      ? cartData.payment_methods.filter((method): method is string => typeof method === 'string')
-      : []
+    const checkoutData = checkoutBootstrapOk ? await parseJsonSafe(checkoutResponse) : {}
+    const experimentalCart =
+      checkoutData && typeof checkoutData === 'object' && '__experimentalCart' in checkoutData
+        ? (checkoutData as { __experimentalCart?: Record<string, unknown> }).__experimentalCart
+        : undefined
+
+    let availablePaymentMethods = mergeUniquePaymentMethodIds(
+      normalizeStoreApiPaymentMethods(cartData.payment_methods),
+      normalizeStoreApiPaymentMethods(
+        checkoutData && typeof checkoutData === 'object' && 'payment_methods' in checkoutData
+          ? (checkoutData as { payment_methods?: unknown }).payment_methods
+          : undefined
+      ),
+      normalizeStoreApiPaymentMethods(experimentalCart?.payment_methods)
+    )
+
+    // Headless: Store API listet „bacs“ oft nicht, WooGraphQL-Checkout unterstützt ihn trotzdem.
+    // Opt-out (z. B. wenn Banküberweisung in Woo wirklich deaktiviert): CHECKOUT_SUPPLEMENT_BACS=0
+    const supplementBacs = process.env.CHECKOUT_SUPPLEMENT_BACS?.trim() !== '0'
+    if (supplementBacs) {
+      availablePaymentMethods = mergeUniquePaymentMethodIds(availablePaymentMethods, ['bacs'])
+    }
     const paymentRequirements = Array.isArray(cartData.payment_requirements)
       ? cartData.payment_requirements.filter((entry): entry is string => typeof entry === 'string')
       : []
     const cartItems = Array.isArray(cartData.items) ? cartData.items : []
     const hasStripeKey = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim())
 
+    let gateways = resolveCheckoutGateways(availablePaymentMethods, hasStripeKey)
+
+    const explicitBankId = process.env.WC_CHECKOUT_BANK_PAYMENT_METHOD_ID?.trim()
+    if (explicitBankId) {
+      gateways = gateways.map((g) =>
+        g.id === 'bacs'
+          ? {
+              ...g,
+              wcPaymentMethodId: explicitBankId,
+              available: true,
+              frontendReady: true,
+              expressEligible: false,
+            }
+          : g,
+      )
+    }
+
     const payload: PaymentOptionsResponse = {
-      gateways: resolveCheckoutGateways(availablePaymentMethods, hasStripeKey),
+      gateways,
       diagnostics: {
         upstreamUrl,
         cartUrl,
         cartFetchOk: cartResponse.ok,
         checkoutBootstrapOk,
         cookiePresent: cookie.length > 0,
+        wooSessionHeaderSent: Boolean(sessionToken),
         cartItemCount: cartItems.length,
         availablePaymentMethods,
         paymentRequirements,

@@ -1,9 +1,14 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { Playfair_Display } from 'next/font/google'
 import Image from 'next/image'
+import Script from 'next/script'
+import { GoogleAnalyticsAppTracker } from '@/components/analytics/google-analytics-app-tracker'
+import { GoogleAnalyticsScripts } from '@/components/analytics/google-analytics-scripts'
 import '@/shared/styles/globals.css'
 import { Providers } from './Providers'
 import { DEFAULT_DESCRIPTION, GOOGLE_SITE_VERIFICATION, SITE_NAME, SITE_URL } from '@/lib/seo'
+import { getGtmBootstrapScript, getGtmId } from '@/lib/gtm'
 import { getLocalBusinessJsonLd, getOrganizationJsonLd, getWebSiteJsonLd } from '@/lib/seo-schema'
 
 const playfair = Playfair_Display({
@@ -60,6 +65,7 @@ export const metadata: Metadata = {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const gtmId = getGtmId()
   const whatsappHref = 'https://wa.me/491727436428'
   const organizationJsonLd = getOrganizationJsonLd()
   const websiteJsonLd = getWebSiteJsonLd()
@@ -67,7 +73,30 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="de">
+      <head>
+        {gtmId ? (
+          <Script
+            id="google-tag-manager"
+            strategy="beforeInteractive"
+            dangerouslySetInnerHTML={{
+              __html: getGtmBootstrapScript(gtmId),
+            }}
+          />
+        ) : null}
+        <GoogleAnalyticsScripts />
+      </head>
       <body className={playfair.variable}>
+        {gtmId ? (
+          <noscript>
+            <iframe
+              src={`https://www.googletagmanager.com/ns.html?id=${gtmId}`}
+              height={0}
+              width={0}
+              style={{ display: 'none', visibility: 'hidden' }}
+              title="Google Tag Manager"
+            />
+          </noscript>
+        ) : null}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
@@ -80,6 +109,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }}
         />
+        <Suspense fallback={null}>
+          <GoogleAnalyticsAppTracker />
+        </Suspense>
         <Providers>{children}</Providers>
         <a
           href={whatsappHref}

@@ -1,7 +1,6 @@
+import { redirect } from 'next/navigation'
+
+/** @deprecated Nutze /thank-you – bleibt für alte Links erhalten. */
 export default function CheckoutConfirmationPage() {
-  return (
-    <div className="container py-12">
-      <h1 className="text-2xl font-semibold">Bestellung bestaetigt</h1>
-    </div>
-  )
+  redirect('/thank-you')
 }

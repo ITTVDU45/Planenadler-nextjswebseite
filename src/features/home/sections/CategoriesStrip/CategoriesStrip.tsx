@@ -24,11 +24,7 @@ export function CategoriesStrip({
   }, [])
   const count = slides.length
   const canSlide = count > 1
-
-  useEffect(() => {
-    if (count === 0) return
-    setActiveIndex((current) => Math.min(current, count - 1))
-  }, [count])
+  const safeActiveIndex = count === 0 ? 0 : Math.min(activeIndex, count - 1)
 
   useEffect(() => {
     if (!canSlide) return
@@ -58,7 +54,7 @@ export function CategoriesStrip({
           <div className="overflow-hidden">
             <div
               className="flex transition-transform duration-300 ease-out"
-              style={{ transform: `translateX(-${activeIndex * 100}%)` }}
+              style={{ transform: `translateX(-${safeActiveIndex * 100}%)` }}
             >
               {slides.map((slide, slideIndex) => (
                 <div
@@ -95,7 +91,7 @@ export function CategoriesStrip({
 
             <div className="flex items-center justify-center gap-2">
               {slides.map((slide, index) => {
-                const isActive = index === activeIndex
+                const isActive = index === safeActiveIndex
                 return (
                   <button
                     key={`category-dot-${index}`}

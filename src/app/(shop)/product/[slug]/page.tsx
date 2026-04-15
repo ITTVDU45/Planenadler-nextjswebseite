@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import ProductFeatures from './components/ProductFeatures'
 import ProductGallery from './components/ProductGallery'
 import ProductConfigurator from './components/ProductConfigurator'
+import { ProductViewTracker } from './components/ProductViewTracker'
 import ProductTabs from './components/ProductTabs'
 import ProductRecommendations from './components/ProductRecommendations'
 import { getCachedProductPageData } from './product-page-cache'
@@ -11,6 +12,7 @@ import Stickynav from '@/shared/components/Footer/Stickynav.component'
 import Footer from '@/shared/components/Footer/Footer.component'
 import { SITE_NAME, absoluteUrl } from '@/lib/seo'
 import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
+import { parseCartPriceString } from '@/shared/lib/functions'
 
 /**
  * ISR (Sekunden). Muss ein **konstanter** Wert sein (Next.js Segment Config ist statisch zu analysieren).
@@ -80,12 +82,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     { name: product.title, path: `/product/${slug}` },
   ])
 
-  const numericPrice = Number.parseFloat(
-    product.price
-      .replace(/[^0-9,.-]/g, '')
-      .replace(/\./g, '')
-      .replace(',', '.'),
-  )
+  const numericPrice = parseCartPriceString(product.price)
   const productSchema = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -121,6 +118,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
       />
       <main className="bg-white pb-16 sm:pt-20">
+        <ProductViewTracker
+          productId={product.databaseId}
+          slug={slug}
+          name={product.title}
+          priceValue={Number.isFinite(numericPrice) ? numericPrice : null}
+        />
         <TopBar />
         <ProductHeroReviewsBoundary product={product} />
         <ProductFeatures items={product.features} />

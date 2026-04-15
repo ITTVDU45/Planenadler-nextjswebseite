@@ -8,17 +8,32 @@ import type {
   PaymentMethodId,
   CheckoutFormShipping,
 } from '../types/checkout.types'
+import type { OrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
+
+export type { OrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
+
+export interface LastCompletedOrderSnapshot {
+  orderNumber?: number | string | null
+  databaseId?: string | null
+  date?: string | null
+  status?: string | null
+  orderKey?: string | null
+  receipt?: OrderReceiptSnapshot | null
+  completedAt: number
+}
 
 interface CheckoutState {
   currentStep: CheckoutStepId
   selectedShipping: ShippingMethodId
   selectedPayment: PaymentMethodId
   orderCompleted: boolean
+  lastCompletedOrder: LastCompletedOrderSnapshot | null
   shippingData: CheckoutFormShipping | null
   setCurrentStep: (step: CheckoutStepId) => void
   setSelectedShipping: (id: ShippingMethodId) => void
   setSelectedPayment: (id: PaymentMethodId) => void
   setOrderCompleted: (value: boolean) => void
+  setLastCompletedOrder: (value: LastCompletedOrderSnapshot | null) => void
   setShippingData: (data: CheckoutFormShipping | null) => void
   reset: () => void
 }
@@ -33,11 +48,13 @@ export const useCheckoutStore = create<CheckoutState>()(
       selectedShipping: DEFAULT_SHIPPING,
       selectedPayment: DEFAULT_PAYMENT,
       orderCompleted: false,
+      lastCompletedOrder: null,
       shippingData: null,
       setCurrentStep: (currentStep) => set({ currentStep }),
       setSelectedShipping: (selectedShipping) => set({ selectedShipping }),
       setSelectedPayment: (selectedPayment) => set({ selectedPayment }),
       setOrderCompleted: (orderCompleted) => set({ orderCompleted }),
+      setLastCompletedOrder: (lastCompletedOrder) => set({ lastCompletedOrder }),
       setShippingData: (shippingData) => set({ shippingData }),
       reset: () =>
         set({
@@ -45,6 +62,7 @@ export const useCheckoutStore = create<CheckoutState>()(
           selectedShipping: DEFAULT_SHIPPING,
           selectedPayment: DEFAULT_PAYMENT,
           orderCompleted: false,
+          lastCompletedOrder: null,
           shippingData: null,
         }),
     }),
@@ -54,6 +72,8 @@ export const useCheckoutStore = create<CheckoutState>()(
         shippingData: state.shippingData,
         selectedShipping: state.selectedShipping,
         selectedPayment: state.selectedPayment,
+        orderCompleted: state.orderCompleted,
+        lastCompletedOrder: state.lastCompletedOrder,
       }),
     }
   )

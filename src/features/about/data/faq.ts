@@ -16,7 +16,197 @@ function createFaqSection(id: string, title: string, entries: Array<[string, str
   }
 }
 
+/**
+ * Ueberblick fuer shop.planenadler.de – Eintraege nur dort, wo keine inhaltliche
+ * Dopplung zu den folgenden Produktthemen (z. B. Versand, Zahlungen, Messanleitungen) besteht.
+ */
+const PLANENADLER_SHOP_OVERVIEW_SECTIONS: FaqSection[] = [
+  createFaqSection('faq-allgemein', 'Allgemein', [
+    [
+      'Was bietet Planenadler an?',
+      'Planenadler bietet massgefertigte PVC-Planen, Abdeckhauben, Anhaengerplanen, Terrassenplanen, Poolabdeckungen, Sichtschutzloesungen und weitere individuelle Planenkonfektionen an. Ueber <a href="/shop">shop.planenadler.de</a> koennen Sie passende Produkte konfigurieren und direkt bestellen.',
+    ],
+    [
+      'Fuer wen sind die Produkte von Planenadler geeignet?',
+      'Die Produkte eignen sich fuer Privatkunden, Gewerbekunden, Handwerker, Gartenbesitzer, Anhaengerbesitzer und Unternehmen, die langlebige und passgenaue Planenloesungen benoetigen.',
+    ],
+    [
+      'Gibt es bei Planenadler auch Loesungen fuer gewerbliche Kunden?',
+      'Ja. Planenadler bietet auch Loesungen fuer gewerbliche Einsaetze an, zum Beispiel fuer Anhaenger, Container, Terrassen, Lagerbereiche oder Maschinenabdeckungen.',
+    ],
+    [
+      'Kann ich bei Planenadler Massanfertigungen bestellen?',
+      'Ja. Viele Produkte koennen Sie im <a href="/shop">Shop</a> individuell nach Mass konfigurieren und bestellen – fuer eine Loesung, die zu Ihrem Einsatzbereich passt.',
+    ],
+    [
+      'Welche Vorteile haben massgefertigte Planen von Planenadler?',
+      'Massanfertigungen bieten bessere Passform, mehr Schutz, eine sauberere Optik und meist eine laengere Nutzungsdauer als Standardloesungen von der Stange.',
+    ],
+    [
+      'Welche Materialien verwendet Planenadler?',
+      'Planenadler setzt auf robuste, langlebige Materialien wie hochwertiges PVC-Planenmaterial fuer viele Anwendungen im Aussenbereich. Technische Details und Vergleiche (z. B. PVC und PE) finden Sie in den FAQ-Bereichen Abdeckplanen und Material weiter unten.',
+    ],
+    [
+      'Sind die Produkte von Planenadler witterungsbestaendig?',
+      'Ja. Die Produkte sind fuer den Einsatz im Aussenbereich konzipiert und schuetzen zuverlaessig vor Regen, Schmutz, Wind und vielen weiteren Umwelteinfluessen.',
+    ],
+    [
+      'Kann ich bei shop.planenadler.de auch Sonderloesungen anfragen?',
+      'Ja. Bei besonderen Formen oder Anforderungen unterstuetzt Sie Planenadler – nutzen Sie den Konfigurator oder die <a href="/kontakt">Kontaktseite</a> fuer eine individuelle Abstimmung.',
+    ],
+    [
+      'Warum sollte ich bei Planenadler bestellen?',
+      'Planenadler steht fuer individuelle Planenloesungen, moderne Online-Konfiguration, passgenaue Fertigung und eine grosse Auswahl an Produkten fuer Schutz, Abdeckung und Verkleidung.',
+    ],
+    [
+      'Kann ich meine Bestellung bei Planenadler mit Skizze oder Foto ergaenzen?',
+      'Ja. Bei komplexeren Anforderungen helfen Skizze oder Foto, Ihre gewuenschte Ausfuehrung klar zu machen – Sie koennen sie im Bestellprozess bzw. ueber den Kontakt einreichen.',
+    ],
+  ]),
+  createFaqSection('faq-planen-allgemein', 'Planen', [
+    [
+      'Wofuer kann ich eine Plane von Planenadler verwenden?',
+      'Eine Plane kann zum Schutz von Moebeln, Anhaengern, Holz, Maschinen, Fahrzeugen, Terrassenbereichen, Pools und vielen weiteren Gegenstaenden eingesetzt werden.',
+    ],
+    [
+      'Was ist der Unterschied zwischen einer Plane und einer Haube?',
+      'Eine Plane ist in der Regel eine flache oder angepasste Abdeckung; eine Haube umschliesst den Gegenstand meist staerker von oben und an den Seiten. Beides finden Sie passend zu Ihrem Bedarf im Sortiment.',
+    ],
+    [
+      'Sind Planen von Planenadler wasserdicht?',
+      'Hochwertige PVC-Planen sind fuer zuverlaessigen Wetterschutz ausgelegt und eignen sich sehr gut als widerstandsfaehige Abdeckung im Aussenbereich. Details zu Materialien finden Sie auch unter dem Thema Material weiter unten.',
+    ],
+    [
+      'Kann ich eine Plane bei shop.planenadler.de in Wunschmassen bestellen?',
+      'Ja. Viele Planen koennen Sie im <a href="/shop">Shop</a> mit Ihren Massen und Optionen konfigurieren.',
+    ],
+    [
+      'Welche Formen sind bei Planenadler moeglich?',
+      'Je nach Produkt sind rechteckige, runde, ovale oder weitere individuelle Formen moeglich, damit die Plane optimal zum Einsatzbereich passt.',
+    ],
+    [
+      'Was bedeutet Randverstaerkung bei einer Plane?',
+      'Eine Randverstaerkung erhoeht die Stabilitaet an den Aussenkanten – sinnvoll bei staerkerer Belastung oder haeufiger Befestigung.',
+    ],
+    [
+      'Wozu dienen Oesen in einer Plane?',
+      'Oesen erleichtern die sichere Befestigung der Plane, etwa mit Expanderseilen oder Spanngurten. Je nach Produkt waehlen Sie passende Oesenabstaende und -groessen.',
+    ],
+    [
+      'Welche Oesenvarianten gibt es bei Planenadler?',
+      'Je nach Produkt sind verschiedene Befestigungsoptionen moeglich, zum Beispiel Rundoesen in ueblichen Durchmessern; Details stehen im jeweiligen Konfigurator.',
+    ],
+    [
+      'Wie reinige ich eine Plane von Planenadler?',
+      'In der Regel mit Wasser, einem weichen Tuch und mildem Reinigungsmittel. Aggressive Reiniger, Scheuermittel und Hochdruckreiniger sollten vermieden werden. Produkt-spezifische Hinweise finden Sie bei Abdeckplanen und Terrassenplanen weiter unten.',
+    ],
+    [
+      'Wie lange haelt eine Plane von Planenadler?',
+      'Die Lebensdauer haengt von Nutzung, Witterung und Pflege ab. Hochwertiges PVC und passende Konfiguration sind auf Langlebigkeit ausgelegt – bei sachgemaesser Pflege koennen PVC-Planen viele Jahre halten.',
+    ],
+  ]),
+  createFaqSection('faq-hauben-allgemein', 'Hauben und Abdeckhauben', [
+    [
+      'Was ist eine Abdeckhaube von Planenadler?',
+      'Eine Abdeckhaube ist eine passgenaue Schutzloesung, die Gegenstaende von oben und an den Seiten abdeckt und vor Witterung, Staub und Schmutz schuetzt.',
+    ],
+    [
+      'Fuer welche Gegenstaende eignen sich Hauben von Planenadler?',
+      'Unter anderem fuer Gartenmoebel, Grills, Maschinen, Geraete, Container, Tische oder individuelle Sonderformen – jeweils nach Mass konfigurierbar, z. B. als <a href="/product/abdeckhaube">Abdeckhaube</a>.',
+    ],
+    [
+      'Sollte eine Haube exakt passen oder etwas groesser sein?',
+      'Die Haube sollte weder zu eng noch unnoetig gross sein. Eine moderate Zugabe an Masse kann sinnvoll sein, damit sich die Haube leichter aufziehen laesst; genaue Hinweise finden Sie bei der jeweiligen Messanleitung.',
+    ],
+    [
+      'Kann ich bei Planenadler auch Grillhauben bestellen?',
+      'Ja. Haubenloesungen fuer Grills und andere Garten- oder Freizeitobjekte sind ueber Massanfertigungen im Shop bzw. auf Anfrage moeglich.',
+    ],
+    [
+      'Kann ich eine Haube mit Befestigung bestellen?',
+      'Je nach Produkt und Ausfuehrung gibt es passende Befestigungsoptionen wie Oesen, Gummizuege oder Spannteile – waehlbar im Konfigurator, soweit angeboten.',
+    ],
+  ]),
+  createFaqSection('faq-anhaenger-allgemein', 'Anhaengerplanen', [
+    [
+      'Bietet Planenadler Anhaengerplanen nach Mass an?',
+      'Ja. Anhaengerplanen werden nach Mass gefertigt, damit sie optimal zu Ihrem Anhaenger passen – z. B. als <a href="/product/hochplane">Hochplane</a> oder <a href="/product/anhaenger-flachplane">Flachplane</a>.',
+    ],
+    [
+      'Welche Anhaengerplanen gibt es bei Planenadler?',
+      'Je nach Bedarf unter anderem Flachplanen, Hochplanen (mit Spriegel) und weitere individuelle Ausfuehrungen – im Ueberblick im <a href="/shop?category=anhaengerplanen">Shop-Bereich Anhaengerplanen</a>.',
+    ],
+    [
+      'Warum ist eine passgenaue Anhaengerplane wichtig?',
+      'Sie sorgt fuer besseren Schutz der Ladung, sichere Befestigung und eine saubere Optik am Fahrzeug.',
+    ],
+    [
+      'Kann ich fuer meinen Hochlader oder Sonderanhaenger eine Plane bestellen?',
+      'Ja. Planenadler ist auf individuelle Loesungen spezialisiert; bei Sondermassen und -typen helfen Praezisionsmessung und ggf. eine Skizze.',
+    ],
+    [
+      'Wie messe ich meine Anhaengerplane richtig aus?',
+      'Ermitteln Sie die Aussenmasse des Anhaengers bzw. des Gestells sorgfaeltig. Im Konfigurator finden Sie die benoetigten Felder; bei Sonderformen ist eine Skizze hilfreich.',
+    ],
+    [
+      'Schuetzt eine Anhaengerplane von Planenadler auch waehrend des Transports?',
+      'Ja. Korrekt konfiguriert und befestigt schuetzt die Plane die Ladung waehrend Transport und Standzeit.',
+    ],
+  ]),
+  createFaqSection('faq-terrasse-sichtschutz', 'Terrassenplanen und Sichtschutz', [
+    [
+      'Wofuer eignet sich eine Terrassenplane von Planenadler?',
+      'Als Windschutz, Wetterschutz und seitliche Abgrenzung fuer Terrassen, Ueberdachungen oder Aussenbereiche – konfigurierbar als <a href="/product/terrassenplanen">Terrassenplanen</a>.',
+    ],
+    [
+      'Sind Terrassenplanen von Planenadler auch als Sichtschutz geeignet?',
+      'Ja. Viele Loesungen dienen zugleich dem Wetterschutz und mehr Privatsphaere im Aussenbereich.',
+    ],
+    [
+      'Fuer welche Bereiche eignet sich ein Sichtschutz von Planenadler?',
+      'Zum Beispiel fuer Balkon, Terrasse, Garten, Zaun oder gewerbliche Aussenbereiche – je nach Produkt und Massanfertigung.',
+    ],
+  ]),
+  createFaqSection('faq-pool-allgemein', 'Poolabdeckungen', [
+    [
+      'Welche Vorteile bietet eine Poolabdeckung von Planenadler?',
+      'Sie schuetzt den Pool vor Laub, Schmutz und anderen aeusseren Einfluessen und erleichtert die Pflege.',
+    ],
+    [
+      'Ist eine Poolabdeckung von Planenadler fuer verschiedene Poolformen geeignet?',
+      'Ja. Es gibt Loesungen fuer unterschiedliche Poolformen und individuelle Masse – siehe <a href="/product/poolplane">Poolplane</a> im Konfigurator.',
+    ],
+  ]),
+  createFaqSection('faq-bestellung-shop', 'Bestellung, Versand und Zahlung', [
+    [
+      'Wie bestelle ich bei shop.planenadler.de?',
+      'Waehlen Sie Ihr Produkt, konfigurieren Sie es im Konfigurator und schliessen Sie die Bestellung im Checkout ab.',
+    ],
+    [
+      'Kann ich bei Planenadler mehrere Produkte gleichzeitig bestellen?',
+      'Ja. Sie koennen mehrere Artikel in den Warenkorb legen und in einer Bestellung zusammenfassen.',
+    ],
+    [
+      'Welche Zahlungsmoeglichkeiten gibt es bei shop.planenadler.de?',
+      'Die aktuell verfuegbaren Zahlungsarten sehen Sie im Checkout. Ausfuehrliche Informationen finden Sie zusaetzlich im FAQ-Bereich Zahlungen weiter unten auf dieser Seite.',
+    ],
+    [
+      'Wie laeuft der Versand bei Planenadler ab?',
+      'Bestellungen werden sicher verpackt versendet – je nach Groesse per Paketdienst oder Spedition. Details zu Versandarten und Kosten finden Sie im FAQ-Bereich Versand weiter unten sowie auf der <a href="/versand">Versandseite</a>.',
+    ],
+    [
+      'Wie lange dauert die Lieferung bei Planenadler?',
+      'Lieferzeit und Produktion haengen vom Produkt und vom Grad der Individualisierung ab. Richtwerte und Ablauf beschreiben der Bestellprozess, der FAQ-Bereich Versand und der Abschnitt Wie wir arbeiten weiter unten auf dieser Seite.',
+    ],
+    [
+      'Wie kann ich Planenadler kontaktieren?',
+      'Ueber die <a href="/kontakt">Kontaktseite</a> sowie die auf der Webseite angegebenen Kanaele, wenn Sie Fragen zu Produkten, Massen oder Sonderanfertigungen haben.',
+    ],
+  ]),
+]
+
 export const ABOUT_FAQ_SECTIONS: FaqSection[] = [
+  ...PLANENADLER_SHOP_OVERVIEW_SECTIONS,
   createFaqSection('terrassenplanen', 'Terrassenplanen', [
     ['Wie messe ich eine Terrassenoeffnung korrekt aus?', 'Messen Sie Breite und Hoehe von Pfostenaussenseite zu Pfostenaussenseite und beruecksichtigen Sie alle Seiten, an denen die Plane anliegen soll. Bei Massanfertigungen sollte genuegend Platz, mindestens 10 cm, fuer Oesen und Fenster eingeplant werden. Passend dazu finden Sie unsere <a href="/product/terrassenplanen">Terrassenplanen</a> direkt im Konfigurator.'],
     ['Woran erkenne ich die Aussen- und Innenseite einer Terrassenplane?', 'Die Aussenseite ist glatt und glaenzend, waehrend die Innenseite leicht rau und matt ist.'],
@@ -176,3 +366,30 @@ export const ABOUT_FAQ_SECTIONS: FaqSection[] = [
 ]
 
 export const ABOUT_FAQ_ITEMS: FaqItem[] = ABOUT_FAQ_SECTIONS.flatMap((section) => section.items)
+
+/** Eine Frage pro Thema fuer die Startseite (10 verschiedene FAQ-Kategorien). */
+const HOME_PAGE_FAQ_SECTION_PICKS: Array<{ sectionId: string; itemIndex: number }> = [
+  { sectionId: 'faq-allgemein', itemIndex: 0 },
+  { sectionId: 'faq-planen-allgemein', itemIndex: 0 },
+  { sectionId: 'faq-hauben-allgemein', itemIndex: 0 },
+  { sectionId: 'faq-anhaenger-allgemein', itemIndex: 0 },
+  { sectionId: 'faq-terrasse-sichtschutz', itemIndex: 0 },
+  { sectionId: 'faq-pool-allgemein', itemIndex: 0 },
+  { sectionId: 'material', itemIndex: 0 },
+  { sectionId: 'versand', itemIndex: 0 },
+  { sectionId: 'zahlungen', itemIndex: 0 },
+  { sectionId: 'wie-wir-arbeiten', itemIndex: 0 },
+]
+
+function pickHomePageFaqItems(sections: FaqSection[]): FaqItem[] {
+  return HOME_PAGE_FAQ_SECTION_PICKS.map(({ sectionId, itemIndex }) => {
+    const section = sections.find((s) => s.id === sectionId)
+    const item = section?.items[itemIndex]
+    if (!item) {
+      throw new Error(`Home FAQ pick missing: section "${sectionId}" itemIndex ${itemIndex}`)
+    }
+    return item
+  })
+}
+
+export const HOME_PAGE_FAQ_ITEMS: FaqItem[] = pickHomePageFaqItems(ABOUT_FAQ_SECTIONS)

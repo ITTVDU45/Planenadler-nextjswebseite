@@ -52,9 +52,9 @@ export const SHOP_CATEGORIES: ShopCategory[] = [
   {
     id: 'gitterboxen',
     slug: 'gitterboxen',
-    name: 'Gitterboxen',
+    name: 'Gitterboxplanen',
     description: 'Planen für Gitterboxen und Paletten – sicher und maßgenau.',
-    image: { src: '/images/Gitterboxplanenadler.png', alt: 'Gitterboxen' },
+    image: { src: '/images/Gitterboxplanenadler.png', alt: 'Gitterboxplanen' },
     href: '/product/gitterboxen',
     hrefConfig: '/product/gitterboxen#konfigurator',
   },

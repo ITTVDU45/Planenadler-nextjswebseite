@@ -1,5 +1,10 @@
 export { useCheckoutStore } from './store/checkout.store'
 export type {
+  LastCompletedOrderSnapshot,
+  OrderReceiptSnapshot,
+} from './store/checkout.store'
+export { OrderThankYouContent } from './components/OrderThankYouContent'
+export type {
   CheckoutStepId,
   CheckoutFormValues,
   ShippingOption,

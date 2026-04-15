@@ -5,13 +5,11 @@ interface ICustomValidation {
   minlength?: number;
 }
 
-interface IErrors {}
-
 export interface IInputRootObject {
   inputLabel: string;
   inputName: string;
   customValidation: ICustomValidation;
-  errors?: IErrors;
+  errors?: Record<string, unknown>;
   register?: UseFormRegister<FieldValues>;
   type?: string;
 }

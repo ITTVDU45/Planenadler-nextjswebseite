@@ -24,24 +24,22 @@ export function BlogShowcase({ articles: articlesProp, categories: categoriesPro
 
   const sourceArticles = articlesProp ?? ARTICLES
   const sourceCategories = categoriesProp ?? BLOG_CATEGORIES
-
-  useEffect(() => {
-    const slugs = sourceCategories.map((c) => c.slug)
-    if (!slugs.includes(activeSlug)) setActiveSlug('all')
-  }, [sourceCategories, activeSlug])
+  const selectedSlug = sourceCategories.some((category) => category.slug === activeSlug)
+    ? activeSlug
+    : 'all'
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
     return sourceArticles.filter((article) => {
       const matchesCategory =
-        activeSlug === 'all' || article.category === activeSlug
+        selectedSlug === 'all' || article.category === selectedSlug
       const matchesQuery =
         !normalizedQuery ||
         article.title.toLowerCase().includes(normalizedQuery) ||
         article.excerpt.toLowerCase().includes(normalizedQuery)
       return matchesCategory && matchesQuery
     })
-  }, [activeSlug, query, sourceArticles])
+  }, [query, selectedSlug, sourceArticles])
 
   const [featured, ...rest] = filtered
   const gridArticles: Article[] = rest.slice(0, 3)
@@ -54,11 +52,8 @@ export function BlogShowcase({ articles: articlesProp, categories: categoriesPro
   }, [])
   const mobileSlideCount = mobileSlides.length
   const canSlideMobile = mobileSlideCount > 1
-
-  useEffect(() => {
-    if (mobileSlideCount === 0) return
-    setMobileSlideIndex((current) => Math.min(current, mobileSlideCount - 1))
-  }, [mobileSlideCount])
+  const safeMobileSlideIndex =
+    mobileSlideCount === 0 ? 0 : Math.min(mobileSlideIndex, mobileSlideCount - 1)
 
   useEffect(() => {
     if (!canSlideMobile) return
@@ -98,7 +93,7 @@ export function BlogShowcase({ articles: articlesProp, categories: categoriesPro
         <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <CategoryTabs
             categories={sourceCategories}
-            activeSlug={activeSlug}
+            activeSlug={selectedSlug}
             onChange={setActiveSlug}
           />
         </div>
@@ -109,7 +104,7 @@ export function BlogShowcase({ articles: articlesProp, categories: categoriesPro
               <div className="overflow-hidden">
                 <div
                   className="flex transition-transform duration-300 ease-out"
-                  style={{ transform: `translateX(-${mobileSlideIndex * 100}%)` }}
+                  style={{ transform: `translateX(-${safeMobileSlideIndex * 100}%)` }}
                 >
                   {mobileSlides.map((slide, slideIndex) => (
                     <div
@@ -148,7 +143,7 @@ export function BlogShowcase({ articles: articlesProp, categories: categoriesPro
 
                 <div className="flex items-center justify-center gap-2">
                   {mobileSlides.map((slide, index) => {
-                    const isActive = index === mobileSlideIndex
+                    const isActive = index === safeMobileSlideIndex
                     return (
                       <button
                         key={`blog-mobile-dot-${index}`}

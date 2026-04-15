@@ -21,12 +21,22 @@ const nextConfig = {
     return [
       { source: '/:path*', headers: securityHeaders },
       {
+        source: '/sw.js',
+        headers: [{ key: 'Cache-Control', value: 'no-store, max-age=0, must-revalidate' }],
+      },
+      {
         source: '/_next/static/webpack/:path*',
         headers: [
           { key: 'Access-Control-Allow-Origin', value: '*' },
           { key: 'Cache-Control', value: 'no-store' },
         ],
       },
+    ]
+  },
+  async rewrites() {
+    return [
+      // Browser fragen oft /favicon.ico an; statisches ICO entfernt – gleiche Grafik wie Markenlogo
+      { source: '/favicon.ico', destination: '/Planenadlerlogo.png' },
     ]
   },
   async redirects() {
@@ -40,6 +50,8 @@ const nextConfig = {
       { source: '/kategorier', destination: '/shop', permanent: true },
       // Kategorieseiten nicht anzeigen – direkt auf Produktseite weiterleiten
       { source: '/shop/:slug', destination: '/product/:slug', permanent: true },
+      { source: '/ThankYou', destination: '/thank-you', permanent: false },
+      { source: '/thankyou', destination: '/thank-you', permanent: false },
     ]
   },
   images: {
@@ -114,6 +126,21 @@ const serwistOptions = {
   additionalPrecacheEntries: [{ url: '/~offline', revision: null }],
   // PWA in Development deaktivieren – @serwist/next unterstützt Turbopack nicht.
   disable: process.env.NODE_ENV !== 'production',
+  /**
+   * Gehashte Chunks/CSS/Fonts ändern sich bei jedem Build. Im Precache führt ein Deploy zu
+   * 404 („bad-precaching-response“), wenn noch ein alter SW aktiv ist. Diese Assets werden
+   * über Runtime-Caching in src/sw.ts (StaleWhileRevalidate) geladen.
+   */
+  exclude: [
+    ({ asset }) => {
+      const n = String(asset.name).replace(/\\/g, '/')
+      return (
+        n.includes('static/chunks/') ||
+        n.includes('static/css/') ||
+        n.includes('static/media/')
+      )
+    },
+  ],
 }
 
 module.exports = withSerwist(serwistOptions)(nextConfig)

@@ -38,9 +38,9 @@ export interface CheckoutSessionResult {
  * For card/paypal/klarna: returns stub (redirect URL or "coming soon").
  */
 export async function createCheckoutSession(
-  _params: CreateCheckoutSessionParams
+  params: CreateCheckoutSessionParams
 ): Promise<CheckoutSessionResult> {
-  const { paymentMethod } = _params
+  const { paymentMethod } = params
   const wcMethod = getWooCommercePaymentMethod(paymentMethod)
 
   if (wcMethod === 'bacs') {
@@ -61,7 +61,7 @@ export async function createCheckoutSession(
  * Confirms payment (e.g. after redirect from provider).
  * Stub for now.
  */
-export async function confirmPayment(_sessionId: string): Promise<{ success: boolean; error?: string }> {
+export async function confirmPayment(): Promise<{ success: boolean; error?: string }> {
   return { success: false, error: 'Nicht implementiert' }
 }
 
@@ -70,8 +70,10 @@ export async function confirmPayment(_sessionId: string): Promise<{ success: boo
  * To be used in app/api/webhooks/... route.
  */
 export async function handleWebhook(
-  _provider: string,
-  _payload: unknown
+  provider: string,
+  payload: unknown
 ): Promise<{ received: boolean; error?: string }> {
+  void provider
+  void payload
   return { received: false }
 }

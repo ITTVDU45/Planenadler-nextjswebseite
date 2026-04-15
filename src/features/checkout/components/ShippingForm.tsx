@@ -1,7 +1,7 @@
 'use client'
 
 import { forwardRef, useEffect, useRef, type InputHTMLAttributes } from 'react'
-import { useForm, FormProvider } from 'react-hook-form'
+import { useForm, FormProvider, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useCheckoutStore } from '../store/checkout.store'
 import { useCartStore } from '@/shared/lib/cartStore'
@@ -85,28 +85,23 @@ export function ShippingForm({ onValidSubmit, submitLabel, initialData }: Shippi
   const {
     register,
     handleSubmit,
-    watch,
     reset,
     formState: { errors, isDirty },
   } = methods
 
-  const shipToDifferentAddress = watch('shipToDifferentAddress')
-  const shippingMethod = watch('shippingMethod')
+  const shipToDifferentAddress = useWatch({ control: methods.control, name: 'shipToDifferentAddress' })
+  const shippingMethod = useWatch({ control: methods.control, name: 'shippingMethod' })
 
   useEffect(() => {
     setSelectedShipping(shippingMethod)
   }, [shippingMethod, setSelectedShipping])
 
-  // isDirty in Ref halten, damit die Dependency-Liste konstant bleibt (React-Regel: gleiche Array-Länge).
-  const isDirtyRef = useRef(isDirty)
-  isDirtyRef.current = isDirty
-
   // Nur beim ersten Mount mit gespeicherten Daten füllen – nicht wenn später z. B. Persist rehydriert (sonst gehen Eingaben verloren).
   useEffect(() => {
-    if (!initialData || appliedInitialRef.current || isDirtyRef.current) return
+    if (!initialData || appliedInitialRef.current || isDirty) return
     reset(initialData)
     appliedInitialRef.current = true
-  }, [initialData, reset])
+  }, [initialData, isDirty, reset])
 
   const onFormSubmit = handleSubmit((data) => {
     reset(data)
