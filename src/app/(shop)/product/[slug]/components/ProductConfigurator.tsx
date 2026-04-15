@@ -1485,7 +1485,7 @@ export default function ProductConfigurator({
         sketch?.name,
       )
 
-      const { response } = await postGraphQL<{ addToCart: { cartItem: { key: string } } }>(
+      await postGraphQL<{ addToCart: { cartItem: { key: string } } }>(
         ADD_TO_CART_MUTATION,
         {
           input: {

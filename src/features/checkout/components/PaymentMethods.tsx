@@ -57,11 +57,12 @@ const ALL_PAYMENT_OPTIONS: CheckoutGatewayOption[] = [
     label: 'Apple Pay / Google Pay',
     description: 'Nur mit echtem Wallet-Flow im Frontend',
     available: true,
-    frontendReady: false,
+    frontendReady: true,
     expressEligible: false,
     action: 'select',
     wcPaymentMethodAliases: [],
-    helperText: 'Wallet wird erst aktiv, wenn der direkte Stripe/WooPayments-Flow angebunden ist.',
+    helperText:
+      'Apple Pay und Google Pay werden ueber Stripe bereitgestellt, wenn Browser und Geraet sie unterstuetzen.',
   },
 ]
 

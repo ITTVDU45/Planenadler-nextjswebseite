@@ -115,13 +115,16 @@ export function getGatewayDefinitions(hasStripePublishableKey: boolean): Gateway
       description: 'Nur wenn Browser und Gateway dies unterstuetzen',
       aliases: CARD_ALIASES,
       action: 'select',
-      frontendReady: () => false,
-      helperText: (available) => {
+      frontendReady: () => hasStripePublishableKey,
+      helperText: (available, frontendReady) => {
         if (!available) return undefined
         if (!hasStripePublishableKey) {
           return 'Wallet wurde im Backend erkannt, aber der Stripe Public Key fehlt im Frontend.'
         }
-        return 'Wallet wurde erkannt, benoetigt aber noch den echten Express-Flow im Frontend.'
+        if (frontendReady) {
+          return 'Apple Pay und Google Pay werden ueber Stripe bereitgestellt, wenn Browser und Geraet sie unterstuetzen.'
+        }
+        return 'Wallet wurde erkannt, ist fuer diese Session aber noch nicht verfuegbar.'
       },
     },
     {
