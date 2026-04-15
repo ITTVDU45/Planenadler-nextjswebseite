@@ -106,7 +106,7 @@ export function getGatewayDefinitions(hasStripePublishableKey: boolean): Gateway
       frontendReady: () => true,
       helperText: (available) =>
         available
-          ? 'Kartenzahlung wird sicher ueber WooCommerce/Stripe weitergeleitet.'
+          ? 'Kartenzahlung wird sicher ueber Stripe weitergeleitet.'
           : undefined,
     },
     {
