@@ -23,7 +23,7 @@ const ALL_PAYMENT_OPTIONS: CheckoutGatewayOption[] = [
     expressEligible: false,
     action: 'select',
     wcPaymentMethodAliases: [],
-    helperText: 'Kartenzahlung wird sicher ueber WooCommerce/Stripe weitergeleitet.',
+    helperText: 'Kartenzahlung wird sicher ueber Stripe weitergeleitet.',
   },
   {
     id: PAYMENT_METHOD_IDS.PAYPAL,
