@@ -301,6 +301,10 @@ export function PaymentPageContent() {
       void handleProviderRedirect('card')
       return
     }
+    if (gatewayId === PAYMENT_METHOD_IDS.WALLET) {
+      void handleProviderRedirect('card')
+      return
+    }
     if (gatewayId === PAYMENT_METHOD_IDS.PAYPAL) {
       void handleProviderRedirect('paypal')
       return
@@ -386,10 +390,16 @@ export function PaymentPageContent() {
             />
           ) : null}
           {selectedPayment === PAYMENT_METHOD_IDS.WALLET ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              {selectedGateway?.helperText ??
-                'Wallet wird vom Backend erkannt, ist in dieser Next.js-Checkout-Stufe aber noch nicht direkt ansprechbar.'}
-            </div>
+            <CardPaymentForm
+              title="Apple Pay / Google Pay"
+              introText="Wenn dein Browser oder Geraet Apple Pay oder Google Pay unterstuetzt, zeigt Stripe die passende Wallet-Option an."
+              buttonLabel="Mit Wallet fortfahren"
+              onContinue={() => {
+                void handleProviderRedirect('card')
+              }}
+              isSubmitting={providerLoading === PAYMENT_METHOD_IDS.CARD}
+              helperText={selectedGateway?.helperText}
+            />
           ) : null}
         </div>
         <div className="lg:sticky lg:top-24 lg:self-start">
