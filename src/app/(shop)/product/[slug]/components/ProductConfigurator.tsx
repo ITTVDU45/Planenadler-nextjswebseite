@@ -1497,7 +1497,7 @@ export default function ProductConfigurator({
         },
       )
 
-      applySessionFromResponse(response)
+      applySessionFromResponse()
       await apolloClient.refetchQueries({ include: [GET_CART] })
 
       const addToCartEvent: DataLayerEcommerceEvent = {

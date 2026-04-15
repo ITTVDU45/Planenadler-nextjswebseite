@@ -658,7 +658,7 @@ function mapToTruckTarpProduct(
     ctaLabel: 'Jetzt konfigurieren',
     image: mainImage,
     gallery,
-    features: buildFeatures(product),
+    features: buildFeatures(),
     tabs: buildTabs(product),
     recommendations: buildRecommendations(relatedNodes, allProducts, product.databaseId),
     configuratorHints: customizerData?.resolvedConfig?.hints,
@@ -720,7 +720,7 @@ function fallbackProduct(slug: string, dataErrorMessage?: string): TruckTarpProd
     ctaLabel: 'Jetzt konfigurieren',
     image: PLACEHOLDER_IMAGE,
     gallery: [],
-    features: buildFeatures({} as WpProductNode),
+    features: buildFeatures(),
     tabs: [
       {
         value: 'beschreibung',
