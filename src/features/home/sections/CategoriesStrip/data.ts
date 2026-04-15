@@ -1,11 +1,4 @@
 import type { Category } from './types'
-import { PLACEHOLDER_IMAGE_DATA_URL } from '@/shared/lib/functions'
-
-const placeholderImage = {
-  src: PLACEHOLDER_IMAGE_DATA_URL,
-  alt: 'Kategorie Bild',
-}
-
 export const POPULAR_CATEGORIES: Category[] = [
   {
     id: 'terrassenplanen',

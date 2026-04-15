@@ -1,16 +1,4 @@
 import type { HeroSlide } from './types'
-import { PLACEHOLDER_IMAGE_DATA_URL } from '@/shared/lib/functions'
-
-const placeholderBackground = {
-  src: PLACEHOLDER_IMAGE_DATA_URL,
-  alt: 'Hero Hintergrund',
-}
-
-const placeholderThumb = {
-  src: PLACEHOLDER_IMAGE_DATA_URL,
-  alt: 'Hero Vorschau',
-}
-
 export const HERO_SLIDES: HeroSlide[] = [
   {
     id: 'cabins',

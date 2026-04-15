@@ -47,22 +47,20 @@ export function OrderThankYouContent() {
   const selectedPayment = useCheckoutStore((s) => s.selectedPayment)
   const reset = useCheckoutStore((s) => s.reset)
 
-  const [hydrated, setHydrated] = useState(false)
+  const [hydrated, setHydrated] = useState(() => {
+    const api = useCheckoutStore.persist
+    return api ? api.hasHydrated() : true
+  })
   const purchasePushAttempted = useRef(false)
 
   useEffect(() => {
     const api = useCheckoutStore.persist
-    if (!api) {
-      setHydrated(true)
-      return
-    }
-    if (api.hasHydrated()) {
-      setHydrated(true)
+    if (!api || hydrated || api.hasHydrated()) {
       return
     }
     const unsub = api.onFinishHydration(() => setHydrated(true))
     return unsub
-  }, [])
+  }, [hydrated])
 
   useEffect(() => {
     if (!hydrated) return

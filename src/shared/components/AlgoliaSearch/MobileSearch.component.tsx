@@ -20,9 +20,9 @@ const searchClient = isAlgoliaConfigured
  * Algolia search for mobile menu.
  */
 const MobileSearch = () => {
-  if (!isAlgoliaConfigured || !searchClient) return null
   const [search, setSearch] = useState<string | null>(null);
-  const [hasFocus, sethasFocus] = useState<boolean>(false);
+  const [hasFocus, setHasFocus] = useState<boolean>(false);
+  if (!isAlgoliaConfigured || !searchClient) return null
   return (
     <div className="inline mt-4 md:hidden">
       <InstantSearch indexName={algoliaIndex} searchClient={searchClient}>
@@ -36,16 +36,17 @@ const MobileSearch = () => {
             hasFocus ? 'border-black' : 'border-gray-400'
           }`}
           onReset={() => {
+            setHasFocus(false);
             setSearch(null);
           }}
           onChange={(event) => {
             const target = event.target as HTMLInputElement;
-            sethasFocus(true);
+            setHasFocus(true);
             setSearch(target.value);
           }}
           onKeyDown={(event) => {
             const target = event.target as HTMLInputElement;
-            sethasFocus(true);
+            setHasFocus(true);
             setSearch(target.value);
           }}
         />

@@ -1,4 +1,3 @@
-import { CounterItem } from './CounterItem'
 import { INFO_WITH_COUNTERS } from './data'
 import type { InfoWithCountersContent } from './types'
 import { ContentShell } from '@/shared/components/ContentShell.component'

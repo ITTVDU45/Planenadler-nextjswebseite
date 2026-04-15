@@ -436,7 +436,7 @@ function toProductImage(
   return { src: versionedSrc, alt: img?.altText || fallbackAlt }
 }
 
-function buildFeatures(product: WpProductNode): ProductFeature[] {
+function buildFeatures(): ProductFeature[] {
   const features: ProductFeature[] = []
 
   features.push({

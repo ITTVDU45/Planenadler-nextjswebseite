@@ -2,8 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useRouter } from 'next/compat/router'
-import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { ContentShell } from '@/shared/components/ContentShell.component'
 import { MiniCartDropdown } from '@/features/cart/components/MiniCartDropdown'
@@ -21,7 +20,6 @@ const rightMenu = [
   { label: 'Mein Konto', href: '/mein-konto' },
 ]
 
-const cartLink = { label: 'Warenkorb', href: '/cart' }
 const configuratorLink = { label: 'ZUM KONFIGURATOR', href: '/shop' }
 
 function getIsActive(asPath: string, href: string) {
@@ -32,13 +30,8 @@ function getIsActive(asPath: string, href: string) {
 }
 
 export function TopBar() {
-  const router = useRouter()
-  const [clientPath, setClientPath] = useState('')
-  const asPath = router?.asPath ?? clientPath
-
-  useEffect(() => {
-    setClientPath(window.location.pathname)
-  }, [])
+  const pathname = usePathname()
+  const asPath = pathname ?? ''
 
   return (
     <div className="fixed left-0 right-0 top-0 z-50 w-full bg-transparent">

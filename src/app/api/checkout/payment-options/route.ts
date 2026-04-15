@@ -14,6 +14,7 @@ function resolveWordPressOrigin(): string {
     process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim(),
     process.env.CUSTOMIZER_API_URL?.trim(),
     process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
+    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim(),
     process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
     process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
   ].filter((value): value is string => Boolean(value))
@@ -36,6 +37,7 @@ function resolveWordPressOrigin(): string {
 function resolveStoreApiCheckoutUrl(): string {
   const explicit =
     process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim() ??
+    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim() ??
     process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim() ??
     process.env.WC_KLARNA_CHECKOUT_API_URL?.trim() ??
     ''

@@ -33,7 +33,7 @@ async function callWordPressAuthApi<TResponse>(
   fallbackMessage: string
 ): Promise<TResponse> {
   let response: Response;
-  let data: any = {};
+  let data: Record<string, unknown> = {};
 
   try {
     response = await fetch(endpoint, {
@@ -65,9 +65,16 @@ async function callWordPressAuthApi<TResponse>(
   return data as TResponse;
 }
 
-function getErrorMessage(error: any, fallback = 'Anfrage fehlgeschlagen. Bitte erneut versuchen.'): string {
-  if (error?.graphQLErrors?.length) {
-    const message = String(error.graphQLErrors[0]?.message ?? '');
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function getErrorMessage(error: unknown, fallback = 'Anfrage fehlgeschlagen. Bitte erneut versuchen.'): string {
+  if (isRecord(error)) {
+    const graphQLErrors = Array.isArray(error.graphQLErrors) ? error.graphQLErrors : null
+    if (graphQLErrors?.length) {
+      const firstGraphQLError = isRecord(graphQLErrors[0]) ? graphQLErrors[0] : null
+      const message = String(firstGraphQLError?.message ?? '');
     const mapped: Record<string, string> = {
       invalid_username: 'Ungueltiger Benutzername oder E-Mail-Adresse.',
       incorrect_password: 'Falsches Passwort.',
@@ -80,15 +87,16 @@ function getErrorMessage(error: any, fallback = 'Anfrage fehlgeschlagen. Bitte e
       invalid_password_reset_key: 'Der Passwort-Reset-Link ist ungueltig oder abgelaufen.',
     };
 
-    if (mapped[message]) return mapped[message];
-    if (message.includes('Cannot query field "loginWithCookies"')) {
-      return 'Die GraphQL-Login-Mutation fehlt im WordPress-Backend (loginWithCookies nicht verfuegbar).';
+      if (mapped[message]) return mapped[message];
+      if (message.includes('Cannot query field "loginWithCookies"')) {
+        return 'Die GraphQL-Login-Mutation fehlt im WordPress-Backend (loginWithCookies nicht verfuegbar).';
+      }
+      if (message.trim()) return message;
     }
-    if (message.trim()) return message;
-  }
 
-  if (error?.networkError) {
-    return 'Netzwerkfehler. Bitte Internetverbindung pruefen und erneut versuchen.';
+    if (error.networkError) {
+      return 'Netzwerkfehler. Bitte Internetverbindung pruefen und erneut versuchen.';
+    }
   }
 
   return fallback;

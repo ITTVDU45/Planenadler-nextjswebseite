@@ -44,7 +44,7 @@ interface GatewayDefinition {
 
 const PAYPAL_ALIASES = ['ppcp', 'ppcp-gateway', 'paypal', 'paypal_checkout', 'ppec_paypal']
 const KLARNA_ALIASES = ['stripe_klarna', 'woocommerce_payments_klarna', 'klarna_payments', 'klarna', 'kco']
-const CARD_ALIASES = [
+export const CARD_ALIASES = [
   'woocommerce_payments',
   'wcpay',
   'stripe',
@@ -103,10 +103,10 @@ export function getGatewayDefinitions(hasStripePublishableKey: boolean): Gateway
       description: 'VISA, Mastercard, AMEX',
       aliases: CARD_ALIASES,
       action: 'select',
-      frontendReady: () => false,
+      frontendReady: () => true,
       helperText: (available) =>
         available
-          ? 'Backend erkennt Karte, aber der direkte Karten-Flow ist in Next.js noch nicht live.'
+          ? 'Kartenzahlung wird sicher ueber WooCommerce/Stripe weitergeleitet.'
           : undefined,
     },
     {
@@ -148,6 +148,17 @@ export function buildBankTransferCheckoutCandidates(gateway: CheckoutGatewayOpti
   return ordered
 }
 
+export function buildCardCheckoutCandidates(gateway: CheckoutGatewayOption | undefined): string[] {
+  const ordered: string[] = []
+  const add = (id: string | undefined) => {
+    const t = id?.trim()
+    if (t && !ordered.includes(t)) ordered.push(t)
+  }
+  add(gateway?.wcPaymentMethodId)
+  for (const alias of CARD_ALIASES) add(alias)
+  return ordered
+}
+
 export function resolveCheckoutGateways(
   availableMethodIds: string[],
   hasStripePublishableKey: boolean
@@ -169,4 +180,3 @@ export function resolveCheckoutGateways(
     }
   })
 }
-

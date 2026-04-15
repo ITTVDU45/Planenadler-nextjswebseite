@@ -41,7 +41,7 @@ export default function ProductHero({ product, googleReviews }: ProductHeroProps
     })
 
     return Array.from(unique.values())
-  }, [product.gallery, product.image])
+  }, [product])
 
   const [activeImageSrc, setActiveImageSrc] = useState(heroImages[0]?.src ?? product.image.src)
   const activeImage =

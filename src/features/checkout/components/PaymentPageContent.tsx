@@ -22,7 +22,10 @@ import { PAYMENT_METHOD_IDS } from '../types/checkout.types'
 import type { PaymentMethodId } from '../types/checkout.types'
 import { ExpressCheckout } from './ExpressCheckout'
 import { usePaymentOptions } from '../hooks/usePaymentOptions'
-import { buildBankTransferCheckoutCandidates } from '../lib/payment-gateways'
+import {
+  buildBankTransferCheckoutCandidates,
+  buildCardCheckoutCandidates,
+} from '../lib/payment-gateways'
 import { buildOrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
 import {
   isWooCommerceOrderReceivedRedirect,
@@ -46,7 +49,8 @@ interface CheckoutMutationResponse {
   } | null
 }
 
-const PROVIDER_PAYMENT_METHOD_CANDIDATES: Record<'paypal' | 'klarna', string[]> = {
+const PROVIDER_PAYMENT_METHOD_CANDIDATES: Record<'card' | 'paypal' | 'klarna', string[]> = {
+  card: ['woocommerce_payments', 'wcpay', 'stripe', 'stripe_cc', 'stripe_credit_card', 'credit_card'],
   paypal: ['ppcp', 'ppcp-gateway', 'paypal'],
   klarna: ['stripe_klarna', 'woocommerce_payments_klarna', 'klarna_payments', 'klarna'],
 }
@@ -134,7 +138,7 @@ export function PaymentPageContent() {
   const [checkoutMutation, { loading: checkoutLoading }] = useMutation<CheckoutMutationResponse>(CHECKOUT_MUTATION)
 
   const tryProviderCheckoutMutation = async (
-    paymentMethod: 'paypal' | 'klarna',
+    paymentMethod: 'card' | 'paypal' | 'klarna',
     formData: CheckoutFormShipping,
   ): Promise<{
     redirectUrl: string | null
@@ -234,7 +238,7 @@ export function PaymentPageContent() {
     setSubmitError(lastErrorMessage)
   }
 
-  const handleProviderRedirect = async (paymentMethod: 'paypal' | 'klarna') => {
+  const handleProviderRedirect = async (paymentMethod: 'card' | 'paypal' | 'klarna') => {
     if (!shippingData) return
     setSubmitError(null)
     setProviderLoading(paymentMethod)
@@ -252,7 +256,15 @@ export function PaymentPageContent() {
         return
       }
 
-      const orderProps = toCheckoutDataProps(shippingData, paymentMethod)
+      const gateway =
+        paymentMethod === PAYMENT_METHOD_IDS.CARD
+          ? paymentOptions?.gateways?.find((candidate) => candidate.id === PAYMENT_METHOD_IDS.CARD)
+          : undefined
+      const checkoutMethod =
+        paymentMethod === PAYMENT_METHOD_IDS.CARD
+          ? buildCardCheckoutCandidates(gateway)[0] ?? PAYMENT_METHOD_IDS.CARD
+          : paymentMethod
+      const orderProps = toCheckoutDataProps(shippingData, checkoutMethod)
       const checkoutInput = createCheckoutData(orderProps)
       const response = await fetch('/api/checkout/provider-redirect', {
         method: 'POST',
@@ -285,6 +297,10 @@ export function PaymentPageContent() {
   }
 
   const handleExpressActivation = (gatewayId: PaymentMethodId) => {
+    if (gatewayId === PAYMENT_METHOD_IDS.CARD) {
+      void handleProviderRedirect('card')
+      return
+    }
     if (gatewayId === PAYMENT_METHOD_IDS.PAYPAL) {
       void handleProviderRedirect('paypal')
       return
@@ -338,7 +354,15 @@ export function PaymentPageContent() {
             loading={paymentOptionsLoading}
           />
 
-          {selectedPayment === PAYMENT_METHOD_IDS.CARD ? <CardPaymentForm /> : null}
+          {selectedPayment === PAYMENT_METHOD_IDS.CARD ? (
+            <CardPaymentForm
+              onContinue={() => {
+                void handleProviderRedirect('card')
+              }}
+              isSubmitting={providerLoading === PAYMENT_METHOD_IDS.CARD}
+              helperText={selectedGateway?.helperText}
+            />
+          ) : null}
           {selectedPayment === PAYMENT_METHOD_IDS.PAYPAL ? (
             <PayPalPanel
               onContinue={() => {

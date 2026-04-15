@@ -22,9 +22,10 @@ const searchClient = isAlgoliaConfigured
  * Displays Algolia search for larger resolutions that do not show the mobile menu
  */
 const AlgoliaSearchBox = () => {
-  if (!isAlgoliaConfigured || !searchClient) return null
   const [search, setSearch] = useState<string | null>(null);
-  const [hasFocus, sethasFocus] = useState<boolean>(false);
+  const [hasFocus, setHasFocus] = useState<boolean>(false);
+
+  if (!isAlgoliaConfigured || !searchClient) return null
 
   return (
     <div className="hidden mt-2 md:inline xl:inline">
@@ -43,15 +44,16 @@ const AlgoliaSearchBox = () => {
             }`}
             onChange={(event) => {
               const target = event.target as HTMLInputElement;
-              sethasFocus(true);
+              setHasFocus(true);
               setSearch(target.value);
             }}
             onKeyDown={(event) => {
               const target = event.target as HTMLInputElement;
-              sethasFocus(true);
+              setHasFocus(true);
               setSearch(target.value);
             }}
             onReset={() => {
+              setHasFocus(false);
               setSearch(null);
             }}
           />

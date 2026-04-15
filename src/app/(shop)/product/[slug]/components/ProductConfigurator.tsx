@@ -157,7 +157,7 @@ async function postGraphQL<T>(
 }
 
 /** Woo-Session laeuft ueber HttpOnly-Cookie (siehe /api/graphql); kein localStorage mehr. */
-function applySessionFromResponse(_response: Response): void {}
+function applySessionFromResponse(): void {}
 
 function mergeHints(
   resolvedHints: ResolvedConfiguratorHints,
@@ -978,7 +978,6 @@ function YesNoToggle({
 
 export default function ProductConfigurator({
   productId,
-  productSlug,
   productName,
   price,
   hints,
@@ -1116,16 +1115,7 @@ export default function ProductConfigurator({
   const dimensionDiagramSrc = useMemo(() => {
     if (!resolvedConfig) return undefined
     return resolveDimensionDiagramSrc(resolvedConfig.dimensions, form)
-  }, [
-    resolvedConfig?.dimensions.imageSrc,
-    resolvedConfig?.dimensions.imageSrcWhenBGreater,
-    resolvedConfig?.dimensions.imageSrcWhenCGreater,
-    (resolvedConfig?.dimensions.fields ?? []).map((f) => f.key).join(','),
-    form.heightRightBCm,
-    form.heightLeftCCm,
-    form.rectangularWidthCm,
-    form.rectangularHeightCm,
-  ])
+  }, [form, resolvedConfig])
 
   const openingValidationIssues = useMemo(() => {
     if (!resolvedConfig) return []

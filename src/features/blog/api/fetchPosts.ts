@@ -67,8 +67,7 @@ export async function fetchAllBlogPostsFromAPI(): Promise<BlogPost[]> {
   const results: BlogPost[] = []
   let after: string | null = null
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  for (;;) {
     const data: WPGraphQLPostsResponse = await blogGraphQLFetch<WPGraphQLPostsResponse>({
       query: POSTS_LIST_QUERY,
       variables: { first: BATCH_SIZE, after },

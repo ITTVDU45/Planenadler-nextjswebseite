@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac } from 'crypto'
 
-type Provider = 'klarna' | 'paypal'
+type Provider = 'card' | 'klarna' | 'paypal'
 
 interface BodyShape {
   provider?: Provider
@@ -43,6 +43,7 @@ function resolveWordPressOrigin(): string {
     process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim(),
     process.env.CUSTOMIZER_API_URL?.trim(),
     process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
+    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim(),
     process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
     process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
   ].filter((value): value is string => Boolean(value))
@@ -70,11 +71,15 @@ function resolveDefaultStoreApiCheckoutUrl(): string {
 function resolveUpstreamUrl(provider: Provider): string {
   const sharedProviderUrl = process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim()
   if (sharedProviderUrl) return sharedProviderUrl
+  if (provider === 'card') return process.env.WC_STRIPE_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
   if (provider === 'klarna') return process.env.WC_KLARNA_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
   return process.env.WC_PAYPAL_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
 }
 
 function resolvePaymentMethodId(provider: Provider): string {
+  if (provider === 'card') {
+    return process.env.WC_STRIPE_PAYMENT_METHOD_ID ?? 'stripe'
+  }
   if (provider === 'klarna') {
     return process.env.WC_KLARNA_PAYMENT_METHOD_ID ?? 'stripe_klarna'
   }
@@ -90,11 +95,15 @@ function isPlanenadlerCustomEndpoint(url: string): boolean {
 }
 
 function resolveStoreApiFallbackUrl(provider: Provider): string {
+  if (provider === 'card') return process.env.WC_STRIPE_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
   if (provider === 'klarna') return process.env.WC_KLARNA_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
   return process.env.WC_PAYPAL_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
 }
 
 function getProviderPaymentAliases(provider: Provider): string[] {
+  if (provider === 'card') {
+    return ['woocommerce_payments', 'wcpay', 'stripe', 'stripe_cc', 'stripe_credit_card', 'credit_card']
+  }
   if (provider === 'klarna') {
     return ['stripe_klarna', 'woocommerce_payments_klarna', 'klarna_payments', 'klarna', 'kco']
   }
@@ -359,13 +368,18 @@ export async function POST(request: NextRequest) {
   }
 
   const provider = body.provider
-  if (provider !== 'klarna' && provider !== 'paypal') {
-    return NextResponse.json({ error: 'provider muss klarna oder paypal sein' }, { status: 400 })
+  if (provider !== 'card' && provider !== 'klarna' && provider !== 'paypal') {
+    return NextResponse.json({ error: 'provider muss card, klarna oder paypal sein' }, { status: 400 })
   }
 
   const upstreamUrl = resolveUpstreamUrl(provider)
   if (!upstreamUrl) {
-    const varName = provider === 'klarna' ? 'WC_KLARNA_CHECKOUT_API_URL' : 'WC_PAYPAL_CHECKOUT_API_URL'
+    const varName =
+      provider === 'card'
+        ? 'WC_STRIPE_CHECKOUT_API_URL'
+        : provider === 'klarna'
+          ? 'WC_KLARNA_CHECKOUT_API_URL'
+          : 'WC_PAYPAL_CHECKOUT_API_URL'
     return NextResponse.json({ error: `Konfiguration fehlt: ${varName}` }, { status: 501 })
   }
 

@@ -10,7 +10,7 @@ export function calcTax(subtotal: number, taxRate: number = DEFAULT_TAX_RATE): n
   return Math.round(subtotal * taxRate * 100) / 100
 }
 
-export function calcShipping(_products: CartProduct[]): number {
+export function calcShipping(): number {
   return 0
 }
 

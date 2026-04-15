@@ -1,6 +1,5 @@
 'use client'
 
-import { useCheckoutStore } from '../store/checkout.store'
 import { SHIPPING_METHOD_IDS, type ShippingMethodId } from '../types/checkout.types'
 import { formatPrice } from '@/features/cart/services/cartCalculations'
 

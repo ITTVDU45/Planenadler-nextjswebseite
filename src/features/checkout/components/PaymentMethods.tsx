@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useCheckoutStore } from '../store/checkout.store'
-import { PAYMENT_METHOD_IDS, type PaymentMethodId } from '../types/checkout.types'
+import { PAYMENT_METHOD_IDS } from '../types/checkout.types'
 import type { CheckoutGatewayOption } from '../lib/payment-gateways'
 import { useCartStore } from '@/shared/lib/cartStore'
 import {
@@ -19,11 +19,11 @@ const ALL_PAYMENT_OPTIONS: CheckoutGatewayOption[] = [
     label: 'Karte',
     description: 'VISA, Mastercard, AMEX',
     available: true,
-    frontendReady: false,
+    frontendReady: true,
     expressEligible: false,
     action: 'select',
     wcPaymentMethodAliases: [],
-    helperText: 'Direkter Karten-Flow ist in Next.js noch nicht live.',
+    helperText: 'Kartenzahlung wird sicher ueber WooCommerce/Stripe weitergeleitet.',
   },
   {
     id: PAYMENT_METHOD_IDS.PAYPAL,
