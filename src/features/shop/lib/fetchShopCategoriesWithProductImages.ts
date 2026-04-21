@@ -112,13 +112,15 @@ function getGraphqlEndpoints(): string[] {
 function appendImageVersion(sourceUrl: string, version?: string | null): string {
   if (!version) return sourceUrl
 
+  const safeVersion = version.replace(/[^a-zA-Z0-9]/g, '')
+
   try {
     const url = new URL(sourceUrl)
-    url.searchParams.set('v', version)
+    url.searchParams.set('v', safeVersion)
     return url.toString()
   } catch {
-    const separator = sourceUrl.includes('?') ? '&' : '?'
-    return `${sourceUrl}${separator}v=${encodeURIComponent(version)}`
+    // If it's a relative URL, adding ?v= breaks Next.js Image Optimization
+    return sourceUrl
   }
 }
 

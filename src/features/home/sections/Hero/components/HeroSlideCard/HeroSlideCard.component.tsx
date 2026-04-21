@@ -28,6 +28,8 @@ export function HeroSlideCard({ image, variant, onClick, ariaLabel }: HeroSlideC
         src={image.src}
         alt={image.alt}
         fill
+        priority={variant === 'active'}
+        loading={variant === 'active' ? 'eager' : 'lazy'}
         className="object-cover"
         sizes="160px"
       />

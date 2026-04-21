@@ -55,6 +55,7 @@ function Footer() {
                 alt="Planenadler Logo"
                 width={160}
                 height={43}
+                style={{ width: 'auto', height: 'auto' }}
                 className="h-10 w-auto object-contain sm:h-11"
               />
             </Link>

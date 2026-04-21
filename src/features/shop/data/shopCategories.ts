@@ -58,4 +58,14 @@ export const SHOP_CATEGORIES: ShopCategory[] = [
     href: '/product/gitterboxen',
     hrefConfig: '/product/gitterboxen#konfigurator',
   },
+  {
+    id: 'abdeckhaube-lounge',
+    slug: 'abdeckhaube-lounge',
+    name: 'Abdeckhaube Lounge',
+    description:
+      'Maßgeschneiderte Schutzhauben für Lounge-Möbel – wasserdicht, UV-beständig und in vielen Farben erhältlich.',
+    image: { src: '/images/Abdeckhaube_adlerPlanen.png', alt: 'Abdeckhaube Lounge' },
+    href: '/product/abdeckhaube-lounge',
+    hrefConfig: '/product/abdeckhaube-lounge#konfigurator',
+  },
 ]

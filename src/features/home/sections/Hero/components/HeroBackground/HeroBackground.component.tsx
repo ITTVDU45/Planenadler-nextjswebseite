@@ -14,6 +14,7 @@ export function HeroBackground({ image, slideId }: HeroBackgroundProps) {
         alt={image.alt}
         fill
         priority
+        loading="eager"
         className="object-cover"
         sizes="100vw"
       />

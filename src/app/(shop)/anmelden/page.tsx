@@ -25,6 +25,7 @@ export default function AnmeldenPage() {
                 alt="Planenadler Logo"
                 width={220}
                 height={56}
+                style={{ width: 'auto', height: 'auto' }}
                 className="mb-6 h-12 w-auto object-contain sm:h-14"
                 priority
               />

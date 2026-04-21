@@ -16,6 +16,8 @@ import { getRecentBlogPosts } from '@/features/blog'
 import { buildCanonicalMetadata } from '@/lib/seo'
 import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
 
+export const revalidate = 3600
+
 export const metadata: Metadata = buildCanonicalMetadata(
   '/shop',
   'Shop',

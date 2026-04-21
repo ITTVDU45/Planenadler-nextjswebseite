@@ -53,7 +53,7 @@ export const GET_PRODUCTS_BY_CATEGORY = /* GraphQL */ `
 
 export const GET_PRODUCTS_ALL = /* GraphQL */ `
   query ProductsAll {
-    products(first: 50) {
+    products(first: 100) {
       nodes {
         id
         slug

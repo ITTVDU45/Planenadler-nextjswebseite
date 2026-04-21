@@ -36,6 +36,7 @@ const Stickynav = () => {
               alt="Planenadler Logo"
               width={220}
               height={58}
+              style={{ width: 'auto', height: 'auto' }}
               className="h-12 w-auto object-contain sm:h-14"
               priority
             />

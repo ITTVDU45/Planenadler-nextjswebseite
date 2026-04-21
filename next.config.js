@@ -90,31 +90,31 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'swewoocommerce.dfweb.no',
-        pathname: '**',
+        pathname: '/**',
       },
       // Cloudinary (Placeholder etc.)
       {
         protocol: 'https',
         hostname: 'res.cloudinary.com',
-        pathname: '**',
+        pathname: '/**',
       },
       // Placeholder Fallback
       {
         protocol: 'https',
         hostname: 'via.placeholder.com',
-        pathname: '**',
+        pathname: '/**',
       },
       // Unsplash (Blog-Mock-Bilder)
       {
         protocol: 'https',
         hostname: 'images.unsplash.com',
-        pathname: '**',
+        pathname: '/**',
       },
       // Pravatar (Blog-Mock-Avatare)
       {
         protocol: 'https',
         hostname: 'i.pravatar.cc',
-        pathname: '**',
+        pathname: '/**',
       },
     ],
   },
