@@ -55,7 +55,7 @@ const AddToCart = ({
   };
 
   // Get cart data query
-  const { data, refetch } = useQuery(GET_CART, {
+  const { data } = useQuery(GET_CART, {
     notifyOnNetworkStatusChange: true,
   });
 
@@ -71,21 +71,22 @@ const AddToCart = ({
     },
     refetchQueries: [{ query: GET_CART }],
     onCompleted: () => {
-      void refetch();
       const priceValue = typeof product?.salePrice === 'string'
         ? Number.parseFloat(product.salePrice.replace(/[^0-9,.-]/g, '').replace(/\./g, '').replace(',', '.'))
         : typeof product?.price === 'string'
           ? Number.parseFloat(product.price.replace(/[^0-9,.-]/g, '').replace(/\./g, '').replace(',', '.'))
           : undefined
+      const roundedPrice = Number.isFinite(priceValue) ? roundTrackingValue(priceValue as number) : undefined
       const event: DataLayerEcommerceEvent = {
         event: 'add_to_cart',
         ecommerce: {
           currency: 'EUR',
+          value: roundedPrice,
           items: [
             {
               item_id: String(productId),
               item_name: product?.name ?? 'Produkt',
-              price: Number.isFinite(priceValue) ? roundTrackingValue(priceValue as number) : undefined,
+              price: roundedPrice,
               quantity: 1,
             },
           ],

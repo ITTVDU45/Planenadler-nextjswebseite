@@ -12,6 +12,8 @@ export interface PurchaseEventInput {
   transactionId: string
   value: number
   currency?: string
+  tax?: number
+  shipping?: number
   receipt: OrderReceiptSnapshot
 }
 
@@ -20,12 +22,15 @@ export interface PurchaseEcommerceItem {
   item_name: string
   price: number
   quantity: number
+  item_variant?: string
 }
 
 export interface PurchaseEcommercePayload {
   transaction_id: string
   value: number
   currency: string
+  tax?: number
+  shipping?: number
   items: PurchaseEcommerceItem[]
 }
 
@@ -61,6 +66,7 @@ export function buildPurchaseEcommercePayload(input: PurchaseEventInput): Purcha
       item_name: line.name,
       price: roundCurrency(Number.isFinite(line.unitPrice) ? line.unitPrice : 0),
       quantity: line.qty,
+      ...(line.variant ? { item_variant: line.variant } : {}),
     }))
     .filter((line) => line.item_id && line.item_name && line.quantity > 0)
 
@@ -70,6 +76,12 @@ export function buildPurchaseEcommercePayload(input: PurchaseEventInput): Purcha
     transaction_id: transactionId,
     value: roundCurrency(input.value),
     currency: normalizeTrackingCurrency(input.currency ?? DEFAULT_CURRENCY),
+    ...(Number.isFinite(input.tax) && (input.tax as number) >= 0
+      ? { tax: roundCurrency(input.tax as number) }
+      : {}),
+    ...(Number.isFinite(input.shipping) && (input.shipping as number) >= 0
+      ? { shipping: roundCurrency(input.shipping as number) }
+      : {}),
     items,
   }
 }

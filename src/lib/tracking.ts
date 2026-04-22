@@ -11,6 +11,8 @@ const DEFAULT_CURRENCY = 'EUR'
 export type EcommerceEventName =
   | 'view_item'
   | 'add_to_cart'
+  | 'remove_from_cart'
+  | 'view_cart'
   | 'begin_checkout'
   | 'add_shipping_info'
   | 'add_payment_info'
@@ -21,12 +23,16 @@ export interface EcommerceItemInput {
   item_name: string
   price?: number
   quantity?: number
+  item_variant?: string
+  index?: number
 }
 
 export interface EcommercePayload {
   transaction_id?: string
   value?: number
   currency?: string
+  tax?: number
+  shipping?: number
   shipping_tier?: string
   payment_type?: string
   items?: EcommerceItemInput[]
@@ -41,6 +47,8 @@ export function pushToDataLayer(data: DataLayerEcommerceEvent): void {
   if (typeof window === 'undefined') return
 
   window.dataLayer = window.dataLayer || []
+  // GA4 requires clearing the previous ecommerce object to prevent data bleeding between events
+  window.dataLayer.push({ ecommerce: null })
   window.dataLayer.push(data)
 }
 
@@ -70,6 +78,7 @@ export function mapCartProductToTrackingItem(item: CartProduct): EcommerceItemIn
     item_name: item.name,
     price: roundTrackingValue(Number.isFinite(item.price) ? item.price : 0),
     quantity: item.qty,
+    ...(item.variant ? { item_variant: item.variant } : {}),
   }
 }
 

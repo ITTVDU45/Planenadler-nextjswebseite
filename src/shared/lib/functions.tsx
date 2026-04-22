@@ -299,6 +299,11 @@ export const getFormattedCart = (data: IFormattedCartProps) => {
       hasConfiguration,
     } = decodeConfigurationSummary(item)
 
+    const variantAttributes = item.variation?.node.attributes?.nodes ?? []
+    const variant = variantAttributes.length > 0
+      ? variantAttributes.map((a) => a.value).filter(Boolean).join(' / ')
+      : undefined
+
     const product: CartProduct = {
       productId: givenProduct.productId ?? givenProduct.databaseId,
       cartKey: item.key,
@@ -325,6 +330,7 @@ export const getFormattedCart = (data: IFormattedCartProps) => {
             title: givenProduct.name,
           },
       slug: givenProduct.slug,
+      variant,
       configurationId,
       configurationSummary,
       hasConfiguration,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -12,8 +12,16 @@ import {
   getAbsoluteImageUrl,
   getFormattedCart,
   getUpdatedItems,
+  parseCartPriceString,
   type IProductRootObject,
 } from '@/shared/lib/functions'
+import {
+  buildCartItemId,
+  mapCartToTrackingItems,
+  pushToDataLayer,
+  roundTrackingValue,
+  type DataLayerEcommerceEvent,
+} from '@/lib/tracking'
 import { GET_CART } from '../../api/queries'
 import { UPDATE_CART } from '@/shared/lib/GQL_MUTATIONS'
 import { OrderSummary } from '../OrderSummary/OrderSummary'
@@ -31,6 +39,7 @@ export function CartPageContent() {
   const router = useRouter()
   const { cart, syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
   const { shippingData, setSelectedPayment } = useCheckoutStore()
+  const viewCartFiredRef = useRef(false)
   const {
     data: paymentOptions,
     loading: paymentOptionsLoading,
@@ -38,7 +47,7 @@ export function CartPageContent() {
     refresh: refreshPaymentOptions,
   } = usePaymentOptions()
 
-  const { data, refetch, loading } = useQuery(GET_CART, {
+  const { data, loading } = useQuery(GET_CART, {
     notifyOnNetworkStatusChange: true,
   })
 
@@ -52,10 +61,25 @@ export function CartPageContent() {
     if (updatedCart) syncWithWooCommerce(updatedCart)
   }, [data, clearWooCommerceSession, syncWithWooCommerce])
 
+  useEffect(() => {
+    if (viewCartFiredRef.current) return
+    const items = mapCartToTrackingItems(cart)
+    if (items.length === 0) return
+
+    viewCartFiredRef.current = true
+    pushToDataLayer({
+      event: 'view_cart',
+      ecommerce: {
+        currency: 'EUR',
+        value: parseCartPriceString(cart?.totals?.total),
+        items,
+      },
+    })
+  }, [cart])
+
   const [updateCart, { loading: updateCartLoading }] = useMutation(UPDATE_CART, {
-    onCompleted: () => {
-      void refetch()
-    },
+    refetchQueries: [{ query: GET_CART }],
+    awaitRefetchQueries: false,
   })
 
   const handleQuantityUpdate = async (cartKey: string, quantity: number) => {
@@ -63,6 +87,29 @@ export function CartPageContent() {
     if (!products.length) return
 
     const nextQuantity = Math.max(0, quantity)
+
+    if (nextQuantity === 0) {
+      const removedProduct = cart?.products.find((p) => p.cartKey === cartKey)
+      if (removedProduct) {
+        const removeEvent: DataLayerEcommerceEvent = {
+          event: 'remove_from_cart',
+          ecommerce: {
+            currency: 'EUR',
+            value: roundTrackingValue(removedProduct.price * removedProduct.qty),
+            items: [
+              {
+                item_id: buildCartItemId(removedProduct),
+                item_name: removedProduct.name,
+                price: roundTrackingValue(removedProduct.price),
+                quantity: removedProduct.qty,
+              },
+            ],
+          },
+        }
+        pushToDataLayer(removeEvent)
+      }
+    }
+
     const items = getUpdatedItems(products, nextQuantity, cartKey)
     await updateCart({
       variables: {

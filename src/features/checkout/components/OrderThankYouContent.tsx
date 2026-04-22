@@ -102,11 +102,20 @@ export function OrderThankYouContent() {
 
     purchasePushAttempted.current = true
 
+    const taxValue = receipt.totals.totalTax != null
+      ? parseCartPriceString(receipt.totals.totalTax)
+      : undefined
+    const shippingValue = receipt.totals.shippingTotal != null
+      ? parseCartPriceString(receipt.totals.shippingTotal)
+      : undefined
+
     // Pushes the GTM/GA4 purchase event once per order on the real thank-you page.
     pushPurchaseEvent({
       transactionId: adsTransactionId,
       value: adsValueEuro,
       currency: 'EUR',
+      tax: Number.isFinite(taxValue) && (taxValue as number) >= 0 ? taxValue : undefined,
+      shipping: Number.isFinite(shippingValue) && (shippingValue as number) >= 0 ? shippingValue : undefined,
       receipt,
     })
   }, [adsTransactionId, adsValueEuro, hydrated, lastCompletedOrder, orderCompleted, receipt])

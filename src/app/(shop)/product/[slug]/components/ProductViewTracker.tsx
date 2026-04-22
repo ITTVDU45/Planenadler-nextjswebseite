@@ -19,18 +19,21 @@ export function ProductViewTracker({ productId, slug, name, priceValue }: Produc
     const itemId = Number.isFinite(productId) && productId > 0 ? String(productId) : slug?.trim()
     if (!itemId || !name.trim()) return
 
+    const roundedPrice =
+      priceValue != null && Number.isFinite(priceValue) && priceValue >= 0
+        ? roundTrackingValue(priceValue)
+        : undefined
+
     const event: DataLayerEcommerceEvent = {
       event: 'view_item',
       ecommerce: {
         currency: 'EUR',
+        value: roundedPrice,
         items: [
           {
             item_id: itemId,
             item_name: name,
-            price:
-              priceValue != null && Number.isFinite(priceValue) && priceValue >= 0
-                ? roundTrackingValue(priceValue)
-                : undefined,
+            price: roundedPrice,
             quantity: 1,
           },
         ],

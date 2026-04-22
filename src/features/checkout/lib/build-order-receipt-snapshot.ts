@@ -12,6 +12,7 @@ export interface OrderReceiptLineSnapshot {
   totalDisplay: string
   imageSourceUrl?: string
   imageTitle?: string
+  variant?: string
   configurationSummary: Array<{ label: string; value: string }>
 }
 
@@ -44,6 +45,7 @@ export function buildOrderReceiptSnapshot(
     totalDisplay: p.totalDisplay,
     imageSourceUrl: p.image?.sourceUrl,
     imageTitle: p.image?.title,
+    variant: p.variant,
     configurationSummary: p.configurationSummary.map((c) => ({ label: c.label, value: c.value })),
   }))
 

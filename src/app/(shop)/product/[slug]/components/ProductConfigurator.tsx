@@ -1500,17 +1500,19 @@ export default function ProductConfigurator({
       applySessionFromResponse()
       await apolloClient.refetchQueries({ include: [GET_CART] })
 
+      const configuredPrice = calculatedPrice
+        ? roundTrackingValue(parseCartPriceString(calculatedPrice))
+        : undefined
       const addToCartEvent: DataLayerEcommerceEvent = {
         event: 'add_to_cart',
         ecommerce: {
           currency: 'EUR',
+          value: configuredPrice,
           items: [
             {
               item_id: String(productId),
               item_name: productName,
-              price: calculatedPrice
-                ? roundTrackingValue(parseCartPriceString(calculatedPrice))
-                : undefined,
+              price: configuredPrice,
               quantity: 1,
             },
           ],
