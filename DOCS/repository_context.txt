@@ -3211,36 +3211,6 @@ export default function CartPage() {
 }
 ````
 
-## File: src/app/(shop)/checkout/payment/page.tsx
-````typescript
-import type { Metadata } from 'next'
-import { TopBar } from '@/shared/components/TopBar/TopBar.component'
-import Stickynav from '@/shared/components/Footer/Stickynav.component'
-import Footer from '@/shared/components/Footer/Footer.component'
-import { PaymentPageContent } from '@/features/checkout/components/PaymentPageContent'
-export const metadata: Metadata = {
-  title: 'Zahlung | Kasse | Planenadler',
-  description:
-    'Zahlungsart wählen und Bestellung abschließen. Sichere Zahlung.',
-  openGraph: {
-    title: 'Zahlung | Kasse | Planenadler',
-    description: 'Zahlungsart wählen und Bestellung abschließen.',
-  },
-}
-export default function CheckoutPaymentPage() {
-  return (
-    <main className="min-h-screen bg-white pb-24 sm:pt-20 lg:pb-16">
-      <TopBar />
-      <section className="min-h-[50vh]" aria-label="Zahlung">
-        <PaymentPageContent />
-      </section>
-      <Footer />
-      <Stickynav />
-    </main>
-  )
-}
-````
-
 ## File: src/app/(shop)/checkout/shipping/page.tsx
 ````typescript
 import type { Metadata } from 'next'
@@ -4823,6 +4793,157 @@ export default function ProductRecommendations({ items = [] }: ProductRecommenda
       </div>
     </section>
   )
+}
+````
+
+## File: src/app/(shop)/product/[slug]/components/ProductTabs.tsx
+````typescript
+'use client'
+import { Card, CardContent } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import type { ProductTab } from './types'
+interface ProductTabsProps {
+  tabs: ProductTab[]
+}
+export default function ProductTabs({ tabs }: ProductTabsProps) {
+  const firstTab = tabs[0]?.value ?? 'beschreibung'
+  return (
+    <section className="py-12 md:py-16" aria-labelledby="product-tabs-title">
+      <div className="mx-auto max-w-7xl px-4">
+        <h2 id="product-tabs-title" className="text-2xl font-bold text-[#0F2B52]">
+          Produktinformationen
+        </h2>
+        <Tabs defaultValue={firstTab} className="mt-6">
+          <TabsList>
+            {tabs.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value}>
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {tabs.map((tab) => (
+            <TabsContent key={tab.value} value={tab.value}>
+              <Card>
+                <CardContent className="p-6">
+                  {tab.content.html ? (
+                    <div
+                      className="product-description-rich"
+                      dangerouslySetInnerHTML={{ __html: tab.content.html }}
+                    />
+                  ) : (
+                    <p className="whitespace-pre-line text-sm leading-7 text-[#1F5CAB]/90">
+                      {tab.content.intro}
+                    </p>
+                  )}
+                  {!tab.content.html && tab.content.bullets?.length ? (
+                    <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-[#1F5CAB]/85">
+                      {tab.content.bullets.map((bullet) => (
+                        <li key={bullet}>{bullet}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {!tab.content.html && tab.content.specs?.length ? (
+                    <dl className="mt-6 divide-y divide-[#EEF3FB] rounded-xl border border-[#E7EEF8]">
+                      {tab.content.specs.map((spec) => (
+                        <div key={spec.label} className="grid grid-cols-2 gap-4 px-4 py-3 text-sm">
+                          <dt className="font-semibold text-[#0F2B52]">{spec.label}</dt>
+                          <dd className="text-[#1F5CAB]/80">{spec.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          ))}
+        </Tabs>
+      </div>
+    </section>
+  )
+}
+````
+
+## File: src/app/(shop)/product/[slug]/components/types.ts
+````typescript
+export interface ProductImage {
+  src: string
+  alt: string
+}
+export interface ProductFeature {
+  title: string
+  detail: string
+  icon?: string
+}
+export interface ProductTabSpec {
+  label: string
+  value: string
+}
+export interface ProductTabContent {
+  intro: string
+  html?: string
+  bullets?: string[]
+  specs?: ProductTabSpec[]
+}
+export interface ProductTab {
+  value: string
+  label: string
+  content: ProductTabContent
+}
+export interface FaqItem {
+  id: string
+  question: string
+  answer: string
+}
+export interface BlogTeaser {
+  id: string
+  title: string
+  slug: string
+  href: string
+  publishedAt: string
+  excerpt?: string
+}
+export interface ConfiguratorHints {
+  color?: string
+  size?: string
+  topSide?: string
+  leftSide?: string
+  rightSide?: string
+  bottomSide?: string
+  window?: string
+  door?: string
+  eyelets?: string
+  closureType?: string
+  frontClosure?: string
+  backClosure?: string
+  extras?: string
+  sketch?: string
+}
+export interface ConfiguratorOptionsFromBackend {
+  rawCustomizerConfig?: import('@/lib/customizer-types').CustomizerConfig | null
+  resolvedConfig?: import('@/lib/customizer-runtime').ResolvedCustomizerConfig | null
+  state?: import('@/lib/customizer-runtime').ConfiguratorState
+}
+export interface ProductRecommendation {
+  id: number
+  name: string
+  slug: string
+  price: string
+  image?: ProductImage
+}
+export interface TruckTarpProduct {
+  databaseId: number
+  title: string
+  subtitle: string
+  price: string
+  ctaLabel: string
+  image: ProductImage
+  gallery: ProductImage[]
+  features: ProductFeature[]
+  tabs: ProductTab[]
+  recommendations: ProductRecommendation[]
+  configuratorHints?: ConfiguratorHints
+  configuratorOptions?: ConfiguratorOptionsFromBackend
+  priceEndpoint?: string
 }
 ````
 
@@ -14017,6 +14138,45 @@ export const GET_PRODUCTS_FROM_CATEGORY = gql`
 `;
 ````
 
+## File: src/features/product/api/server-fetch.ts
+````typescript
+import type { DocumentNode } from 'graphql'
+import { print } from 'graphql'
+import { gqlFetch } from '@/features/home/sections/ProductsShowcase/api/fetcher'
+const DEFAULT_GRAPHQL_ENDPOINT = 'https://wp.planenadler.de/graphql'
+function getGraphqlEndpoints(): string[] {
+  const configuredEndpoint =
+    process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim()
+  return Array.from(
+    new Set(
+      [configuredEndpoint, DEFAULT_GRAPHQL_ENDPOINT].filter(
+        (value): value is string => Boolean(value),
+      ),
+    ),
+  )
+}
+export async function fetchGraphqlWithFallback<T>(
+  query: DocumentNode,
+  variables?: Record<string, unknown>,
+  timeoutMs = 12000,
+): Promise<T> {
+  const endpoints = getGraphqlEndpoints()
+  let lastError: unknown = null
+  for (const endpoint of endpoints) {
+    try {
+      return await gqlFetch<T>(endpoint, {
+        query: print(query),
+        variables,
+        timeoutMs,
+      })
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('GraphQL fetch failed')
+}
+````
+
 ## File: src/features/product/components/DisplayProducts.component.tsx
 ````typescript
 /*eslint complexity: ["error", 20]*/
@@ -15990,6 +16150,43 @@ function Index({
 export default Index
 ````
 
+## File: src/pages/kategorier.tsx
+````typescript
+import { NextPage, InferGetStaticPropsType, GetStaticProps } from 'next';
+import Categories from '@/shared/components/Category/Categories.component';
+import Layout from '@/shared/components/Layout.component';
+import { FETCH_ALL_CATEGORIES_QUERY } from '@/features/product/api/queries';
+import { fetchGraphqlWithFallback } from '@/features/product/api/server-fetch';
+/**
+ * Category page displays all of the categories
+ */
+const Kategorier: NextPage = ({
+  categories,
+}: InferGetStaticPropsType<typeof getStaticProps>) => (
+  <Layout title="Kategorier">
+    {categories && <Categories categories={categories} />}
+  </Layout>
+);
+export default Kategorier;
+export const getStaticProps: GetStaticProps = async () => {
+  let categories: { id: string; name: string; slug: string }[] = []
+  try {
+    const result = await fetchGraphqlWithFallback<{
+      productCategories?: { nodes?: { id: string; name: string; slug: string }[] }
+    }>(FETCH_ALL_CATEGORIES_QUERY)
+    categories = result.productCategories?.nodes ?? []
+  } catch (error) {
+    console.error('[CategoriesPage] GraphQL fetch failed', error)
+  }
+  return {
+    props: {
+      categories,
+    },
+    revalidate: 10,
+  };
+};
+````
+
 ## File: src/pages/kontakt.tsx
 ````typescript
 import Head from 'next/head'
@@ -16127,6 +16324,196 @@ const CustomerAccountPage: NextPage = () => {
   );
 };
 export default withAuth(CustomerAccountPage);
+````
+
+## File: src/pages/produkter.tsx
+````typescript
+import Head from 'next/head';
+import Layout from '@/shared/components/Layout.component';
+import ProductList from '@/features/product/components/ProductList.component';
+import { FETCH_ALL_PRODUCTS_QUERY } from '@/features/product/api/queries';
+import { fetchGraphqlWithFallback } from '@/features/product/api/server-fetch';
+import type { Product } from '@/shared/types/product';
+import type { NextPage, GetStaticProps, InferGetStaticPropsType } from 'next';
+const Produkter: NextPage = ({
+  products,
+  loading,
+}: InferGetStaticPropsType<typeof getStaticProps>) => {
+  if (loading)
+    return (
+      <Layout title="Produkter">
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-gray-900"></div>
+        </div>
+      </Layout>
+    );
+  if (!products)
+    return (
+      <Layout title="Produkter">
+        <div className="flex justify-center items-center min-h-screen">
+          <p className="text-red-500">Ingen produkter funnet</p>
+        </div>
+      </Layout>
+    );
+  return (
+    <Layout title="Produkter">
+      <Head>
+        <title>Produkter | WooCommerce Next.js</title>
+      </Head>
+      <div className="container mx-auto px-4 py-8">
+        <ProductList products={products} title="Herreklær" />
+      </div>
+    </Layout>
+  );
+};
+export default Produkter;
+export const getStaticProps: GetStaticProps = async () => {
+  let products: Product[] = []
+  try {
+    const data = await fetchGraphqlWithFallback<{
+      products?: { nodes?: Product[] }
+    }>(FETCH_ALL_PRODUCTS_QUERY)
+    products = data.products?.nodes ?? []
+  } catch (error) {
+    console.error('[ProductsPage] GraphQL fetch failed', error)
+  }
+  return {
+    props: {
+      products,
+      loading: false,
+      networkStatus: 7,
+    },
+    revalidate: 60,
+  };
+};
+````
+
+## File: src/pages/ueber-uns.tsx
+````typescript
+import Head from 'next/head'
+import type { GetStaticProps, InferGetStaticPropsType, NextPage } from 'next'
+import Layout from '@/shared/components/Layout.component'
+import {
+  HeroSection,
+  AboutStorySection,
+  MissionSection,
+  ConfiguratorSection,
+  BenefitsSection,
+  ProductGridSection,
+  FAQSection,
+  buildFaqSchema,
+  ABOUT_FAQ_ITEMS,
+} from '@/features/about'
+import { BlogShowcase } from '@/features/home'
+import {
+  getCategoriesFromBlogPosts,
+  mapBlogPostToArticle,
+} from '@/features/home/sections/BlogShowcase/mapBlogPostToArticle'
+import type { ProductGroupCard } from '@/features/about/types'
+import {
+  mergeProductGroupsWithApiProducts,
+  type ApiProductForMerge,
+} from '@/features/about/lib/mergeProductGroupsWithApi'
+import { FETCH_ALL_PRODUCTS_QUERY } from '@/features/product/api/queries'
+import { fetchGraphqlWithFallback } from '@/features/product/api/server-fetch'
+import { getRecentBlogPosts } from '@/features/blog'
+import type { Article, ArticleCategory } from '@/features/home/sections/BlogShowcase/types'
+import { absoluteUrl } from '@/lib/seo'
+import { getBreadcrumbJsonLd, getWebPageJsonLd } from '@/lib/seo-schema'
+const PAGE_TITLE = 'Ueber uns | Planenadler'
+const META_DESCRIPTION =
+  'Planenadler entwickelt massgeschneiderte PVC-Planen in hoher Qualitaet fuer Terrasse, Pool, Anhaenger und viele weitere Anwendungen.'
+const CANONICAL_URL = absoluteUrl('/ueber-uns')
+const OG_IMAGE_URL = absoluteUrl('/Planenadlerlogo.png')
+const UeberUns: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
+  productGroups,
+  blogArticles,
+  blogCategories,
+}) => {
+  const faqSchema = buildFaqSchema(ABOUT_FAQ_ITEMS)
+  const webPageJsonLd = getWebPageJsonLd(PAGE_TITLE, '/ueber-uns', META_DESCRIPTION)
+  const breadcrumbJsonLd = getBreadcrumbJsonLd([
+    { name: 'Home', path: '/' },
+    { name: 'Ueber uns', path: '/ueber-uns' },
+  ])
+  return (
+    <>
+      <Head>
+        <title>{PAGE_TITLE}</title>
+        <meta name="description" content={META_DESCRIPTION} />
+        <link rel="canonical" href={CANONICAL_URL} />
+        <meta property="og:title" content={PAGE_TITLE} />
+        <meta property="og:description" content={META_DESCRIPTION} />
+        <meta property="og:url" content={CANONICAL_URL} />
+        <meta property="og:image" content={OG_IMAGE_URL} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={PAGE_TITLE} />
+        <meta name="twitter:description" content={META_DESCRIPTION} />
+        <meta name="twitter:image" content={OG_IMAGE_URL} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+        />
+      </Head>
+      <Layout title={PAGE_TITLE}>
+        <HeroSection />
+        <AboutStorySection />
+        <MissionSection />
+        <ConfiguratorSection />
+        <BenefitsSection />
+        <ProductGridSection products={productGroups} />
+        <BlogShowcase articles={blogArticles} categories={blogCategories} />
+        <FAQSection />
+      </Layout>
+    </>
+  )
+}
+export default UeberUns
+export const getStaticProps: GetStaticProps<{
+  productGroups: ProductGroupCard[]
+  blogArticles: Article[]
+  blogCategories: ArticleCategory[]
+}> = async () => {
+  let productGroups: ProductGroupCard[] = mergeProductGroupsWithApiProducts([])
+  let blogArticles: Article[] = []
+  let blogCategories: ArticleCategory[] = [{ id: 'all', label: 'Alle', slug: 'all' }]
+  try {
+    const posts = await getRecentBlogPosts(4)
+    blogArticles = posts.map(mapBlogPostToArticle)
+    blogCategories = getCategoriesFromBlogPosts(posts)
+    if (blogCategories.length === 0) {
+      blogCategories = [{ id: 'all', label: 'Alle', slug: 'all' }]
+    }
+  } catch {
+    // API fallback stays inside service layer.
+  }
+  try {
+    const productsResult = await fetchGraphqlWithFallback<{
+      products?: { nodes?: ApiProductForMerge[] }
+    }>(FETCH_ALL_PRODUCTS_QUERY)
+    const nodes = productsResult.products?.nodes ?? []
+    productGroups = mergeProductGroupsWithApiProducts(nodes)
+  } catch (error) {
+    console.error('[AboutPage] GraphQL fetch failed', error)
+    productGroups = mergeProductGroupsWithApiProducts([])
+  }
+  return {
+    props: {
+      productGroups,
+      blogArticles,
+      blogCategories,
+    },
+    revalidate: 60,
+  }
+}
 ````
 
 ## File: src/shared/components/AlgoliaSearch/SearchResults.component.tsx
@@ -17119,6 +17506,175 @@ export const getUniqueProductTypes = (products: Product[]): ProductType[] => {
     a.name.localeCompare(b.name),
   );
 };
+````
+
+## File: src/shared/styles/globals.css
+````css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+body > div,
+#__next {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+#cart-div {
+  width: 300px;
+}
+#closeXsearch {
+  padding-left: 5px;
+}
+#close-cart-p {
+  margin-top: 2px;
+}
+#mobile-search-close-p {
+  margin-top: -20px;
+}
+/* Fix Algolia mobile searchbox design issues */
+#mobilesearchdiv {
+  position: absolute;
+  height: 200px;
+}
+.ais-SearchBox-submit {
+  width: 48px;
+}
+.ais-SearchBox-submitIcon {
+  display: none;
+}
+.ais-SearchBox-reset {
+  margin-left: 10px;
+}
+/* Fix Chrome padding issue */
+.ais-SearchBox-input[type='search']::-webkit-search-cancel-button {
+  display: none;
+}
+.modern-popup-scrollbar {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #9dbbe1 #eef3fb;
+}
+.modern-popup-scrollbar::-webkit-scrollbar {
+  width: 12px;
+}
+.modern-popup-scrollbar::-webkit-scrollbar-track {
+  margin-block: 12px;
+  border-radius: 9999px;
+  background: #eef3fb;
+}
+.modern-popup-scrollbar::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background: #afc7e8;
+  background-clip: content-box;
+}
+.modern-popup-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #8fb2de;
+  background-clip: content-box;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.product-description-rich {
+  color: rgba(31, 92, 171, 0.92);
+  font-size: 1rem;
+  line-height: 1.9;
+}
+.product-description-rich > *:first-child {
+  margin-top: 0;
+}
+.product-description-rich > *:last-child {
+  margin-bottom: 0;
+}
+.product-description-rich h1,
+.product-description-rich h2,
+.product-description-rich h3,
+.product-description-rich h4,
+.product-description-rich h5,
+.product-description-rich h6 {
+  margin: 2rem 0 0.85rem;
+  color: #0f2b52;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.product-description-rich h1 {
+  font-size: clamp(2rem, 4vw, 2.7rem);
+}
+.product-description-rich h2 {
+  font-size: clamp(1.7rem, 3vw, 2.15rem);
+}
+.product-description-rich h3 {
+  font-size: clamp(1.45rem, 2.4vw, 1.75rem);
+}
+.product-description-rich h4 {
+  font-size: clamp(1.2rem, 2vw, 1.45rem);
+}
+.product-description-rich h5 {
+  font-size: 1.1rem;
+}
+.product-description-rich h6 {
+  font-size: 1rem;
+}
+.product-description-rich p,
+.product-description-rich ul,
+.product-description-rich ol,
+.product-description-rich blockquote,
+.product-description-rich table {
+  margin: 0 0 1rem;
+}
+.product-description-rich ul,
+.product-description-rich ol {
+  padding-left: 1.5rem;
+}
+.product-description-rich ul {
+  list-style: disc;
+}
+.product-description-rich ol {
+  list-style: decimal;
+}
+.product-description-rich li {
+  margin: 0.35rem 0;
+}
+.product-description-rich strong,
+.product-description-rich b {
+  color: #0f2b52;
+  font-weight: 700;
+}
+.product-description-rich a {
+  color: #1f5cab;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.product-description-rich table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border: 1px solid #e7eef8;
+  border-radius: 1rem;
+}
+.product-description-rich th,
+.product-description-rich td {
+  border-bottom: 1px solid #eef3fb;
+  padding: 0.9rem 1rem;
+  text-align: left;
+}
+.product-description-rich th {
+  color: #0f2b52;
+  font-weight: 700;
+}
+.product-description-rich tr:last-child td {
+  border-bottom: 0;
+}
 ````
 
 ## File: src/shared/types/checkout.ts
@@ -19778,6 +20334,48 @@ reference](https://developers.google.com/analytics/devguides/collection/ga4/refe
     });
 ````
 
+## File: src/app/(shop)/checkout/payment/page.tsx
+````typescript
+import { Suspense } from 'react'
+import type { Metadata } from 'next'
+import { TopBar } from '@/shared/components/TopBar/TopBar.component'
+import Stickynav from '@/shared/components/Footer/Stickynav.component'
+import Footer from '@/shared/components/Footer/Footer.component'
+import { PaymentPageContent } from '@/features/checkout/components/PaymentPageContent'
+import { ContentShell } from '@/shared/components/ContentShell.component'
+export const metadata: Metadata = {
+  title: 'Zahlung | Kasse | Planenadler',
+  description:
+    'Zahlungsart wählen und Bestellung abschließen. Sichere Zahlung.',
+  openGraph: {
+    title: 'Zahlung | Kasse | Planenadler',
+    description: 'Zahlungsart wählen und Bestellung abschließen.',
+  },
+}
+export default function CheckoutPaymentPage() {
+  return (
+    <main className="min-h-screen bg-white pb-24 sm:pt-20 lg:pb-16">
+      <TopBar />
+      <section className="min-h-[50vh]" aria-label="Zahlung">
+        <Suspense
+          fallback={
+            <ContentShell className="py-12">
+              <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
+                <p className="text-[#1F5CAB]/90">Lade...</p>
+              </div>
+            </ContentShell>
+          }
+        >
+          <PaymentPageContent />
+        </Suspense>
+      </section>
+      <Footer />
+      <Stickynav />
+    </main>
+  )
+}
+````
+
 ## File: src/app/(shop)/checkout/provider-callback/page.tsx
 ````typescript
 import { redirect } from 'next/navigation'
@@ -19999,90 +20597,6 @@ export default function ProductHero({ product, googleReviews }: ProductHeroProps
       </div>
     </section>
   )
-}
-````
-
-## File: src/app/(shop)/product/[slug]/components/types.ts
-````typescript
-export interface ProductImage {
-  src: string
-  alt: string
-}
-export interface ProductFeature {
-  title: string
-  detail: string
-  icon?: string
-}
-export interface ProductTabSpec {
-  label: string
-  value: string
-}
-export interface ProductTabContent {
-  intro: string
-  html?: string
-  bullets?: string[]
-  specs?: ProductTabSpec[]
-}
-export interface ProductTab {
-  value: string
-  label: string
-  content: ProductTabContent
-}
-export interface FaqItem {
-  id: string
-  question: string
-  answer: string
-}
-export interface BlogTeaser {
-  id: string
-  title: string
-  slug: string
-  href: string
-  publishedAt: string
-  excerpt?: string
-}
-export interface ConfiguratorHints {
-  color?: string
-  size?: string
-  topSide?: string
-  leftSide?: string
-  rightSide?: string
-  bottomSide?: string
-  window?: string
-  door?: string
-  eyelets?: string
-  closureType?: string
-  frontClosure?: string
-  backClosure?: string
-  extras?: string
-  sketch?: string
-}
-export interface ConfiguratorOptionsFromBackend {
-  rawCustomizerConfig?: import('@/lib/customizer-types').CustomizerConfig | null
-  resolvedConfig?: import('@/lib/customizer-runtime').ResolvedCustomizerConfig | null
-  state?: import('@/lib/customizer-runtime').ConfiguratorState
-}
-export interface ProductRecommendation {
-  id: number
-  name: string
-  slug: string
-  price: string
-  image?: ProductImage
-}
-export interface TruckTarpProduct {
-  databaseId: number
-  title: string
-  subtitle: string
-  price: string
-  ctaLabel: string
-  image: ProductImage
-  gallery: ProductImage[]
-  features: ProductFeature[]
-  tabs: ProductTab[]
-  recommendations: ProductRecommendation[]
-  configuratorHints?: ConfiguratorHints
-  configuratorOptions?: ConfiguratorOptionsFromBackend
-  priceEndpoint?: string
 }
 ````
 
@@ -23267,45 +23781,6 @@ const Hero = () => (
 export default Hero;
 ````
 
-## File: src/features/product/api/server-fetch.ts
-````typescript
-import type { DocumentNode } from 'graphql'
-import { print } from 'graphql'
-import { gqlFetch } from '@/features/home/sections/ProductsShowcase/api/fetcher'
-const DEFAULT_GRAPHQL_ENDPOINT = 'https://wp.planenadler.de/graphql'
-function getGraphqlEndpoints(): string[] {
-  const configuredEndpoint =
-    process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim()
-  return Array.from(
-    new Set(
-      [configuredEndpoint, DEFAULT_GRAPHQL_ENDPOINT].filter(
-        (value): value is string => Boolean(value),
-      ),
-    ),
-  )
-}
-export async function fetchGraphqlWithFallback<T>(
-  query: DocumentNode,
-  variables?: Record<string, unknown>,
-  timeoutMs = 12000,
-): Promise<T> {
-  const endpoints = getGraphqlEndpoints()
-  let lastError: unknown = null
-  for (const endpoint of endpoints) {
-    try {
-      return await gqlFetch<T>(endpoint, {
-        query: print(query),
-        variables,
-        timeoutMs,
-      })
-    } catch (error) {
-      lastError = error
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error('GraphQL fetch failed')
-}
-````
-
 ## File: src/features/product/components/ProductCard.component.tsx
 ````typescript
 import Link from 'next/link';
@@ -23707,233 +24182,6 @@ function MyApp({ Component, pageProps }: AppProps) {
   );
 }
 export default MyApp
-````
-
-## File: src/pages/kategorier.tsx
-````typescript
-import { NextPage, InferGetStaticPropsType, GetStaticProps } from 'next';
-import Categories from '@/shared/components/Category/Categories.component';
-import Layout from '@/shared/components/Layout.component';
-import { FETCH_ALL_CATEGORIES_QUERY } from '@/features/product/api/queries';
-import { fetchGraphqlWithFallback } from '@/features/product/api/server-fetch';
-/**
- * Category page displays all of the categories
- */
-const Kategorier: NextPage = ({
-  categories,
-}: InferGetStaticPropsType<typeof getStaticProps>) => (
-  <Layout title="Kategorier">
-    {categories && <Categories categories={categories} />}
-  </Layout>
-);
-export default Kategorier;
-export const getStaticProps: GetStaticProps = async () => {
-  let categories: { id: string; name: string; slug: string }[] = []
-  try {
-    const result = await fetchGraphqlWithFallback<{
-      productCategories?: { nodes?: { id: string; name: string; slug: string }[] }
-    }>(FETCH_ALL_CATEGORIES_QUERY)
-    categories = result.productCategories?.nodes ?? []
-  } catch (error) {
-    console.error('[CategoriesPage] GraphQL fetch failed', error)
-  }
-  return {
-    props: {
-      categories,
-    },
-    revalidate: 10,
-  };
-};
-````
-
-## File: src/pages/produkter.tsx
-````typescript
-import Head from 'next/head';
-import Layout from '@/shared/components/Layout.component';
-import ProductList from '@/features/product/components/ProductList.component';
-import { FETCH_ALL_PRODUCTS_QUERY } from '@/features/product/api/queries';
-import { fetchGraphqlWithFallback } from '@/features/product/api/server-fetch';
-import type { Product } from '@/shared/types/product';
-import type { NextPage, GetStaticProps, InferGetStaticPropsType } from 'next';
-const Produkter: NextPage = ({
-  products,
-  loading,
-}: InferGetStaticPropsType<typeof getStaticProps>) => {
-  if (loading)
-    return (
-      <Layout title="Produkter">
-        <div className="flex justify-center items-center min-h-screen">
-          <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-gray-900"></div>
-        </div>
-      </Layout>
-    );
-  if (!products)
-    return (
-      <Layout title="Produkter">
-        <div className="flex justify-center items-center min-h-screen">
-          <p className="text-red-500">Ingen produkter funnet</p>
-        </div>
-      </Layout>
-    );
-  return (
-    <Layout title="Produkter">
-      <Head>
-        <title>Produkter | WooCommerce Next.js</title>
-      </Head>
-      <div className="container mx-auto px-4 py-8">
-        <ProductList products={products} title="Herreklær" />
-      </div>
-    </Layout>
-  );
-};
-export default Produkter;
-export const getStaticProps: GetStaticProps = async () => {
-  let products: Product[] = []
-  try {
-    const data = await fetchGraphqlWithFallback<{
-      products?: { nodes?: Product[] }
-    }>(FETCH_ALL_PRODUCTS_QUERY)
-    products = data.products?.nodes ?? []
-  } catch (error) {
-    console.error('[ProductsPage] GraphQL fetch failed', error)
-  }
-  return {
-    props: {
-      products,
-      loading: false,
-      networkStatus: 7,
-    },
-    revalidate: 60,
-  };
-};
-````
-
-## File: src/pages/ueber-uns.tsx
-````typescript
-import Head from 'next/head'
-import type { GetStaticProps, InferGetStaticPropsType, NextPage } from 'next'
-import Layout from '@/shared/components/Layout.component'
-import {
-  HeroSection,
-  AboutStorySection,
-  MissionSection,
-  ConfiguratorSection,
-  BenefitsSection,
-  ProductGridSection,
-  FAQSection,
-  buildFaqSchema,
-  ABOUT_FAQ_ITEMS,
-} from '@/features/about'
-import { BlogShowcase } from '@/features/home'
-import {
-  getCategoriesFromBlogPosts,
-  mapBlogPostToArticle,
-} from '@/features/home/sections/BlogShowcase/mapBlogPostToArticle'
-import type { ProductGroupCard } from '@/features/about/types'
-import {
-  mergeProductGroupsWithApiProducts,
-  type ApiProductForMerge,
-} from '@/features/about/lib/mergeProductGroupsWithApi'
-import { FETCH_ALL_PRODUCTS_QUERY } from '@/features/product/api/queries'
-import { fetchGraphqlWithFallback } from '@/features/product/api/server-fetch'
-import { getRecentBlogPosts } from '@/features/blog'
-import type { Article, ArticleCategory } from '@/features/home/sections/BlogShowcase/types'
-import { absoluteUrl } from '@/lib/seo'
-import { getBreadcrumbJsonLd, getWebPageJsonLd } from '@/lib/seo-schema'
-const PAGE_TITLE = 'Ueber uns | Planenadler'
-const META_DESCRIPTION =
-  'Planenadler entwickelt massgeschneiderte PVC-Planen in hoher Qualitaet fuer Terrasse, Pool, Anhaenger und viele weitere Anwendungen.'
-const CANONICAL_URL = absoluteUrl('/ueber-uns')
-const OG_IMAGE_URL = absoluteUrl('/Planenadlerlogo.png')
-const UeberUns: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
-  productGroups,
-  blogArticles,
-  blogCategories,
-}) => {
-  const faqSchema = buildFaqSchema(ABOUT_FAQ_ITEMS)
-  const webPageJsonLd = getWebPageJsonLd(PAGE_TITLE, '/ueber-uns', META_DESCRIPTION)
-  const breadcrumbJsonLd = getBreadcrumbJsonLd([
-    { name: 'Home', path: '/' },
-    { name: 'Ueber uns', path: '/ueber-uns' },
-  ])
-  return (
-    <>
-      <Head>
-        <title>{PAGE_TITLE}</title>
-        <meta name="description" content={META_DESCRIPTION} />
-        <link rel="canonical" href={CANONICAL_URL} />
-        <meta property="og:title" content={PAGE_TITLE} />
-        <meta property="og:description" content={META_DESCRIPTION} />
-        <meta property="og:url" content={CANONICAL_URL} />
-        <meta property="og:image" content={OG_IMAGE_URL} />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={PAGE_TITLE} />
-        <meta name="twitter:description" content={META_DESCRIPTION} />
-        <meta name="twitter:image" content={OG_IMAGE_URL} />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
-        />
-      </Head>
-      <Layout title={PAGE_TITLE}>
-        <HeroSection />
-        <AboutStorySection />
-        <MissionSection />
-        <ConfiguratorSection />
-        <BenefitsSection />
-        <ProductGridSection products={productGroups} />
-        <BlogShowcase articles={blogArticles} categories={blogCategories} />
-        <FAQSection />
-      </Layout>
-    </>
-  )
-}
-export default UeberUns
-export const getStaticProps: GetStaticProps<{
-  productGroups: ProductGroupCard[]
-  blogArticles: Article[]
-  blogCategories: ArticleCategory[]
-}> = async () => {
-  let productGroups: ProductGroupCard[] = mergeProductGroupsWithApiProducts([])
-  let blogArticles: Article[] = []
-  let blogCategories: ArticleCategory[] = [{ id: 'all', label: 'Alle', slug: 'all' }]
-  try {
-    const posts = await getRecentBlogPosts(4)
-    blogArticles = posts.map(mapBlogPostToArticle)
-    blogCategories = getCategoriesFromBlogPosts(posts)
-    if (blogCategories.length === 0) {
-      blogCategories = [{ id: 'all', label: 'Alle', slug: 'all' }]
-    }
-  } catch {
-    // API fallback stays inside service layer.
-  }
-  try {
-    const productsResult = await fetchGraphqlWithFallback<{
-      products?: { nodes?: ApiProductForMerge[] }
-    }>(FETCH_ALL_PRODUCTS_QUERY)
-    const nodes = productsResult.products?.nodes ?? []
-    productGroups = mergeProductGroupsWithApiProducts(nodes)
-  } catch (error) {
-    console.error('[AboutPage] GraphQL fetch failed', error)
-    productGroups = mergeProductGroupsWithApiProducts([])
-  }
-  return {
-    props: {
-      productGroups,
-      blogArticles,
-      blogCategories,
-    },
-    revalidate: 60,
-  }
-}
 ````
 
 ## File: src/shared/components/AlgoliaSearch/AlgoliaSearchBox.component.tsx
@@ -24495,175 +24743,6 @@ export const GET_CUSTOMER_ORDERS = gql`
     }
   }
 `;
-````
-
-## File: src/shared/styles/globals.css
-````css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-html,
-body {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: hidden;
-}
-body > div,
-#__next {
-  max-width: 100%;
-  overflow-x: hidden;
-}
-#cart-div {
-  width: 300px;
-}
-#closeXsearch {
-  padding-left: 5px;
-}
-#close-cart-p {
-  margin-top: 2px;
-}
-#mobile-search-close-p {
-  margin-top: -20px;
-}
-/* Fix Algolia mobile searchbox design issues */
-#mobilesearchdiv {
-  position: absolute;
-  height: 200px;
-}
-.ais-SearchBox-submit {
-  width: 48px;
-}
-.ais-SearchBox-submitIcon {
-  display: none;
-}
-.ais-SearchBox-reset {
-  margin-left: 10px;
-}
-/* Fix Chrome padding issue */
-.ais-SearchBox-input[type='search']::-webkit-search-cancel-button {
-  display: none;
-}
-.modern-popup-scrollbar {
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: #9dbbe1 #eef3fb;
-}
-.modern-popup-scrollbar::-webkit-scrollbar {
-  width: 12px;
-}
-.modern-popup-scrollbar::-webkit-scrollbar-track {
-  margin-block: 12px;
-  border-radius: 9999px;
-  background: #eef3fb;
-}
-.modern-popup-scrollbar::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 9999px;
-  background: #afc7e8;
-  background-clip: content-box;
-}
-.modern-popup-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #8fb2de;
-  background-clip: content-box;
-}
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-.product-description-rich {
-  color: rgba(31, 92, 171, 0.92);
-  font-size: 1rem;
-  line-height: 1.9;
-}
-.product-description-rich > *:first-child {
-  margin-top: 0;
-}
-.product-description-rich > *:last-child {
-  margin-bottom: 0;
-}
-.product-description-rich h1,
-.product-description-rich h2,
-.product-description-rich h3,
-.product-description-rich h4,
-.product-description-rich h5,
-.product-description-rich h6 {
-  margin: 2rem 0 0.85rem;
-  color: #0f2b52;
-  font-weight: 800;
-  line-height: 1.2;
-}
-.product-description-rich h1 {
-  font-size: clamp(2rem, 4vw, 2.7rem);
-}
-.product-description-rich h2 {
-  font-size: clamp(1.7rem, 3vw, 2.15rem);
-}
-.product-description-rich h3 {
-  font-size: clamp(1.45rem, 2.4vw, 1.75rem);
-}
-.product-description-rich h4 {
-  font-size: clamp(1.2rem, 2vw, 1.45rem);
-}
-.product-description-rich h5 {
-  font-size: 1.1rem;
-}
-.product-description-rich h6 {
-  font-size: 1rem;
-}
-.product-description-rich p,
-.product-description-rich ul,
-.product-description-rich ol,
-.product-description-rich blockquote,
-.product-description-rich table {
-  margin: 0 0 1rem;
-}
-.product-description-rich ul,
-.product-description-rich ol {
-  padding-left: 1.5rem;
-}
-.product-description-rich ul {
-  list-style: disc;
-}
-.product-description-rich ol {
-  list-style: decimal;
-}
-.product-description-rich li {
-  margin: 0.35rem 0;
-}
-.product-description-rich strong,
-.product-description-rich b {
-  color: #0f2b52;
-  font-weight: 700;
-}
-.product-description-rich a {
-  color: #1f5cab;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.product-description-rich table {
-  width: 100%;
-  border-collapse: collapse;
-  overflow: hidden;
-  border: 1px solid #e7eef8;
-  border-radius: 1rem;
-}
-.product-description-rich th,
-.product-description-rich td {
-  border-bottom: 1px solid #eef3fb;
-  padding: 0.9rem 1rem;
-  text-align: left;
-}
-.product-description-rich th {
-  color: #0f2b52;
-  font-weight: 700;
-}
-.product-description-rich tr:last-child td {
-  border-bottom: 0;
-}
 ````
 
 ## File: src/shared/types/graphql.ts
@@ -25430,73 +25509,6 @@ export default function CheckoutConfirmationPage() {
 }
 ````
 
-## File: src/app/(shop)/product/[slug]/components/ProductTabs.tsx
-````typescript
-'use client'
-import { Card, CardContent } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import type { ProductTab } from './types'
-interface ProductTabsProps {
-  tabs: ProductTab[]
-}
-export default function ProductTabs({ tabs }: ProductTabsProps) {
-  const firstTab = tabs[0]?.value ?? 'beschreibung'
-  return (
-    <section className="py-12 md:py-16" aria-labelledby="product-tabs-title">
-      <div className="mx-auto max-w-7xl px-4">
-        <h2 id="product-tabs-title" className="text-2xl font-bold text-[#0F2B52]">
-          Produktinformationen
-        </h2>
-        <Tabs defaultValue={firstTab} className="mt-6">
-          <TabsList>
-            {tabs.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value}>
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          {tabs.map((tab) => (
-            <TabsContent key={tab.value} value={tab.value}>
-              <Card>
-                <CardContent className="p-6">
-                  {tab.content.html ? (
-                    <div
-                      className="product-description-rich"
-                      dangerouslySetInnerHTML={{ __html: tab.content.html }}
-                    />
-                  ) : (
-                    <p className="whitespace-pre-line text-sm leading-7 text-[#1F5CAB]/90">
-                      {tab.content.intro}
-                    </p>
-                  )}
-                  {!tab.content.html && tab.content.bullets?.length ? (
-                    <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-[#1F5CAB]/85">
-                      {tab.content.bullets.map((bullet) => (
-                        <li key={bullet}>{bullet}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  {!tab.content.html && tab.content.specs?.length ? (
-                    <dl className="mt-6 divide-y divide-[#EEF3FB] rounded-xl border border-[#E7EEF8]">
-                      {tab.content.specs.map((spec) => (
-                        <div key={spec.label} className="grid grid-cols-2 gap-4 px-4 py-3 text-sm">
-                          <dt className="font-semibold text-[#0F2B52]">{spec.label}</dt>
-                          <dd className="text-[#1F5CAB]/80">{spec.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          ))}
-        </Tabs>
-      </div>
-    </section>
-  )
-}
-````
-
 ## File: src/app/(shop)/product/[slug]/components/ProductViewTracker.tsx
 ````typescript
 'use client'
@@ -25596,433 +25608,6 @@ export default async function ShopPage() {
       <Stickynav />
     </>
   )
-}
-````
-
-## File: src/app/api/checkout/provider-redirect/route.ts
-````typescript
-import { NextRequest, NextResponse } from 'next/server'
-import { createHmac } from 'crypto'
-import { fetchCustomerAccount } from '@/features/auth/api/fetchCustomerAccount'
-type Provider = 'card' | 'klarna' | 'paypal'
-interface BodyShape {
-  provider?: Provider
-  checkoutInput?: unknown
-  returnUrl?: string
-  cancelUrl?: string
-}
-interface CheckoutInputShape {
-  billing?: {
-    firstName?: string
-    lastName?: string
-    company?: string
-    country?: string
-    address1?: string
-    address2?: string
-    city?: string
-    state?: string
-    postcode?: string
-    phone?: string
-    email?: string
-  }
-  shipping?: {
-    firstName?: string
-    lastName?: string
-    company?: string
-    country?: string
-    address1?: string
-    address2?: string
-    city?: string
-    state?: string
-    postcode?: string
-    phone?: string
-  }
-}
-type JsonPayload = Record<string, unknown>
-function resolveGraphqlUrl(): string {
-  return process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim() || ''
-}
-function resolveWordPressOrigin(): string {
-  const candidates = [
-    process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim(),
-    process.env.CUSTOMIZER_API_URL?.trim(),
-    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
-    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim(),
-    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
-    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
-  ].filter((value): value is string => Boolean(value))
-  for (const candidate of candidates) {
-    if (/\/wp-json\/wc\/store\/v1\/checkout\/?$/i.test(candidate)) {
-      return candidate.replace(/\/wp-json\/wc\/store\/v1\/checkout\/?$/i, '')
-    }
-    if (/\/graphql\/?$/i.test(candidate)) {
-      return candidate.replace(/\/graphql\/?$/i, '')
-    }
-    if (/\/wp-json\/.+$/i.test(candidate)) {
-      return candidate.replace(/\/wp-json\/.+$/i, '')
-    }
-  }
-  return ''
-}
-function resolveDefaultStoreApiCheckoutUrl(): string {
-  const origin = resolveWordPressOrigin()
-  return origin ? `${origin}/wp-json/wc/store/v1/checkout` : ''
-}
-function resolveUpstreamUrl(provider: Provider): string {
-  const sharedProviderUrl = process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim()
-  if (sharedProviderUrl) return sharedProviderUrl
-  if (provider === 'card') return process.env.WC_STRIPE_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
-  if (provider === 'klarna') return process.env.WC_KLARNA_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
-  return process.env.WC_PAYPAL_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
-}
-function resolvePaymentMethodId(provider: Provider): string {
-  if (provider === 'card') {
-    return process.env.WC_STRIPE_PAYMENT_METHOD_ID ?? 'stripe'
-  }
-  if (provider === 'klarna') {
-    return process.env.WC_KLARNA_PAYMENT_METHOD_ID ?? 'stripe_klarna'
-  }
-  return process.env.WC_PAYPAL_PAYMENT_METHOD_ID ?? 'ppcp'
-}
-function isStoreApiCheckoutUrl(url: string): boolean {
-  return /\/wp-json\/wc\/store\/v1\/checkout\/?$/.test(url)
-}
-function isPlanenadlerCustomEndpoint(url: string): boolean {
-  return /\/wp-json\/planenadler\/v1\//.test(url)
-}
-function resolveStoreApiFallbackUrl(provider: Provider): string {
-  if (provider === 'card') return process.env.WC_STRIPE_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
-  if (provider === 'klarna') return process.env.WC_KLARNA_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
-  return process.env.WC_PAYPAL_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
-}
-function getProviderPaymentAliases(provider: Provider): string[] {
-  if (provider === 'card') {
-    return ['woocommerce_payments', 'wcpay', 'stripe', 'stripe_cc', 'stripe_credit_card', 'credit_card']
-  }
-  if (provider === 'klarna') {
-    return ['stripe_klarna', 'woocommerce_payments_klarna', 'klarna_payments', 'klarna', 'kco']
-  }
-  return ['ppcp', 'ppcp-gateway', 'paypal', 'paypal_checkout', 'ppec_paypal']
-}
-function pickBestPaymentMethodId(
-  provider: Provider,
-  configuredId: string,
-  availableMethods: string[]
-): string {
-  if (!availableMethods.length) return configuredId
-  const byLower = new Map<string, string>()
-  for (const id of availableMethods) byLower.set(id.toLowerCase(), id)
-  const direct = byLower.get(configuredId.toLowerCase())
-  if (direct) return direct
-  for (const candidate of getProviderPaymentAliases(provider)) {
-    const match = byLower.get(candidate.toLowerCase())
-    if (match) return match
-  }
-  for (const [lower, original] of byLower.entries()) {
-    if (lower.includes(provider)) return original
-  }
-  return configuredId
-}
-function toStoreApiCartUrl(checkoutUrl: string): string {
-  return checkoutUrl.replace(/\/checkout\/?$/i, '/cart')
-}
-function toStoreApiPayload(input: CheckoutInputShape, paymentMethodId: string) {
-  const billing = input.billing ?? {}
-  const shipping = input.shipping ?? billing
-  return {
-    billing_address: {
-      first_name: billing.firstName ?? '',
-      last_name: billing.lastName ?? '',
-      company: billing.company ?? '',
-      country: billing.country ?? 'DE',
-      address_1: billing.address1 ?? '',
-      address_2: billing.address2 ?? '',
-      city: billing.city ?? '',
-      state: billing.state ?? '',
-      postcode: billing.postcode ?? '',
-      phone: billing.phone ?? '',
-      email: billing.email ?? '',
-    },
-    shipping_address: {
-      first_name: shipping.firstName ?? billing.firstName ?? '',
-      last_name: shipping.lastName ?? billing.lastName ?? '',
-      company: shipping.company ?? '',
-      country: shipping.country ?? billing.country ?? 'DE',
-      address_1: shipping.address1 ?? billing.address1 ?? '',
-      address_2: shipping.address2 ?? '',
-      city: shipping.city ?? billing.city ?? '',
-      state: shipping.state ?? billing.state ?? '',
-      postcode: shipping.postcode ?? billing.postcode ?? '',
-      phone: shipping.phone ?? billing.phone ?? '',
-    },
-    payment_method: paymentMethodId,
-    payment_data: [],
-  }
-}
-function extractRedirectUrl(data: Record<string, unknown>): string {
-  const direct = data.redirectUrl
-  if (typeof direct === 'string') return direct
-  const altDirect = data.redirect
-  if (typeof altDirect === 'string') return altDirect
-  const storeApi = data.redirect_url
-  if (typeof storeApi === 'string') return storeApi
-  const paymentResult = data.payment_result
-  if (paymentResult && typeof paymentResult === 'object') {
-    const resultRedirect = (paymentResult as { redirect_url?: unknown }).redirect_url
-    if (typeof resultRedirect === 'string') return resultRedirect
-  }
-  return ''
-}
-function extractErrorMessage(data: Record<string, unknown>, fallback: string): string {
-  return (
-    (data.error as string | undefined) ??
-    (data.message as string | undefined) ??
-    (data.code as string | undefined) ??
-    fallback
-  )
-}
-async function parseJsonSafe(response: Response): Promise<Record<string, unknown>> {
-  return (await response.json().catch(() => ({}))) as Record<string, unknown>
-}
-async function resolveSignedCustomerContext(request: NextRequest): Promise<{
-  customerEmail?: string
-  customerId?: number
-}> {
-  const graphqlUrl = resolveGraphqlUrl()
-  const cookie = request.headers.get('cookie') ?? ''
-  if (!graphqlUrl || !cookie) return {}
-  const customer = await fetchCustomerAccount(graphqlUrl, cookie)
-  if (!customer?.databaseId || !customer.email) return {}
-  return {
-    customerEmail: customer.email,
-    customerId: customer.databaseId,
-  }
-}
-function isReplayDetected(response: Response, data: Record<string, unknown>): boolean {
-  const code = typeof data.code === 'string' ? data.code : ''
-  return response.status === 409 && code === 'replay_detected'
-}
-async function postCustomEndpoint(
-  upstreamUrl: string,
-  cookie: string,
-  payload: Record<string, unknown>
-): Promise<{ response: Response; data: Record<string, unknown> }> {
-  let response: Response | null = null
-  let data: Record<string, unknown> = {}
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const requestBody = JSON.stringify({
-      ...payload,
-      requestId: `${Date.now()}-${attempt}`,
-    })
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(cookie ? { cookie } : {}),
-    }
-    if (isPlanenadlerCustomEndpoint(upstreamUrl) && process.env.WC_PROVIDER_API_SECRET) {
-      const timestamp = Math.floor(Date.now() / 1000).toString()
-      const signature = createHmac('sha256', process.env.WC_PROVIDER_API_SECRET)
-        .update(`${timestamp}.${requestBody}`)
-        .digest('hex')
-      headers['X-Planenadler-Timestamp'] = timestamp
-      headers['X-Planenadler-Signature'] = signature
-      headers['X-Planenadler-Client'] = 'nextjs-woocommerce'
-    }
-    response = await fetch(upstreamUrl, {
-      method: 'POST',
-      headers,
-      redirect: 'manual',
-      body: requestBody,
-    })
-    data = await parseJsonSafe(response)
-    if (!isReplayDetected(response, data)) break
-  }
-  if (!response) {
-    throw new Error('Keine Antwort vom Provider-Endpoint erhalten')
-  }
-  return { response, data }
-}
-function shouldFallbackToStoreApi(
-  provider: Provider,
-  upstreamUrl: string,
-  upstreamStatus: number,
-  data: JsonPayload
-): boolean {
-  if (!isPlanenadlerCustomEndpoint(upstreamUrl)) return false
-  const fallback = resolveStoreApiFallbackUrl(provider)
-  if (!fallback || !isStoreApiCheckoutUrl(fallback)) return false
-  const errorText = extractErrorMessage(data, '').toLowerCase()
-  const errorCode = (typeof data.code === 'string' ? data.code : '').toLowerCase()
-  if (errorText.includes('cart is not available')) return true
-  if (errorText.includes('warenkorb')) return true
-  if (errorCode.includes('cart')) return true
-  // Custom endpoint implementations vary; retry against Store API for common 4xx/5xx path.
-  return upstreamStatus >= 400
-}
-async function executeStoreApiCheckout(
-  provider: Provider,
-  upstreamUrl: string,
-  cookie: string,
-  checkoutInput: CheckoutInputShape
-): Promise<{ status: number; payload: JsonPayload }> {
-  const cartEndpoint = toStoreApiCartUrl(upstreamUrl)
-  const cartRes = await fetch(cartEndpoint, {
-    method: 'GET',
-    headers: cookie ? { cookie } : undefined,
-    cache: 'no-store',
-  })
-  const cartData = await parseJsonSafe(cartRes)
-  const bootstrap = await fetch(upstreamUrl, {
-    method: 'GET',
-    headers: cookie ? { cookie } : undefined,
-    cache: 'no-store',
-  })
-  const nonce = bootstrap.headers.get('nonce') ?? ''
-  const cartToken = bootstrap.headers.get('cart-token') ?? cartRes.headers.get('cart-token') ?? ''
-  const cartNonce = cartRes.headers.get('nonce') ?? nonce
-  const availablePaymentMethods = Array.isArray(cartData.payment_methods)
-    ? cartData.payment_methods.filter((method): method is string => typeof method === 'string')
-    : []
-  const selectedPaymentMethodId = pickBestPaymentMethodId(
-    provider,
-    resolvePaymentMethodId(provider),
-    availablePaymentMethods
-  )
-  const payload = toStoreApiPayload(checkoutInput, selectedPaymentMethodId)
-  const checkoutRes = await fetch(upstreamUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(cookie ? { cookie } : {}),
-      ...(cartNonce ? { Nonce: cartNonce } : {}),
-      ...(cartToken ? { 'Cart-Token': cartToken } : {}),
-    },
-    body: JSON.stringify(payload),
-  })
-  const checkoutData = await parseJsonSafe(checkoutRes)
-  const redirectUrl = extractRedirectUrl(checkoutData)
-  if (!checkoutRes.ok) {
-    return {
-      status: checkoutRes.status,
-      payload: {
-        error: extractErrorMessage(checkoutData, 'Store API Checkout Fehler'),
-        paymentMethodId: selectedPaymentMethodId,
-        availablePaymentMethods,
-        upstream: upstreamUrl,
-      },
-    }
-  }
-  if (!redirectUrl) {
-    return {
-      status: 502,
-      payload: {
-        error: 'Store API hat keine redirect_url geliefert',
-        paymentMethodId: selectedPaymentMethodId,
-        availablePaymentMethods,
-      },
-    }
-  }
-  return {
-    status: 200,
-    payload: {
-      redirectUrl,
-      paymentMethodId: selectedPaymentMethodId,
-    },
-  }
-}
-export async function POST(request: NextRequest) {
-  let body: BodyShape
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Ungueltiger JSON-Body' }, { status: 400 })
-  }
-  const provider = body.provider
-  if (provider !== 'card' && provider !== 'klarna' && provider !== 'paypal') {
-    return NextResponse.json({ error: 'provider muss card, klarna oder paypal sein' }, { status: 400 })
-  }
-  const upstreamUrl = resolveUpstreamUrl(provider)
-  if (!upstreamUrl) {
-    const varName =
-      provider === 'card'
-        ? 'WC_STRIPE_CHECKOUT_API_URL'
-        : provider === 'klarna'
-          ? 'WC_KLARNA_CHECKOUT_API_URL'
-          : 'WC_PAYPAL_CHECKOUT_API_URL'
-    return NextResponse.json({ error: `Konfiguration fehlt: ${varName}` }, { status: 501 })
-  }
-  const cookie = request.headers.get('cookie') ?? ''
-  try {
-    if (isStoreApiCheckoutUrl(upstreamUrl)) {
-      const result = await executeStoreApiCheckout(
-        provider,
-        upstreamUrl,
-        cookie,
-        (body.checkoutInput ?? {}) as CheckoutInputShape
-      )
-      return NextResponse.json(result.payload, { status: result.status })
-    }
-    const upstreamPayload: Record<string, unknown> = {
-      provider,
-      checkoutInput: body.checkoutInput ?? null,
-    }
-    const checkoutInput = (body.checkoutInput ?? {}) as CheckoutInputShape
-    const signedCustomerContext = await resolveSignedCustomerContext(request)
-    const billingEmail = checkoutInput.billing?.email?.trim()
-    if (billingEmail) {
-      upstreamPayload.customerEmail = billingEmail
-    }
-    if (signedCustomerContext.customerEmail) {
-      upstreamPayload.loggedInCustomerEmail = signedCustomerContext.customerEmail
-    }
-    if (signedCustomerContext.customerId) {
-      upstreamPayload.customerId = signedCustomerContext.customerId
-    }
-    if (typeof body.returnUrl === 'string' && body.returnUrl.trim()) {
-      upstreamPayload.returnUrl = body.returnUrl.trim()
-    }
-    if (typeof body.cancelUrl === 'string' && body.cancelUrl.trim()) {
-      upstreamPayload.cancelUrl = body.cancelUrl.trim()
-    }
-    const { response: upstream, data } = await postCustomEndpoint(upstreamUrl, cookie, upstreamPayload)
-    const location = upstream.headers.get('location')
-    if (location && upstream.status >= 300 && upstream.status <= 399) {
-      return NextResponse.json({ redirectUrl: location })
-    }
-    const redirectUrl = extractRedirectUrl(data)
-    if (!upstream.ok) {
-      if (
-        shouldFallbackToStoreApi(provider, upstreamUrl, upstream.status, data)
-      ) {
-        const fallbackUrl = resolveStoreApiFallbackUrl(provider)
-        if (fallbackUrl && isStoreApiCheckoutUrl(fallbackUrl)) {
-          const fallback = await executeStoreApiCheckout(
-            provider,
-            fallbackUrl,
-            cookie,
-            (body.checkoutInput ?? {}) as CheckoutInputShape
-          )
-          return NextResponse.json(fallback.payload, { status: fallback.status })
-        }
-      }
-      return NextResponse.json(
-        {
-          error: extractErrorMessage(data, 'Backend-Fehler'),
-          code: typeof data.code === 'string' ? data.code : undefined,
-          upstream: upstreamUrl,
-        },
-        { status: upstream.status }
-      )
-    }
-    if (!redirectUrl) {
-      return NextResponse.json({ error: 'Keine redirectUrl vom Backend erhalten' }, { status: 502 })
-    }
-    return NextResponse.json({ redirectUrl })
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Proxy-Fehler' },
-      { status: 502 }
-    )
-  }
 }
 ````
 
@@ -28584,6 +28169,444 @@ export interface Cart {
   totalProductsPrice: string;
   totals: CartTotals;
   appliedCoupons: CartAppliedCoupon[];
+}
+````
+
+## File: src/app/api/checkout/provider-redirect/route.ts
+````typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { createHmac } from 'crypto'
+import { fetchCustomerAccount } from '@/features/auth/api/fetchCustomerAccount'
+import { readWooSessionTokenFromRequest } from '@/lib/woo-session-cookie'
+type Provider = 'card' | 'klarna' | 'paypal'
+interface BodyShape {
+  provider?: Provider
+  checkoutInput?: unknown
+  returnUrl?: string
+  cancelUrl?: string
+}
+interface CheckoutInputShape {
+  billing?: {
+    firstName?: string
+    lastName?: string
+    company?: string
+    country?: string
+    address1?: string
+    address2?: string
+    city?: string
+    state?: string
+    postcode?: string
+    phone?: string
+    email?: string
+  }
+  shipping?: {
+    firstName?: string
+    lastName?: string
+    company?: string
+    country?: string
+    address1?: string
+    address2?: string
+    city?: string
+    state?: string
+    postcode?: string
+    phone?: string
+  }
+}
+type JsonPayload = Record<string, unknown>
+function resolveGraphqlUrl(): string {
+  return process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim() || ''
+}
+function resolveWordPressOrigin(): string {
+  const candidates = [
+    process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim(),
+    process.env.CUSTOMIZER_API_URL?.trim(),
+    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
+    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim(),
+    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
+    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
+  ].filter((value): value is string => Boolean(value))
+  for (const candidate of candidates) {
+    if (/\/wp-json\/wc\/store\/v1\/checkout\/?$/i.test(candidate)) {
+      return candidate.replace(/\/wp-json\/wc\/store\/v1\/checkout\/?$/i, '')
+    }
+    if (/\/graphql\/?$/i.test(candidate)) {
+      return candidate.replace(/\/graphql\/?$/i, '')
+    }
+    if (/\/wp-json\/.+$/i.test(candidate)) {
+      return candidate.replace(/\/wp-json\/.+$/i, '')
+    }
+  }
+  return ''
+}
+function resolveDefaultStoreApiCheckoutUrl(): string {
+  const origin = resolveWordPressOrigin()
+  return origin ? `${origin}/wp-json/wc/store/v1/checkout` : ''
+}
+function resolveUpstreamUrl(provider: Provider): string {
+  const sharedProviderUrl = process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim()
+  if (sharedProviderUrl) return sharedProviderUrl
+  if (provider === 'card') return process.env.WC_STRIPE_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
+  if (provider === 'klarna') return process.env.WC_KLARNA_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
+  return process.env.WC_PAYPAL_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
+}
+function resolvePaymentMethodId(provider: Provider): string {
+  if (provider === 'card') {
+    return process.env.WC_STRIPE_PAYMENT_METHOD_ID ?? 'stripe'
+  }
+  if (provider === 'klarna') {
+    return process.env.WC_KLARNA_PAYMENT_METHOD_ID ?? 'stripe_klarna'
+  }
+  return process.env.WC_PAYPAL_PAYMENT_METHOD_ID ?? 'ppcp'
+}
+function isStoreApiCheckoutUrl(url: string): boolean {
+  return /\/wp-json\/wc\/store\/v1\/checkout\/?$/.test(url)
+}
+function isPlanenadlerCustomEndpoint(url: string): boolean {
+  return /\/wp-json\/planenadler\/v1\//.test(url)
+}
+function resolveStoreApiFallbackUrl(provider: Provider): string {
+  if (provider === 'card') return process.env.WC_STRIPE_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
+  if (provider === 'klarna') return process.env.WC_KLARNA_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
+  return process.env.WC_PAYPAL_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
+}
+function getProviderPaymentAliases(provider: Provider): string[] {
+  if (provider === 'card') {
+    return ['woocommerce_payments', 'wcpay', 'stripe', 'stripe_cc', 'stripe_credit_card', 'credit_card']
+  }
+  if (provider === 'klarna') {
+    return ['stripe_klarna', 'woocommerce_payments_klarna', 'klarna_payments', 'klarna', 'kco']
+  }
+  return ['ppcp', 'ppcp-gateway', 'paypal', 'paypal_checkout', 'ppec_paypal']
+}
+function pickBestPaymentMethodId(
+  provider: Provider,
+  configuredId: string,
+  availableMethods: string[]
+): string {
+  if (!availableMethods.length) return configuredId
+  const byLower = new Map<string, string>()
+  for (const id of availableMethods) byLower.set(id.toLowerCase(), id)
+  const direct = byLower.get(configuredId.toLowerCase())
+  if (direct) return direct
+  for (const candidate of getProviderPaymentAliases(provider)) {
+    const match = byLower.get(candidate.toLowerCase())
+    if (match) return match
+  }
+  for (const [lower, original] of byLower.entries()) {
+    if (lower.includes(provider)) return original
+  }
+  return configuredId
+}
+function toStoreApiCartUrl(checkoutUrl: string): string {
+  return checkoutUrl.replace(/\/checkout\/?$/i, '/cart')
+}
+function toStoreApiPayload(input: CheckoutInputShape, paymentMethodId: string) {
+  const billing = input.billing ?? {}
+  const shipping = input.shipping ?? billing
+  return {
+    billing_address: {
+      first_name: billing.firstName ?? '',
+      last_name: billing.lastName ?? '',
+      company: billing.company ?? '',
+      country: billing.country ?? 'DE',
+      address_1: billing.address1 ?? '',
+      address_2: billing.address2 ?? '',
+      city: billing.city ?? '',
+      state: billing.state ?? '',
+      postcode: billing.postcode ?? '',
+      phone: billing.phone ?? '',
+      email: billing.email ?? '',
+    },
+    shipping_address: {
+      first_name: shipping.firstName ?? billing.firstName ?? '',
+      last_name: shipping.lastName ?? billing.lastName ?? '',
+      company: shipping.company ?? '',
+      country: shipping.country ?? billing.country ?? 'DE',
+      address_1: shipping.address1 ?? billing.address1 ?? '',
+      address_2: shipping.address2 ?? '',
+      city: shipping.city ?? billing.city ?? '',
+      state: shipping.state ?? billing.state ?? '',
+      postcode: shipping.postcode ?? billing.postcode ?? '',
+      phone: shipping.phone ?? billing.phone ?? '',
+    },
+    payment_method: paymentMethodId,
+    payment_data: [],
+  }
+}
+function extractRedirectUrl(data: Record<string, unknown>): string {
+  const direct = data.redirectUrl
+  if (typeof direct === 'string') return direct
+  const altDirect = data.redirect
+  if (typeof altDirect === 'string') return altDirect
+  const storeApi = data.redirect_url
+  if (typeof storeApi === 'string') return storeApi
+  const paymentResult = data.payment_result
+  if (paymentResult && typeof paymentResult === 'object') {
+    const resultRedirect = (paymentResult as { redirect_url?: unknown }).redirect_url
+    if (typeof resultRedirect === 'string') return resultRedirect
+  }
+  return ''
+}
+function extractErrorMessage(data: Record<string, unknown>, fallback: string): string {
+  return (
+    (data.error as string | undefined) ??
+    (data.message as string | undefined) ??
+    (data.code as string | undefined) ??
+    fallback
+  )
+}
+async function parseJsonSafe(response: Response): Promise<Record<string, unknown>> {
+  return (await response.json().catch(() => ({}))) as Record<string, unknown>
+}
+async function resolveSignedCustomerContext(request: NextRequest): Promise<{
+  customerEmail?: string
+  customerId?: number
+}> {
+  const graphqlUrl = resolveGraphqlUrl()
+  const cookie = request.headers.get('cookie') ?? ''
+  if (!graphqlUrl || !cookie) return {}
+  const customer = await fetchCustomerAccount(graphqlUrl, cookie)
+  if (!customer?.databaseId || !customer.email) return {}
+  return {
+    customerEmail: customer.email,
+    customerId: customer.databaseId,
+  }
+}
+function isReplayDetected(response: Response, data: Record<string, unknown>): boolean {
+  const code = typeof data.code === 'string' ? data.code : ''
+  return response.status === 409 && code === 'replay_detected'
+}
+async function postCustomEndpoint(
+  upstreamUrl: string,
+  cookie: string,
+  payload: Record<string, unknown>,
+  wooSessionToken?: string | null
+): Promise<{ response: Response; data: Record<string, unknown> }> {
+  let response: Response | null = null
+  let data: Record<string, unknown> = {}
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const requestBody = JSON.stringify({
+      ...payload,
+      requestId: `${Date.now()}-${attempt}`,
+    })
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(cookie ? { cookie } : {}),
+    }
+    if (wooSessionToken) {
+      headers['woocommerce-session'] = `Session ${wooSessionToken}`
+    }
+    if (isPlanenadlerCustomEndpoint(upstreamUrl) && process.env.WC_PROVIDER_API_SECRET) {
+      const timestamp = Math.floor(Date.now() / 1000).toString()
+      const signature = createHmac('sha256', process.env.WC_PROVIDER_API_SECRET)
+        .update(`${timestamp}.${requestBody}`)
+        .digest('hex')
+      headers['X-Planenadler-Timestamp'] = timestamp
+      headers['X-Planenadler-Signature'] = signature
+      headers['X-Planenadler-Client'] = 'nextjs-woocommerce'
+    }
+    response = await fetch(upstreamUrl, {
+      method: 'POST',
+      headers,
+      redirect: 'manual',
+      body: requestBody,
+    })
+    data = await parseJsonSafe(response)
+    if (!isReplayDetected(response, data)) break
+  }
+  if (!response) {
+    throw new Error('Keine Antwort vom Provider-Endpoint erhalten')
+  }
+  return { response, data }
+}
+function shouldFallbackToStoreApi(
+  provider: Provider,
+  upstreamUrl: string,
+  upstreamStatus: number,
+  data: JsonPayload
+): boolean {
+  if (!isPlanenadlerCustomEndpoint(upstreamUrl)) return false
+  const fallback = resolveStoreApiFallbackUrl(provider)
+  if (!fallback || !isStoreApiCheckoutUrl(fallback)) return false
+  const errorText = extractErrorMessage(data, '').toLowerCase()
+  const errorCode = (typeof data.code === 'string' ? data.code : '').toLowerCase()
+  if (errorText.includes('cart is not available')) return true
+  if (errorText.includes('warenkorb')) return true
+  if (errorCode.includes('cart')) return true
+  // Custom endpoint implementations vary; retry against Store API for common 4xx/5xx path.
+  return upstreamStatus >= 400
+}
+async function executeStoreApiCheckout(
+  provider: Provider,
+  upstreamUrl: string,
+  cookie: string,
+  checkoutInput: CheckoutInputShape
+): Promise<{ status: number; payload: JsonPayload }> {
+  const cartEndpoint = toStoreApiCartUrl(upstreamUrl)
+  const cartRes = await fetch(cartEndpoint, {
+    method: 'GET',
+    headers: cookie ? { cookie } : undefined,
+    cache: 'no-store',
+  })
+  const cartData = await parseJsonSafe(cartRes)
+  const bootstrap = await fetch(upstreamUrl, {
+    method: 'GET',
+    headers: cookie ? { cookie } : undefined,
+    cache: 'no-store',
+  })
+  const nonce = bootstrap.headers.get('nonce') ?? ''
+  const cartToken = bootstrap.headers.get('cart-token') ?? cartRes.headers.get('cart-token') ?? ''
+  const cartNonce = cartRes.headers.get('nonce') ?? nonce
+  const availablePaymentMethods = Array.isArray(cartData.payment_methods)
+    ? cartData.payment_methods.filter((method): method is string => typeof method === 'string')
+    : []
+  const selectedPaymentMethodId = pickBestPaymentMethodId(
+    provider,
+    resolvePaymentMethodId(provider),
+    availablePaymentMethods
+  )
+  const payload = toStoreApiPayload(checkoutInput, selectedPaymentMethodId)
+  const checkoutRes = await fetch(upstreamUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(cookie ? { cookie } : {}),
+      ...(cartNonce ? { Nonce: cartNonce } : {}),
+      ...(cartToken ? { 'Cart-Token': cartToken } : {}),
+    },
+    body: JSON.stringify(payload),
+  })
+  const checkoutData = await parseJsonSafe(checkoutRes)
+  const redirectUrl = extractRedirectUrl(checkoutData)
+  if (!checkoutRes.ok) {
+    return {
+      status: checkoutRes.status,
+      payload: {
+        error: extractErrorMessage(checkoutData, 'Store API Checkout Fehler'),
+        paymentMethodId: selectedPaymentMethodId,
+        availablePaymentMethods,
+        upstream: upstreamUrl,
+      },
+    }
+  }
+  if (!redirectUrl) {
+    return {
+      status: 502,
+      payload: {
+        error: 'Store API hat keine redirect_url geliefert',
+        paymentMethodId: selectedPaymentMethodId,
+        availablePaymentMethods,
+      },
+    }
+  }
+  return {
+    status: 200,
+    payload: {
+      redirectUrl,
+      paymentMethodId: selectedPaymentMethodId,
+    },
+  }
+}
+export async function POST(request: NextRequest) {
+  let body: BodyShape
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Ungueltiger JSON-Body' }, { status: 400 })
+  }
+  const provider = body.provider
+  if (provider !== 'card' && provider !== 'klarna' && provider !== 'paypal') {
+    return NextResponse.json({ error: 'provider muss card, klarna oder paypal sein' }, { status: 400 })
+  }
+  const upstreamUrl = resolveUpstreamUrl(provider)
+  if (!upstreamUrl) {
+    const varName =
+      provider === 'card'
+        ? 'WC_STRIPE_CHECKOUT_API_URL'
+        : provider === 'klarna'
+          ? 'WC_KLARNA_CHECKOUT_API_URL'
+          : 'WC_PAYPAL_CHECKOUT_API_URL'
+    return NextResponse.json({ error: `Konfiguration fehlt: ${varName}` }, { status: 501 })
+  }
+  const cookie = request.headers.get('cookie') ?? ''
+  const wooSessionToken = readWooSessionTokenFromRequest(request)
+  try {
+    if (isStoreApiCheckoutUrl(upstreamUrl)) {
+      const result = await executeStoreApiCheckout(
+        provider,
+        upstreamUrl,
+        cookie,
+        (body.checkoutInput ?? {}) as CheckoutInputShape
+      )
+      return NextResponse.json(result.payload, { status: result.status })
+    }
+    const upstreamPayload: Record<string, unknown> = {
+      provider,
+      checkoutInput: body.checkoutInput ?? null,
+    }
+    const checkoutInput = (body.checkoutInput ?? {}) as CheckoutInputShape
+    const signedCustomerContext = await resolveSignedCustomerContext(request)
+    const billingEmail = checkoutInput.billing?.email?.trim()
+    if (billingEmail) {
+      upstreamPayload.customerEmail = billingEmail
+    }
+    if (signedCustomerContext.customerEmail) {
+      upstreamPayload.loggedInCustomerEmail = signedCustomerContext.customerEmail
+    }
+    if (signedCustomerContext.customerId) {
+      upstreamPayload.customerId = signedCustomerContext.customerId
+    }
+    if (typeof body.returnUrl === 'string' && body.returnUrl.trim()) {
+      upstreamPayload.returnUrl = body.returnUrl.trim()
+    }
+    if (typeof body.cancelUrl === 'string' && body.cancelUrl.trim()) {
+      upstreamPayload.cancelUrl = body.cancelUrl.trim()
+    }
+    const { response: upstream, data } = await postCustomEndpoint(
+      upstreamUrl,
+      cookie,
+      upstreamPayload,
+      wooSessionToken
+    )
+    const location = upstream.headers.get('location')
+    if (location && upstream.status >= 300 && upstream.status <= 399) {
+      return NextResponse.json({ redirectUrl: location })
+    }
+    const redirectUrl = extractRedirectUrl(data)
+    if (!upstream.ok) {
+      if (
+        shouldFallbackToStoreApi(provider, upstreamUrl, upstream.status, data)
+      ) {
+        const fallbackUrl = resolveStoreApiFallbackUrl(provider)
+        if (fallbackUrl && isStoreApiCheckoutUrl(fallbackUrl)) {
+          const fallback = await executeStoreApiCheckout(
+            provider,
+            fallbackUrl,
+            cookie,
+            (body.checkoutInput ?? {}) as CheckoutInputShape
+          )
+          return NextResponse.json(fallback.payload, { status: fallback.status })
+        }
+      }
+      return NextResponse.json(
+        {
+          error: extractErrorMessage(data, 'Backend-Fehler'),
+          code: typeof data.code === 'string' ? data.code : undefined,
+          upstream: upstreamUrl,
+        },
+        { status: upstream.status }
+      )
+    }
+    if (!redirectUrl) {
+      return NextResponse.json({ error: 'Keine redirectUrl vom Backend erhalten' }, { status: 502 })
+    }
+    return NextResponse.json({ redirectUrl })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Proxy-Fehler' },
+      { status: 502 }
+    )
+  }
 }
 ````
 
@@ -32049,202 +32072,6 @@ export function PaymentMethods({ hideWallet = false, options, loading = false }:
 }
 ````
 
-## File: src/features/checkout/lib/payment-gateways.ts
-````typescript
-import type { PaymentMethodId } from '../types/checkout.types'
-export interface CheckoutGatewayOption {
-  id: PaymentMethodId
-  label: string
-  description?: string
-  available: boolean
-  frontendReady: boolean
-  expressEligible: boolean
-  action: 'redirect' | 'select'
-  wcPaymentMethodId?: string
-  wcPaymentMethodAliases: string[]
-  helperText?: string
-}
-export interface CheckoutGatewayDiagnostics {
-  upstreamUrl: string
-  cartUrl: string
-  cartFetchOk: boolean
-  checkoutBootstrapOk: boolean
-  cookiePresent: boolean
-  /** Woo-Session-Header an Store API gesendet (wie /api/graphql) */
-  wooSessionHeaderSent: boolean
-  cartItemCount: number
-  availablePaymentMethods: string[]
-  paymentRequirements: string[]
-  errors: string[]
-}
-export interface PaymentOptionsResponse {
-  gateways: CheckoutGatewayOption[]
-  diagnostics: CheckoutGatewayDiagnostics
-}
-interface GatewayDefinition {
-  id: PaymentMethodId
-  label: string
-  description?: string
-  aliases: string[]
-  action: 'redirect' | 'select'
-  frontendReady: (availableMethodIds: string[]) => boolean
-  helperText?: (available: boolean, frontendReady: boolean) => string | undefined
-}
-const PAYPAL_ALIASES = ['ppcp', 'ppcp-gateway', 'paypal', 'paypal_checkout', 'ppec_paypal']
-const KLARNA_ALIASES = ['stripe_klarna', 'woocommerce_payments_klarna', 'klarna_payments', 'klarna', 'kco']
-export const CARD_ALIASES = [
-  'woocommerce_payments',
-  'wcpay',
-  'stripe',
-  'stripe_cc',
-  'stripe_credit_card',
-  'credit_card',
-]
-/** Häufige WooCommerce- und Plugin-IDs für Überweisung / Vorkasse */
-const BANK_ALIASES = [
-  'bacs',
-  'bank_transfer',
-  'direct_bank_transfer',
-  'woocommerce_bacs',
-  'woocommerce-bacs',
-  'wc-bacs',
-  'prepayment',
-  'vorkasse',
-]
-function hasAlias(availableMethodIds: string[], aliases: string[]): boolean {
-  if (!availableMethodIds.length) return false
-  const normalized = availableMethodIds.map((id) => id.toLowerCase())
-  return aliases.some((alias) => normalized.includes(alias.toLowerCase()))
-}
-function getFirstMatch(availableMethodIds: string[], aliases: string[]): string | undefined {
-  const normalized = new Map(availableMethodIds.map((id) => [id.toLowerCase(), id]))
-  for (const alias of aliases) {
-    const match = normalized.get(alias.toLowerCase())
-    if (match) return match
-  }
-  return undefined
-}
-export function getGatewayDefinitions(
-  hasStripePublishableKey: boolean,
-  hasCustomProviderCheckout: boolean
-): GatewayDefinition[] {
-  return [
-    {
-      id: 'paypal',
-      label: 'PayPal',
-      description: 'Direkt zu PayPal weiterleiten',
-      aliases: PAYPAL_ALIASES,
-      action: 'redirect',
-      frontendReady: () => hasCustomProviderCheckout,
-      helperText: (available, frontendReady) => {
-        if (!available) return undefined
-        if (!frontendReady) {
-          return 'PayPal ist im Backend verfuegbar, benoetigt im Headless-Checkout aber einen WordPress-Provider-Endpoint mit returnUrl/cancelUrl.'
-        }
-        return undefined
-      },
-    },
-    {
-      id: 'klarna',
-      label: 'Klarna',
-      description: 'Direkt zu Klarna weiterleiten',
-      aliases: KLARNA_ALIASES,
-      action: 'redirect',
-      frontendReady: () => hasCustomProviderCheckout,
-      helperText: (available, frontendReady) => {
-        if (!available) return undefined
-        if (!frontendReady) {
-          return 'Klarna ist im Backend verfuegbar, benoetigt im Headless-Checkout aber einen WordPress-Provider-Endpoint mit returnUrl/cancelUrl.'
-        }
-        return undefined
-      },
-    },
-    {
-      id: 'card',
-      label: 'Karte',
-      description: 'VISA, Mastercard, AMEX',
-      aliases: CARD_ALIASES,
-      action: 'select',
-      frontendReady: () => true,
-      helperText: (available) =>
-        available
-          ? 'Kartenzahlung wird sicher ueber Stripe weitergeleitet.'
-          : undefined,
-    },
-    {
-      id: 'wallet',
-      label: 'Apple Pay / Google Pay',
-      description: 'Nur wenn Browser und Gateway dies unterstuetzen',
-      aliases: CARD_ALIASES,
-      action: 'select',
-      frontendReady: () => hasStripePublishableKey,
-      helperText: (available, frontendReady) => {
-        if (!available) return undefined
-        if (!hasStripePublishableKey) {
-          return 'Wallet wurde im Backend erkannt, aber der Stripe Public Key fehlt im Frontend.'
-        }
-        if (frontendReady) {
-          return 'Apple Pay und Google Pay werden ueber Stripe bereitgestellt, wenn Browser und Geraet sie unterstuetzen.'
-        }
-        return 'Wallet wurde erkannt, ist fuer diese Session aber noch nicht verfuegbar.'
-      },
-    },
-    {
-      id: 'bacs',
-      label: 'Direkte Bankueberweisung',
-      aliases: BANK_ALIASES,
-      action: 'select',
-      frontendReady: () => true,
-    },
-  ]
-}
-/**
- * Reihenfolge: zuerst vom Store gematchte WC-ID, dann typische Fallback-IDs für GraphQL-Checkout.
- */
-export function buildBankTransferCheckoutCandidates(gateway: CheckoutGatewayOption | undefined): string[] {
-  const ordered: string[] = []
-  const add = (id: string | undefined) => {
-    const t = id?.trim()
-    if (t && !ordered.includes(t)) ordered.push(t)
-  }
-  add(gateway?.wcPaymentMethodId)
-  for (const alias of BANK_ALIASES) add(alias)
-  return ordered
-}
-export function buildCardCheckoutCandidates(gateway: CheckoutGatewayOption | undefined): string[] {
-  const ordered: string[] = []
-  const add = (id: string | undefined) => {
-    const t = id?.trim()
-    if (t && !ordered.includes(t)) ordered.push(t)
-  }
-  add(gateway?.wcPaymentMethodId)
-  for (const alias of CARD_ALIASES) add(alias)
-  return ordered
-}
-export function resolveCheckoutGateways(
-  availableMethodIds: string[],
-  hasStripePublishableKey: boolean,
-  hasCustomProviderCheckout: boolean
-): CheckoutGatewayOption[] {
-  return getGatewayDefinitions(hasStripePublishableKey, hasCustomProviderCheckout).map((gateway) => {
-    const available = hasAlias(availableMethodIds, gateway.aliases)
-    const frontendReady = available && gateway.frontendReady(availableMethodIds)
-    return {
-      id: gateway.id,
-      label: gateway.label,
-      description: gateway.description,
-      available,
-      frontendReady,
-      expressEligible: frontendReady && gateway.action === 'redirect',
-      action: gateway.action,
-      wcPaymentMethodId: getFirstMatch(availableMethodIds, gateway.aliases),
-      wcPaymentMethodAliases: gateway.aliases,
-      helperText: gateway.helperText?.(available, frontendReady),
-    }
-  })
-}
-````
-
 ## File: src/app/(shop)/product/[slug]/product-data.ts
 ````typescript
 import type {
@@ -32908,6 +32735,202 @@ function fallbackProduct(slug: string, dataErrorMessage?: string): TruckTarpProd
         }
       : undefined,
   }
+}
+````
+
+## File: src/features/checkout/lib/payment-gateways.ts
+````typescript
+import type { PaymentMethodId } from '../types/checkout.types'
+export interface CheckoutGatewayOption {
+  id: PaymentMethodId
+  label: string
+  description?: string
+  available: boolean
+  frontendReady: boolean
+  expressEligible: boolean
+  action: 'redirect' | 'select'
+  wcPaymentMethodId?: string
+  wcPaymentMethodAliases: string[]
+  helperText?: string
+}
+export interface CheckoutGatewayDiagnostics {
+  upstreamUrl: string
+  cartUrl: string
+  cartFetchOk: boolean
+  checkoutBootstrapOk: boolean
+  cookiePresent: boolean
+  /** Woo-Session-Header an Store API gesendet (wie /api/graphql) */
+  wooSessionHeaderSent: boolean
+  cartItemCount: number
+  availablePaymentMethods: string[]
+  paymentRequirements: string[]
+  errors: string[]
+}
+export interface PaymentOptionsResponse {
+  gateways: CheckoutGatewayOption[]
+  diagnostics: CheckoutGatewayDiagnostics
+}
+interface GatewayDefinition {
+  id: PaymentMethodId
+  label: string
+  description?: string
+  aliases: string[]
+  action: 'redirect' | 'select'
+  frontendReady: (availableMethodIds: string[]) => boolean
+  helperText?: (available: boolean, frontendReady: boolean) => string | undefined
+}
+const PAYPAL_ALIASES = ['ppcp', 'ppcp-gateway', 'paypal', 'paypal_checkout', 'ppec_paypal']
+const KLARNA_ALIASES = ['stripe_klarna', 'woocommerce_payments_klarna', 'klarna_payments', 'klarna', 'kco']
+export const CARD_ALIASES = [
+  'woocommerce_payments',
+  'wcpay',
+  'stripe',
+  'stripe_cc',
+  'stripe_credit_card',
+  'credit_card',
+]
+/** Häufige WooCommerce- und Plugin-IDs für Überweisung / Vorkasse */
+const BANK_ALIASES = [
+  'bacs',
+  'bank_transfer',
+  'direct_bank_transfer',
+  'woocommerce_bacs',
+  'woocommerce-bacs',
+  'wc-bacs',
+  'prepayment',
+  'vorkasse',
+]
+function hasAlias(availableMethodIds: string[], aliases: string[]): boolean {
+  if (!availableMethodIds.length) return false
+  const normalized = availableMethodIds.map((id) => id.toLowerCase())
+  return aliases.some((alias) => normalized.includes(alias.toLowerCase()))
+}
+function getFirstMatch(availableMethodIds: string[], aliases: string[]): string | undefined {
+  const normalized = new Map(availableMethodIds.map((id) => [id.toLowerCase(), id]))
+  for (const alias of aliases) {
+    const match = normalized.get(alias.toLowerCase())
+    if (match) return match
+  }
+  return undefined
+}
+export function getGatewayDefinitions(
+  hasStripePublishableKey: boolean,
+  hasCustomProviderCheckout: boolean
+): GatewayDefinition[] {
+  return [
+    {
+      id: 'paypal',
+      label: 'PayPal',
+      description: 'Direkt zu PayPal weiterleiten',
+      aliases: PAYPAL_ALIASES,
+      action: 'redirect',
+      frontendReady: () => hasCustomProviderCheckout,
+      helperText: (available, frontendReady) => {
+        if (!available) return undefined
+        if (!frontendReady) {
+          return 'PayPal ist im Backend verfuegbar, benoetigt im Headless-Checkout aber einen WordPress-Provider-Endpoint mit returnUrl/cancelUrl.'
+        }
+        return undefined
+      },
+    },
+    {
+      id: 'klarna',
+      label: 'Klarna',
+      description: 'Direkt zu Klarna weiterleiten',
+      aliases: KLARNA_ALIASES,
+      action: 'redirect',
+      frontendReady: () => hasCustomProviderCheckout,
+      helperText: (available, frontendReady) => {
+        if (!available) return undefined
+        if (!frontendReady) {
+          return 'Klarna ist im Backend verfuegbar, benoetigt im Headless-Checkout aber einen WordPress-Provider-Endpoint mit returnUrl/cancelUrl.'
+        }
+        return undefined
+      },
+    },
+    {
+      id: 'card',
+      label: 'Karte',
+      description: 'VISA, Mastercard, AMEX',
+      aliases: CARD_ALIASES,
+      action: 'select',
+      frontendReady: () => true,
+      helperText: (available) =>
+        available
+          ? 'Kartenzahlung wird sicher ueber Stripe weitergeleitet.'
+          : undefined,
+    },
+    {
+      id: 'wallet',
+      label: 'Apple Pay / Google Pay',
+      description: 'Nur wenn Browser und Gateway dies unterstuetzen',
+      aliases: CARD_ALIASES,
+      action: 'select',
+      frontendReady: () => hasStripePublishableKey,
+      helperText: (available, frontendReady) => {
+        if (!available) return undefined
+        if (!hasStripePublishableKey) {
+          return 'Wallet wurde im Backend erkannt, aber der Stripe Public Key fehlt im Frontend.'
+        }
+        if (frontendReady) {
+          return 'Apple Pay und Google Pay werden ueber Stripe bereitgestellt, wenn Browser und Geraet sie unterstuetzen.'
+        }
+        return 'Wallet wurde erkannt, ist fuer diese Session aber noch nicht verfuegbar.'
+      },
+    },
+    {
+      id: 'bacs',
+      label: 'Direkte Bankueberweisung',
+      aliases: BANK_ALIASES,
+      action: 'select',
+      frontendReady: () => true,
+    },
+  ]
+}
+/**
+ * Reihenfolge: zuerst vom Store gematchte WC-ID, dann typische Fallback-IDs für GraphQL-Checkout.
+ */
+export function buildBankTransferCheckoutCandidates(gateway: CheckoutGatewayOption | undefined): string[] {
+  const ordered: string[] = []
+  const add = (id: string | undefined) => {
+    const t = id?.trim()
+    if (t && !ordered.includes(t)) ordered.push(t)
+  }
+  add(gateway?.wcPaymentMethodId)
+  for (const alias of BANK_ALIASES) add(alias)
+  return ordered
+}
+export function buildCardCheckoutCandidates(gateway: CheckoutGatewayOption | undefined): string[] {
+  const ordered: string[] = []
+  const add = (id: string | undefined) => {
+    const t = id?.trim()
+    if (t && !ordered.includes(t)) ordered.push(t)
+  }
+  add(gateway?.wcPaymentMethodId)
+  for (const alias of CARD_ALIASES) add(alias)
+  return ordered
+}
+export function resolveCheckoutGateways(
+  availableMethodIds: string[],
+  hasStripePublishableKey: boolean,
+  hasCustomProviderCheckout: boolean
+): CheckoutGatewayOption[] {
+  return getGatewayDefinitions(hasStripePublishableKey, hasCustomProviderCheckout).map((gateway) => {
+    const available = hasAlias(availableMethodIds, gateway.aliases)
+    const frontendReady = available && gateway.frontendReady(availableMethodIds)
+    return {
+      id: gateway.id,
+      label: gateway.label,
+      description: gateway.description,
+      available,
+      frontendReady,
+      expressEligible: frontendReady && gateway.action === 'redirect',
+      action: gateway.action,
+      wcPaymentMethodId: getFirstMatch(availableMethodIds, gateway.aliases),
+      wcPaymentMethodAliases: gateway.aliases,
+      helperText: gateway.helperText?.(available, frontendReady),
+    }
+  })
 }
 ````
 
