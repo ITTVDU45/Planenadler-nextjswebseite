@@ -46,7 +46,7 @@ export function ExpressCheckout({
   onActivateGateway,
   onRefresh,
 }: ExpressCheckoutProps) {
-  const availableGateways = gateways.filter((gateway) => gateway.available)
+  const availableGateways = gateways.filter((gateway) => gateway.available && gateway.frontendReady)
 
   return (
     <section className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6">

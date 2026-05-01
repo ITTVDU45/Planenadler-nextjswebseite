@@ -25,6 +25,8 @@ export function CheckoutOrderSummary() {
     discountTotal: '0,00 €',
   }
   const appliedCoupons = cart?.appliedCoupons ?? []
+  const shippingValue = parseCartPriceString(totals.shippingTotal) + parseCartPriceString(totals.feeTotal)
+  const showFreeShippingAmount = shippingValue === 0 && parseCartPriceString(totals.discountTotal) > 0
 
   return (
     <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6 shadow-[0_8px_24px_rgba(31,92,171,0.06)]">
@@ -88,7 +90,9 @@ export function CheckoutOrderSummary() {
             <div className="flex justify-between">
               <dt className="text-[#1F5CAB]/80">Versand</dt>
               <dd className="font-medium text-[#1F5CAB]">
-                {parseCartPriceString(totals.shippingTotal) + parseCartPriceString(totals.feeTotal) === 0
+                {showFreeShippingAmount
+                  ? '0,00 €'
+                  : shippingValue === 0
                   ? 'Preis auf Anfrage'
                   : decodePriceDisplay(getEffectiveShippingTotal(totals))}
               </dd>
