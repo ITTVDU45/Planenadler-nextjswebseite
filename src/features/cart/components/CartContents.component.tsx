@@ -6,6 +6,7 @@ import { useRouter } from 'next/router';
 import { v4 as uuidv4 } from 'uuid';
 
 import { useCartStore } from '@/shared/lib/cartStore';
+import { useCheckoutStore, hasActivePendingExternalPayment } from '@/features/checkout/store/checkout.store';
 import Button from '@/shared/ui/Button.component';
 import LoadingSpinner from '@/shared/components/LoadingSpinner.component';
 
@@ -33,6 +34,7 @@ const CartContents = () => {
     if (!data) return;
     const updatedCart = getFormattedCart(data);
     if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
+      if (hasActivePendingExternalPayment(useCheckoutStore.getState().pendingExternalPayment)) return;
       clearWooCommerceSession();
       return;
     }

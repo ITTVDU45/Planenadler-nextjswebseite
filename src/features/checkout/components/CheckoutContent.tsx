@@ -15,6 +15,7 @@ import { CheckoutForm } from './CheckoutForm'
 import { CheckoutOrderSummary } from './OrderSummary'
 import { PaymentMethods } from './PaymentMethods'
 import { useCheckoutStore } from '../store/checkout.store'
+import { hasActivePendingExternalPayment } from '../store/checkout.store'
 import { ContentShell } from '@/shared/components/ContentShell.component'
 
 const CART_PATH = '/cart'
@@ -78,6 +79,7 @@ export function CheckoutContent() {
     if (!data) return
     const updatedCart = getFormattedCart(data)
     if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
+      if (hasActivePendingExternalPayment(useCheckoutStore.getState().pendingExternalPayment)) return
       clearWooCommerceSession()
       return
     }

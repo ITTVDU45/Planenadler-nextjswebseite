@@ -8,6 +8,7 @@ import { useCartStore } from '@/shared/lib/cartStore'
 import { getFormattedCart } from '@/shared/lib/functions'
 import { GET_CART } from '@/features/cart/api/queries'
 import { useCheckoutStore } from '../store/checkout.store'
+import { hasActivePendingExternalPayment } from '../store/checkout.store'
 import { CheckoutSteps } from './CheckoutSteps'
 import { ShippingForm } from './ShippingForm'
 import { CheckoutOrderSummary } from './OrderSummary'
@@ -35,6 +36,7 @@ export function ShippingPageContent() {
     if (!data) return
     const updatedCart = getFormattedCart(data)
     if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
+      if (hasActivePendingExternalPayment(useCheckoutStore.getState().pendingExternalPayment)) return
       clearWooCommerceSession()
       return
     }
