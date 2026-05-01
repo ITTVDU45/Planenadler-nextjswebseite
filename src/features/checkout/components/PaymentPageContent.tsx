@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState, startTransition, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, startTransition, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation } from '@apollo/client'
 import { useCartStore } from '@/shared/lib/cartStore'
 import { getFormattedCart, createCheckoutData } from '@/shared/lib/functions'
 import { GET_CART } from '@/features/cart/api/queries'
-import { APPLY_COUPON, CHECKOUT_MUTATION, REMOVE_COUPONS } from '@/shared/lib/GQL_MUTATIONS'
+import { ADD_TO_CART, APPLY_COUPON, CHECKOUT_MUTATION, REMOVE_COUPONS } from '@/shared/lib/GQL_MUTATIONS'
 import type { IAppliedCoupon } from '@/shared/types/graphql'
 import type { ICheckoutDataProps } from '@/shared/types/checkout'
 import type { CheckoutFormShipping } from '../types/checkout.types'
@@ -128,6 +128,8 @@ export function PaymentPageContent() {
   const [couponError, setCouponError] = useState<string | null>(null)
   const [guardPassed, setGuardPassed] = useState(false)
   const [providerLoading, setProviderLoading] = useState<PaymentMethodId | null>(null)
+  const [restoreInFlight, setRestoreInFlight] = useState(false)
+  const [restoreAttempted, setRestoreAttempted] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -158,6 +160,7 @@ export function PaymentPageContent() {
   const [checkoutMutation, { loading: checkoutLoading }] = useMutation<CheckoutMutationResponse>(CHECKOUT_MUTATION)
   const [applyCouponMutation, { loading: couponApplying }] = useMutation(APPLY_COUPON)
   const [removeCouponsMutation, { loading: couponRemoving }] = useMutation(REMOVE_COUPONS)
+  const [addToCartMutation] = useMutation(ADD_TO_CART)
 
   const tryProviderCheckoutMutation = async (
     paymentMethod: 'card' | 'paypal' | 'klarna',
@@ -363,7 +366,7 @@ export function PaymentPageContent() {
     setSelectedPayment(gatewayId)
   }
 
-  const syncCartFromLatestQuery = async () => {
+  const syncCartFromLatestQuery = useCallback(async () => {
     const result = await refetch()
     const updatedCart = result.data ? getFormattedCart(result.data) : undefined
     if (!updatedCart && !result.data?.cart?.contents?.nodes?.length) {
@@ -371,7 +374,63 @@ export function PaymentPageContent() {
       return
     }
     if (updatedCart) syncWithWooCommerce(updatedCart)
-  }
+  }, [clearWooCommerceSession, refetch, syncWithWooCommerce])
+
+  useEffect(() => {
+    if (!guardPassed) return
+    if (!hasActivePendingExternalPayment(pendingExternalPayment)) return
+    if (restoreInFlight || restoreAttempted) return
+    if ((data?.cart?.contents?.nodes?.length ?? 0) > 0) return
+
+    const persistedCart = useCartStore.getState().cart
+    const restoreItems = persistedCart?.products
+      ?.map((product) => product.restoreInput)
+      .filter((item) => item && item.productId > 0 && item.quantity > 0) ?? []
+
+    if (restoreItems.length === 0) {
+      setRestoreAttempted(true)
+      return
+    }
+
+    setRestoreInFlight(true)
+    setRestoreAttempted(true)
+    setSubmitError(null)
+
+    ;(async () => {
+      try {
+        for (const item of restoreItems) {
+          await addToCartMutation({
+            variables: {
+              input: {
+                clientMutationId: `restore-cart-${Date.now()}-${item.productId}`,
+                productId: item.productId,
+                quantity: item.quantity,
+                ...(item.extraData ? { extraData: item.extraData } : {}),
+              },
+            },
+          })
+        }
+
+        await syncCartFromLatestQuery()
+        setCouponFeedback('Dein Warenkorb wurde nach der Rueckkehr von der externen Zahlung wiederhergestellt.')
+      } catch (error) {
+        const message = error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : 'Der Warenkorb konnte nach der Rueckkehr von PayPal nicht automatisch wiederhergestellt werden.'
+        setSubmitError(message)
+      } finally {
+        setRestoreInFlight(false)
+      }
+    })()
+  }, [
+    addToCartMutation,
+    data,
+    guardPassed,
+    pendingExternalPayment,
+    restoreAttempted,
+    restoreInFlight,
+    syncCartFromLatestQuery,
+  ])
 
   const handleApplyCoupon = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -457,6 +516,7 @@ export function PaymentPageContent() {
         <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           Eine externe Zahlung wurde gestartet, aber noch nicht abgeschlossen. Deine Artikel bleiben im Checkout,
           bis die Bestellung erfolgreich beendet wurde.
+          {restoreInFlight ? ' Der Warenkorb wird gerade aus deiner Checkout-Session wiederhergestellt.' : ''}
         </div>
       ) : null}
 
