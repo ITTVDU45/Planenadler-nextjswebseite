@@ -11150,120 +11150,6 @@ const Billing = ({ handleFormSubmit }: IBillingProps) => {
 export default Billing;
 ````
 
-## File: src/features/cart/components/Checkout/CheckoutForm.component.tsx
-````typescript
-/*eslint complexity: ["error", 20]*/
-// Imports
-import { useState, useEffect } from 'react';
-import { useQuery, useMutation, ApolloError } from '@apollo/client';
-// Components
-import Billing from './Billing.component';
-import CartContents from '../CartContents.component';
-import LoadingSpinner from '@/shared/components/LoadingSpinner.component';
-// GraphQL
-import { GET_CART } from '@/features/cart/api/queries';
-import { CHECKOUT_MUTATION } from '@/shared/lib/GQL_MUTATIONS';
-import { useCartStore } from '@/shared/lib/cartStore';
-// Utils
-import { getFormattedCart, createCheckoutData } from '@/shared/lib/functions';
-// Types
-import type { ICheckoutDataProps, ICheckoutData } from '@/shared/types/checkout';
-const CheckoutForm = () => {
-  const { cart, clearWooCommerceSession, syncWithWooCommerce } = useCartStore();
-  const [orderData, setOrderData] = useState<ICheckoutData | null>(null);
-  const [requestError, setRequestError] = useState<ApolloError | null>(null);
-  const [orderCompleted, setorderCompleted] = useState<boolean>(false);
-  // Get cart data query
-  const { data, refetch } = useQuery(GET_CART, {
-    notifyOnNetworkStatusChange: true,
-  });
-  useEffect(() => {
-    if (!data) return;
-    const updatedCart = getFormattedCart(data);
-    if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
-      clearWooCommerceSession();
-      return;
-    }
-    if (updatedCart) syncWithWooCommerce(updatedCart);
-  }, [data, clearWooCommerceSession, syncWithWooCommerce]);
-  // Checkout GraphQL mutation
-  const [checkout, { loading: checkoutLoading }] = useMutation(
-    CHECKOUT_MUTATION,
-    {
-      variables: {
-        input: orderData,
-      },
-      onCompleted: () => {
-        clearWooCommerceSession();
-        setorderCompleted(true);
-        refetch();
-      },
-      onError: (error) => {
-        setRequestError(error);
-        refetch();
-      },
-    },
-  );
-  useEffect(() => {
-    if (null !== orderData) {
-      // Perform checkout mutation when the value for orderData changes.
-      checkout();
-      // Delayed refetch to ensure WooCommerce backend has settled
-      setTimeout(() => {
-        refetch();
-      }, 2000);
-    }
-  }, [checkout, orderData, refetch]);
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-  const handleFormSubmit = (submitData: ICheckoutDataProps) => {
-    const checkOutData = createCheckoutData(submitData);
-    setOrderData(checkOutData);
-    setRequestError(null);
-  };
-  return (
-    <>
-      {cart && !orderCompleted ? (
-        <div className="container mx-auto">
-          {/*	Order*/}
-          <CartContents />
-          {/*Payment Details*/}
-          <Billing handleFormSubmit={handleFormSubmit} />
-          {/*Error display*/}
-          {requestError && (
-            <div className="h-32 text-xl text-center text-red-600">
-              En feil har oppstått.
-            </div>
-          )}
-          {/* Checkout Loading*/}
-          {checkoutLoading && (
-            <div className="text-xl text-center">
-              Behandler ordre, vennligst vent ...
-              <LoadingSpinner />
-            </div>
-          )}
-        </div>
-      ) : (
-        <>
-          {!cart && !orderCompleted && (
-            <h1 className="text-2xl m-12 mt-24 font-bold text-center">
-              Ingen produkter i handlekurven
-            </h1>
-          )}
-          {orderCompleted && (
-            <div className="container h-24 m-12 mx-auto mt-24 text-xl text-center">
-              Takk for din ordre!
-            </div>
-          )}
-        </>
-      )}
-    </>
-  );
-};
-export default CheckoutForm;
-````
-
 ## File: src/features/cart/components/EmptyCartState/EmptyCartState.tsx
 ````typescript
 'use client'
@@ -11561,187 +11447,6 @@ export function OrderSummary({
 }
 ````
 
-## File: src/features/cart/components/CartContents.component.tsx
-````typescript
-import { useEffect } from 'react';
-import { useMutation, useQuery } from '@apollo/client';
-import Link from 'next/link';
-import Image from 'next/image';
-import { useRouter } from 'next/router';
-import { v4 as uuidv4 } from 'uuid';
-import { useCartStore } from '@/shared/lib/cartStore';
-import Button from '@/shared/ui/Button.component';
-import LoadingSpinner from '@/shared/components/LoadingSpinner.component';
-import {
-  getFormattedCart,
-  getUpdatedItems,
-  handleQuantityChange,
-  decodePriceDisplay,
-  IProductRootObject,
-} from '@/shared/lib/functions';
-import { GET_CART } from '../api/queries';
-import { UPDATE_CART } from '@/shared/lib/GQL_MUTATIONS';
-const CartContents = () => {
-  const router = useRouter();
-  const { clearWooCommerceSession, syncWithWooCommerce } = useCartStore();
-  const isCheckoutPage = router.pathname === '/kasse' || router.pathname?.startsWith('/checkout');
-  const { data, refetch } = useQuery(GET_CART, {
-    notifyOnNetworkStatusChange: true,
-  });
-  useEffect(() => {
-    if (!data) return;
-    const updatedCart = getFormattedCart(data);
-    if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
-      clearWooCommerceSession();
-      return;
-    }
-    if (updatedCart) syncWithWooCommerce(updatedCart);
-  }, [data, clearWooCommerceSession, syncWithWooCommerce]);
-  const [updateCart, { loading: updateCartProcessing }] = useMutation(
-    UPDATE_CART,
-    {
-      onCompleted: () => {
-        refetch();
-        // Delayed refetch to ensure WooCommerce backend has settled
-        setTimeout(() => {
-          refetch();
-        }, 3000);
-      },
-    },
-  );
-  const handleRemoveProductClick = (
-    cartKey: string,
-    products: IProductRootObject[],
-  ) => {
-    if (products?.length) {
-      const updatedItems = getUpdatedItems(products, 0, cartKey);
-      updateCart({
-        variables: {
-          input: {
-            clientMutationId: uuidv4(),
-            items: updatedItems,
-          },
-        },
-      });
-    }
-    refetch();
-    // Delayed refetch to ensure WooCommerce backend has settled
-    setTimeout(() => {
-      refetch();
-    }, 3000);
-  };
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-  const cartTotal = decodePriceDisplay(data?.cart?.total) || '0';
-  const getUnitPrice = (subtotal: string, quantity: number) => {
-    const numericSubtotal = parseFloat(subtotal.replace(/[^0-9.-]+/g, ''));
-    return isNaN(numericSubtotal)
-      ? 'N/A'
-      : (numericSubtotal / quantity).toFixed(2);
-  };
-  return (
-    <div className="container mx-auto px-4 py-8">
-      {data?.cart?.contents?.nodes?.length ? (
-        <>
-          <div className="bg-white rounded-lg p-6 mb-8 md:w-full">
-            {data.cart.contents.nodes.map((item: IProductRootObject) => (
-              <div
-                key={item.key}
-                className="flex items-center border-b border-gray-200 py-4"
-              >
-                <div className="flex-shrink-0 w-24 h-24 relative hidden md:block">
-                  <Image
-                    src={
-                      item.product.node.image?.sourceUrl || '/placeholder.png'
-                    }
-                    alt={item.product.node.name}
-                    layout="fill"
-                    objectFit="cover"
-                    className="rounded"
-                  />
-                </div>
-                <div className="flex-grow ml-4">
-                  <h2 className="text-lg font-semibold">
-                    {item.product.node.name}
-                  </h2>
-                  <p className="text-gray-600">
-                    kr {getUnitPrice(item.subtotal, item.quantity)}
-                  </p>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="number"
-                    min="1"
-                    value={item.quantity}
-                    onChange={(event) => {
-                      handleQuantityChange(
-                        event,
-                        item.key,
-                        data.cart.contents.nodes,
-                        updateCart,
-                        updateCartProcessing,
-                      );
-                    }}
-                    className="w-16 px-2 py-1 text-center border border-gray-300 rounded mr-2"
-                  />
-                  <Button
-                    handleButtonClick={() =>
-                      handleRemoveProductClick(
-                        item.key,
-                        data.cart.contents.nodes,
-                      )
-                    }
-                    variant="secondary"
-                    buttonDisabled={updateCartProcessing}
-                  >
-                    Fjern
-                  </Button>
-                </div>
-                <div className="ml-4">
-                  <p className="text-lg font-semibold">{item.subtotal}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="bg-white rounded-lg p-6 md:w-full">
-            <div className="flex justify-end mb-4">
-              <span className="font-semibold pr-2">Subtotal:</span>
-              <span>{cartTotal}</span>
-            </div>
-            {!isCheckoutPage && (
-              <div className="flex justify-center mb-4">
-                <Link href="/checkout/shipping" passHref>
-                  <Button variant="primary" fullWidth>GÅ TIL KASSE</Button>
-                </Link>
-              </div>
-            )}
-          </div>
-        </>
-      ) : (
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">
-            Ingen produkter i handlekurven
-          </h2>
-          <Link href="/produkter" passHref>
-            <Button variant="primary">Fortsett å handle</Button>
-          </Link>
-        </div>
-      )}
-      {updateCartProcessing && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white p-4 rounded-lg">
-            <p className="text-lg mb-2">Oppdaterer handlekurv...</p>
-            <LoadingSpinner />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-export default CartContents;
-````
-
 ## File: src/features/cart/components/CartInitializer.component.tsx
 ````typescript
 import { useEffect } from 'react';
@@ -11835,172 +11540,6 @@ export function BankTransferPanel({
         {isSubmitting ? 'Wird verarbeitet…' : 'Bestellung abschließen'}
       </button>
     </div>
-  )
-}
-````
-
-## File: src/features/checkout/components/CheckoutContent.tsx
-````typescript
-'use client'
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { useQuery, useMutation } from '@apollo/client'
-import { useCartStore } from '@/shared/lib/cartStore'
-import { getFormattedCart, createCheckoutData } from '@/shared/lib/functions'
-import { GET_CART } from '@/features/cart/api/queries'
-import { CHECKOUT_MUTATION } from '@/shared/lib/GQL_MUTATIONS'
-import { getWooCommercePaymentMethod } from '../services/payment.service'
-import type { CheckoutShippingInput } from '../lib/checkoutSchema'
-import type { ICheckoutDataProps } from '@/shared/types/checkout'
-import { CheckoutSteps } from './CheckoutSteps'
-import { CheckoutForm } from './CheckoutForm'
-import { CheckoutOrderSummary } from './OrderSummary'
-import { PaymentMethods } from './PaymentMethods'
-import { useCheckoutStore } from '../store/checkout.store'
-import { ContentShell } from '@/shared/components/ContentShell.component'
-const CART_PATH = '/cart'
-function toCheckoutDataProps(data: CheckoutShippingInput, paymentMethod: string): ICheckoutDataProps {
-  return {
-    firstName: data.firstName,
-    lastName: data.lastName,
-    email: data.email,
-    phone: data.phone,
-    address1: data.address1,
-    address2: data.address2 ?? '',
-    city: data.city,
-    postcode: data.postcode,
-    country: data.country,
-    state: data.state ?? '',
-    company: '',
-    paymentMethod,
-    shipToDifferentAddress: data.shipToDifferentAddress,
-    shippingFirstName: data.shippingFirstName,
-    shippingLastName: data.shippingLastName,
-    shippingAddress1: data.shippingAddress1,
-    shippingAddress2: data.shippingAddress2,
-    shippingPostcode: data.shippingPostcode,
-    shippingCity: data.shippingCity,
-    shippingCountry: data.shippingCountry,
-    shippingState: data.shippingState,
-  }
-}
-export function CheckoutContent() {
-  const { cart, syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
-  const { currentStep, orderCompleted, setCurrentStep, setOrderCompleted, selectedPayment } = useCheckoutStore()
-  const [submitError, setSubmitError] = useState<string | null>(null)
-  const { data } = useQuery(GET_CART, { notifyOnNetworkStatusChange: true })
-  const [checkoutMutation, { loading: checkoutLoading }] = useMutation(CHECKOUT_MUTATION, {
-    onCompleted: () => {
-      setOrderCompleted(true)
-      clearWooCommerceSession()
-    },
-    onError: (err) => {
-      setSubmitError(err.message ?? 'Bestellung konnte nicht abgeschlossen werden.')
-    },
-  })
-  const handleCheckoutSubmit = (formData: CheckoutShippingInput) => {
-    setSubmitError(null)
-    const wcPayment = getWooCommercePaymentMethod(selectedPayment)
-    if (wcPayment !== 'bacs') {
-      setSubmitError('Bitte wählen Sie Banküberweisung. Andere Zahlungsarten sind derzeit nicht verfügbar.')
-      return
-    }
-    const orderProps = toCheckoutDataProps(formData, wcPayment)
-    const input = createCheckoutData(orderProps)
-    checkoutMutation({ variables: { input } })
-  }
-  useEffect(() => {
-    if (!data) return
-    const updatedCart = getFormattedCart(data)
-    if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
-      clearWooCommerceSession()
-      return
-    }
-    if (updatedCart) syncWithWooCommerce(updatedCart)
-  }, [data, clearWooCommerceSession, syncWithWooCommerce])
-  const hasItems = (cart?.products?.length ?? 0) > 0
-  if (!hasItems && !orderCompleted) {
-    return (
-      <ContentShell className="py-12">
-        <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
-          <h2 className="text-xl font-bold text-[#1F5CAB]">Keine Artikel im Warenkorb</h2>
-          <p className="mt-2 text-sm text-[#1F5CAB]/80">
-            Legen Sie zuerst Artikel in den Warenkorb, um zur Kasse zu gehen.
-          </p>
-          <Link
-            href={CART_PATH}
-            className="mt-6 inline-flex items-center justify-center rounded-full bg-[#1F5CAB] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#0F2B52]"
-          >
-            Zum Warenkorb
-          </Link>
-        </div>
-      </ContentShell>
-    )
-  }
-  if (orderCompleted) {
-    return (
-      <ContentShell className="py-12">
-        <CheckoutSteps currentStep="order" />
-        <div className="mt-8 rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
-          <h2 className="text-2xl font-bold text-[#1F5CAB]">Vielen Dank für Ihre Bestellung</h2>
-          <p className="mt-2 text-[#1F5CAB]/80">
-            Sie erhalten in Kürze eine Bestätigung per E-Mail.
-          </p>
-          <Link
-            href="/"
-            className="mt-6 inline-flex items-center justify-center rounded-full bg-[#1F5CAB] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#0F2B52]"
-          >
-            Zur Startseite
-          </Link>
-        </div>
-      </ContentShell>
-    )
-  }
-  return (
-    <ContentShell className="py-8 lg:py-12">
-      <CheckoutSteps currentStep={currentStep} />
-      {submitError ? (
-        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
-          {submitError}
-        </div>
-      ) : null}
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px] lg:gap-12">
-        <div className="min-w-0">
-          <CheckoutForm onValidSubmit={handleCheckoutSubmit} />
-        </div>
-        <div className="lg:sticky lg:top-24 lg:self-start">
-          <CheckoutOrderSummary />
-          <div className="mt-6">
-            <PaymentMethods />
-          </div>
-          <button
-            type="submit"
-            form="checkout-form"
-            disabled={checkoutLoading}
-            className="mt-6 hidden w-full rounded-full bg-[#1F5CAB] py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-[#0F2B52] disabled:opacity-60 lg:block"
-          >
-            {checkoutLoading ? 'Wird verarbeitet…' : 'Jetzt bezahlen'}
-          </button>
-        </div>
-      </div>
-      <div className="mt-8 flex flex-col gap-3 lg:flex-row lg:justify-end lg:gap-4">
-        <button
-          type="button"
-          onClick={() => setCurrentStep(currentStep === 'payment' ? 'shipping' : 'payment')}
-          className="hidden w-full rounded-full border-2 border-[#DBE9F9] bg-white py-3.5 text-sm font-semibold text-[#1F5CAB] transition hover:bg-[#F7FAFF] lg:inline-flex lg:max-w-[200px] lg:justify-center"
-        >
-          {currentStep === 'payment' ? 'Zurück' : 'Weiter zur Zahlung'}
-        </button>
-        <button
-          type="submit"
-          form="checkout-form"
-          disabled={checkoutLoading}
-          className="sticky bottom-20 z-10 w-full rounded-full bg-[#1F5CAB] py-3.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#0F2B52] disabled:opacity-60 sm:bottom-4 lg:relative lg:bottom-0 lg:max-w-[240px]"
-        >
-          {checkoutLoading ? 'Wird verarbeitet…' : 'Jetzt bezahlen'}
-        </button>
-      </div>
-    </ContentShell>
   )
 }
 ````
@@ -15139,6 +14678,184 @@ export function getClientIp(request: NextRequest): string {
   const realIp = request.headers.get('x-real-ip')?.trim()
   if (realIp) return realIp
   return request.headers.get('cf-connecting-ip')?.trim() || 'unknown'
+}
+````
+
+## File: src/lib/customizer-types.ts
+````typescript
+export interface CustomizerMaterial {
+  name: string
+  price: number | string
+}
+export interface CustomizerColor {
+  color: string
+  subtitle: string
+  image_url?: string
+}
+export interface CustomizerDimensions {
+  dimension_image_url?: string
+  dimension_b_image_url?: string
+  dimension_c_image_url?: string
+  dimension_description?: string
+  description_b?: string
+  description_c?: string
+  minimum_value?: number
+  weight_per_csm?: number
+  price_per_square_meter?: number
+}
+export interface CustomizerEdgeOption {
+  subtitle: string
+  price: number | string
+  cm?: string
+  pl_handler?: 'by length' | 'per meter' | 'fixed' | string
+  weight?: number
+  image_url?: string
+}
+export type CustomizerTopEdge = CustomizerEdgeOption & {
+  top_tarpaulin_price?: number | string
+  top_tarpaulin__subtitle?: string
+  select_top_cm?: string
+  top_pl_handler?: string
+  top_tarpaulin_weight?: number
+}
+export type CustomizerLeftEdge = CustomizerEdgeOption & {
+  left_tarpaulin_price?: number | string
+  left_tarpaulin__subtitle?: string
+  select_left_cm?: string
+  left_pl_handler?: string
+  left_tarpaulin_weight?: number
+}
+export type CustomizerRightEdge = CustomizerEdgeOption & {
+  right_tarpaulin_price?: number | string
+  right_tarpaulin__subtitle?: string
+  select_right_cm?: string
+  right_pl_handler?: string
+  right_tarpaulin_weight?: number
+}
+export type CustomizerBottomEdge = CustomizerEdgeOption & {
+  bottom_tarpaulin_price?: number | string
+  bottom_tarpaulin__subtitle?: string
+  select_bottom_cm?: string
+  bottom_pl_handler?: string
+  bottom_tarpaulin_weight?: number
+}
+export interface CustomizerEyelet {
+  eyelet_tarpaulin_price?: number | string
+  eyelet_tarpaulin__subtitle?: string
+  select_eyelet_cm?: string
+  eyelet_pl_handler?: string
+  eyelet_weight?: number
+  image_url?: string
+}
+export interface CustomizerClosureType {
+  closure_type_tarpaulin_price?: number | string
+  closure_type_tarpaulin__subtitle?: string
+  select_closure_type_cm?: string
+  closure_type_pl_handler?: string
+  closure_type_weight?: number
+  image_url?: string
+}
+export interface CustomizerWindowData {
+  split_window_image?: string
+  window_dimention_image?: string
+  window_dimention_description?: string
+  window_price_per_square_meter?: number
+  window_full_price_square_meter?: number
+  split_max_pieces?: number
+  price_per_window?: number
+  window_price_of_empoly?: number
+}
+export interface CustomizerDoorData {
+  door_dimention_image?: string
+  door_dimention_description?: string
+  door_price?: number
+}
+export interface CustomizerDoorExtra {
+  door_extras_price?: number | string
+  door_extras__subtitle?: string
+  door_extra_indluded?: string
+  door_extra_weight?: number
+  door_extra_per_piece?: string
+  door_extra_pl?: string
+  image_url?: string
+}
+export interface CustomizerMainExtra {
+  main_extras_price?: number | string
+  main_extras__subtitle?: string
+  main_extra_indluded?: string
+  main_extra_per_piece?: string
+  main_extra_pl?: string
+  main_extra_weight?: number | string
+  main_extra_required?: string
+  image_url?: string
+}
+export interface CustomizerClosure {
+  front_closure_price?: number | string
+  front_closure_price_two?: number | string
+  front_closure__subtitle?: string
+  front_clouser_cm?: string
+  front_clouser_weight?: number
+  front_clouser_pl_handler?: string
+  image_url?: string
+}
+export interface CustomizerBackClosure {
+  back_closure_price?: number | string
+  back_closure_price_two?: number | string
+  back_closure__subtitle?: string
+  back_clouser_cm?: string
+  back_clouser_weight?: number
+  back_clouser_pl_handler?: string
+  image_url?: string
+}
+export interface CustomizerClosureExtra {
+  price?: number | string
+  subtitle?: string
+  included?: string
+  cm_selector?: string
+  pl_handler?: string
+  weight?: number
+  image_url?: string
+  front_clouser_extra__subtitle?: string
+  front_clouser_extra_price?: number | string
+  front_clouser_extra_selector?: string
+  back_clouser_extra__subtitle?: string
+  back_clouser_extra_price?: number | string
+  back_clouser_extra_selector?: string
+  [key: string]: unknown
+}
+export interface CustomizerCalculationUnit {
+  product_type: 'tarpulin' | 'lounge' | 'trailer' | string
+  unit_selector: 'squaremeter' | 'cubicmeter' | string
+}
+export interface CustomizerConfig {
+  id: number
+  product_id: string
+  product_title: string
+  material: CustomizerMaterial[] | null
+  colors: CustomizerColor[] | null
+  dimentions: CustomizerDimensions | null
+  top_tarpaulin: CustomizerTopEdge[] | null
+  left_tarpaulin: CustomizerLeftEdge[] | null
+  right_tarpaulin: CustomizerRightEdge[] | null
+  bottom_tarpaulin: CustomizerBottomEdge[] | null
+  window_data: CustomizerWindowData | null
+  door_data: CustomizerDoorData | null
+  extras: CustomizerDoorExtra[] | null
+  main_extra: CustomizerMainExtra[] | null
+  calculation_unit: CustomizerCalculationUnit | null
+  front_side: unknown
+  back_side: unknown
+  eyelets: CustomizerEyelet[] | null
+  closure_type: CustomizerClosureType[] | null
+  front_clouser: CustomizerClosure[] | null
+  back_clouser: CustomizerBackClosure[] | null
+  front_clouser_extra: CustomizerClosureExtra[] | null
+  back_clouser_extra: CustomizerClosureExtra[] | null
+}
+export interface CustomizerApiResponse {
+  success: boolean
+  data?: CustomizerConfig
+  message?: string
 }
 ````
 
@@ -20931,6 +20648,305 @@ export const GET_CART = gql`
 `;
 ````
 
+## File: src/features/cart/components/Checkout/CheckoutForm.component.tsx
+````typescript
+/*eslint complexity: ["error", 20]*/
+// Imports
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, ApolloError } from '@apollo/client';
+// Components
+import Billing from './Billing.component';
+import CartContents from '../CartContents.component';
+import LoadingSpinner from '@/shared/components/LoadingSpinner.component';
+// GraphQL
+import { GET_CART } from '@/features/cart/api/queries';
+import { CHECKOUT_MUTATION } from '@/shared/lib/GQL_MUTATIONS';
+import { useCartStore } from '@/shared/lib/cartStore';
+import { useCheckoutStore, hasActivePendingExternalPayment } from '@/features/checkout/store/checkout.store';
+// Utils
+import { getFormattedCart, createCheckoutData } from '@/shared/lib/functions';
+// Types
+import type { ICheckoutDataProps, ICheckoutData } from '@/shared/types/checkout';
+const CheckoutForm = () => {
+  const { cart, clearWooCommerceSession, syncWithWooCommerce } = useCartStore();
+  const [orderData, setOrderData] = useState<ICheckoutData | null>(null);
+  const [requestError, setRequestError] = useState<ApolloError | null>(null);
+  const [orderCompleted, setorderCompleted] = useState<boolean>(false);
+  // Get cart data query
+  const { data, refetch } = useQuery(GET_CART, {
+    notifyOnNetworkStatusChange: true,
+  });
+  useEffect(() => {
+    if (!data) return;
+    const updatedCart = getFormattedCart(data);
+    if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
+      if (hasActivePendingExternalPayment(useCheckoutStore.getState().pendingExternalPayment)) return;
+      clearWooCommerceSession();
+      return;
+    }
+    if (updatedCart) syncWithWooCommerce(updatedCart);
+  }, [data, clearWooCommerceSession, syncWithWooCommerce]);
+  // Checkout GraphQL mutation
+  const [checkout, { loading: checkoutLoading }] = useMutation(
+    CHECKOUT_MUTATION,
+    {
+      variables: {
+        input: orderData,
+      },
+      onCompleted: () => {
+        clearWooCommerceSession();
+        setorderCompleted(true);
+        refetch();
+      },
+      onError: (error) => {
+        setRequestError(error);
+        refetch();
+      },
+    },
+  );
+  useEffect(() => {
+    if (null !== orderData) {
+      // Perform checkout mutation when the value for orderData changes.
+      checkout();
+      // Delayed refetch to ensure WooCommerce backend has settled
+      setTimeout(() => {
+        refetch();
+      }, 2000);
+    }
+  }, [checkout, orderData, refetch]);
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+  const handleFormSubmit = (submitData: ICheckoutDataProps) => {
+    const checkOutData = createCheckoutData(submitData);
+    setOrderData(checkOutData);
+    setRequestError(null);
+  };
+  return (
+    <>
+      {cart && !orderCompleted ? (
+        <div className="container mx-auto">
+          {/*	Order*/}
+          <CartContents />
+          {/*Payment Details*/}
+          <Billing handleFormSubmit={handleFormSubmit} />
+          {/*Error display*/}
+          {requestError && (
+            <div className="h-32 text-xl text-center text-red-600">
+              En feil har oppstått.
+            </div>
+          )}
+          {/* Checkout Loading*/}
+          {checkoutLoading && (
+            <div className="text-xl text-center">
+              Behandler ordre, vennligst vent ...
+              <LoadingSpinner />
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {!cart && !orderCompleted && (
+            <h1 className="text-2xl m-12 mt-24 font-bold text-center">
+              Ingen produkter i handlekurven
+            </h1>
+          )}
+          {orderCompleted && (
+            <div className="container h-24 m-12 mx-auto mt-24 text-xl text-center">
+              Takk for din ordre!
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
+};
+export default CheckoutForm;
+````
+
+## File: src/features/cart/components/CartContents.component.tsx
+````typescript
+import { useEffect } from 'react';
+import { useMutation, useQuery } from '@apollo/client';
+import Link from 'next/link';
+import Image from 'next/image';
+import { useRouter } from 'next/router';
+import { v4 as uuidv4 } from 'uuid';
+import { useCartStore } from '@/shared/lib/cartStore';
+import { useCheckoutStore, hasActivePendingExternalPayment } from '@/features/checkout/store/checkout.store';
+import Button from '@/shared/ui/Button.component';
+import LoadingSpinner from '@/shared/components/LoadingSpinner.component';
+import {
+  getFormattedCart,
+  getUpdatedItems,
+  handleQuantityChange,
+  decodePriceDisplay,
+  IProductRootObject,
+} from '@/shared/lib/functions';
+import { GET_CART } from '../api/queries';
+import { UPDATE_CART } from '@/shared/lib/GQL_MUTATIONS';
+const CartContents = () => {
+  const router = useRouter();
+  const { clearWooCommerceSession, syncWithWooCommerce } = useCartStore();
+  const isCheckoutPage = router.pathname === '/kasse' || router.pathname?.startsWith('/checkout');
+  const { data, refetch } = useQuery(GET_CART, {
+    notifyOnNetworkStatusChange: true,
+  });
+  useEffect(() => {
+    if (!data) return;
+    const updatedCart = getFormattedCart(data);
+    if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
+      if (hasActivePendingExternalPayment(useCheckoutStore.getState().pendingExternalPayment)) return;
+      clearWooCommerceSession();
+      return;
+    }
+    if (updatedCart) syncWithWooCommerce(updatedCart);
+  }, [data, clearWooCommerceSession, syncWithWooCommerce]);
+  const [updateCart, { loading: updateCartProcessing }] = useMutation(
+    UPDATE_CART,
+    {
+      onCompleted: () => {
+        refetch();
+        // Delayed refetch to ensure WooCommerce backend has settled
+        setTimeout(() => {
+          refetch();
+        }, 3000);
+      },
+    },
+  );
+  const handleRemoveProductClick = (
+    cartKey: string,
+    products: IProductRootObject[],
+  ) => {
+    if (products?.length) {
+      const updatedItems = getUpdatedItems(products, 0, cartKey);
+      updateCart({
+        variables: {
+          input: {
+            clientMutationId: uuidv4(),
+            items: updatedItems,
+          },
+        },
+      });
+    }
+    refetch();
+    // Delayed refetch to ensure WooCommerce backend has settled
+    setTimeout(() => {
+      refetch();
+    }, 3000);
+  };
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+  const cartTotal = decodePriceDisplay(data?.cart?.total) || '0';
+  const getUnitPrice = (subtotal: string, quantity: number) => {
+    const numericSubtotal = parseFloat(subtotal.replace(/[^0-9.-]+/g, ''));
+    return isNaN(numericSubtotal)
+      ? 'N/A'
+      : (numericSubtotal / quantity).toFixed(2);
+  };
+  return (
+    <div className="container mx-auto px-4 py-8">
+      {data?.cart?.contents?.nodes?.length ? (
+        <>
+          <div className="bg-white rounded-lg p-6 mb-8 md:w-full">
+            {data.cart.contents.nodes.map((item: IProductRootObject) => (
+              <div
+                key={item.key}
+                className="flex items-center border-b border-gray-200 py-4"
+              >
+                <div className="flex-shrink-0 w-24 h-24 relative hidden md:block">
+                  <Image
+                    src={
+                      item.product.node.image?.sourceUrl || '/placeholder.png'
+                    }
+                    alt={item.product.node.name}
+                    layout="fill"
+                    objectFit="cover"
+                    className="rounded"
+                  />
+                </div>
+                <div className="flex-grow ml-4">
+                  <h2 className="text-lg font-semibold">
+                    {item.product.node.name}
+                  </h2>
+                  <p className="text-gray-600">
+                    kr {getUnitPrice(item.subtotal, item.quantity)}
+                  </p>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    type="number"
+                    min="1"
+                    value={item.quantity}
+                    onChange={(event) => {
+                      handleQuantityChange(
+                        event,
+                        item.key,
+                        data.cart.contents.nodes,
+                        updateCart,
+                        updateCartProcessing,
+                      );
+                    }}
+                    className="w-16 px-2 py-1 text-center border border-gray-300 rounded mr-2"
+                  />
+                  <Button
+                    handleButtonClick={() =>
+                      handleRemoveProductClick(
+                        item.key,
+                        data.cart.contents.nodes,
+                      )
+                    }
+                    variant="secondary"
+                    buttonDisabled={updateCartProcessing}
+                  >
+                    Fjern
+                  </Button>
+                </div>
+                <div className="ml-4">
+                  <p className="text-lg font-semibold">{item.subtotal}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="bg-white rounded-lg p-6 md:w-full">
+            <div className="flex justify-end mb-4">
+              <span className="font-semibold pr-2">Subtotal:</span>
+              <span>{cartTotal}</span>
+            </div>
+            {!isCheckoutPage && (
+              <div className="flex justify-center mb-4">
+                <Link href="/checkout/shipping" passHref>
+                  <Button variant="primary" fullWidth>GÅ TIL KASSE</Button>
+                </Link>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">
+            Ingen produkter i handlekurven
+          </h2>
+          <Link href="/produkter" passHref>
+            <Button variant="primary">Fortsett å handle</Button>
+          </Link>
+        </div>
+      )}
+      {updateCartProcessing && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white p-4 rounded-lg">
+            <p className="text-lg mb-2">Oppdaterer handlekurv...</p>
+            <LoadingSpinner />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+export default CartContents;
+````
+
 ## File: src/features/cart/services/cartCalculations.ts
 ````typescript
 import type { CartProduct } from '@/shared/types/cart'
@@ -20960,6 +20976,174 @@ export function formatPrice(value: number): string {
     style: 'currency',
     currency: 'EUR',
   }).format(value)
+}
+````
+
+## File: src/features/checkout/components/CheckoutContent.tsx
+````typescript
+'use client'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useQuery, useMutation } from '@apollo/client'
+import { useCartStore } from '@/shared/lib/cartStore'
+import { getFormattedCart, createCheckoutData } from '@/shared/lib/functions'
+import { GET_CART } from '@/features/cart/api/queries'
+import { CHECKOUT_MUTATION } from '@/shared/lib/GQL_MUTATIONS'
+import { getWooCommercePaymentMethod } from '../services/payment.service'
+import type { CheckoutShippingInput } from '../lib/checkoutSchema'
+import type { ICheckoutDataProps } from '@/shared/types/checkout'
+import { CheckoutSteps } from './CheckoutSteps'
+import { CheckoutForm } from './CheckoutForm'
+import { CheckoutOrderSummary } from './OrderSummary'
+import { PaymentMethods } from './PaymentMethods'
+import { useCheckoutStore } from '../store/checkout.store'
+import { hasActivePendingExternalPayment } from '../store/checkout.store'
+import { ContentShell } from '@/shared/components/ContentShell.component'
+const CART_PATH = '/cart'
+function toCheckoutDataProps(data: CheckoutShippingInput, paymentMethod: string): ICheckoutDataProps {
+  return {
+    firstName: data.firstName,
+    lastName: data.lastName,
+    email: data.email,
+    phone: data.phone,
+    address1: data.address1,
+    address2: data.address2 ?? '',
+    city: data.city,
+    postcode: data.postcode,
+    country: data.country,
+    state: data.state ?? '',
+    company: '',
+    paymentMethod,
+    shipToDifferentAddress: data.shipToDifferentAddress,
+    shippingFirstName: data.shippingFirstName,
+    shippingLastName: data.shippingLastName,
+    shippingAddress1: data.shippingAddress1,
+    shippingAddress2: data.shippingAddress2,
+    shippingPostcode: data.shippingPostcode,
+    shippingCity: data.shippingCity,
+    shippingCountry: data.shippingCountry,
+    shippingState: data.shippingState,
+  }
+}
+export function CheckoutContent() {
+  const { cart, syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
+  const { currentStep, orderCompleted, setCurrentStep, setOrderCompleted, selectedPayment } = useCheckoutStore()
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const { data } = useQuery(GET_CART, { notifyOnNetworkStatusChange: true })
+  const [checkoutMutation, { loading: checkoutLoading }] = useMutation(CHECKOUT_MUTATION, {
+    onCompleted: () => {
+      setOrderCompleted(true)
+      clearWooCommerceSession()
+    },
+    onError: (err) => {
+      setSubmitError(err.message ?? 'Bestellung konnte nicht abgeschlossen werden.')
+    },
+  })
+  const handleCheckoutSubmit = (formData: CheckoutShippingInput) => {
+    setSubmitError(null)
+    const wcPayment = getWooCommercePaymentMethod(selectedPayment)
+    if (wcPayment !== 'bacs') {
+      setSubmitError('Bitte wählen Sie Banküberweisung. Andere Zahlungsarten sind derzeit nicht verfügbar.')
+      return
+    }
+    const orderProps = toCheckoutDataProps(formData, wcPayment)
+    const input = createCheckoutData(orderProps)
+    checkoutMutation({ variables: { input } })
+  }
+  useEffect(() => {
+    if (!data) return
+    const updatedCart = getFormattedCart(data)
+    if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
+      if (hasActivePendingExternalPayment(useCheckoutStore.getState().pendingExternalPayment)) return
+      clearWooCommerceSession()
+      return
+    }
+    if (updatedCart) syncWithWooCommerce(updatedCart)
+  }, [data, clearWooCommerceSession, syncWithWooCommerce])
+  const hasItems = (cart?.products?.length ?? 0) > 0
+  if (!hasItems && !orderCompleted) {
+    return (
+      <ContentShell className="py-12">
+        <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
+          <h2 className="text-xl font-bold text-[#1F5CAB]">Keine Artikel im Warenkorb</h2>
+          <p className="mt-2 text-sm text-[#1F5CAB]/80">
+            Legen Sie zuerst Artikel in den Warenkorb, um zur Kasse zu gehen.
+          </p>
+          <Link
+            href={CART_PATH}
+            className="mt-6 inline-flex items-center justify-center rounded-full bg-[#1F5CAB] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#0F2B52]"
+          >
+            Zum Warenkorb
+          </Link>
+        </div>
+      </ContentShell>
+    )
+  }
+  if (orderCompleted) {
+    return (
+      <ContentShell className="py-12">
+        <CheckoutSteps currentStep="order" />
+        <div className="mt-8 rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
+          <h2 className="text-2xl font-bold text-[#1F5CAB]">Vielen Dank für Ihre Bestellung</h2>
+          <p className="mt-2 text-[#1F5CAB]/80">
+            Sie erhalten in Kürze eine Bestätigung per E-Mail.
+          </p>
+          <Link
+            href="/"
+            className="mt-6 inline-flex items-center justify-center rounded-full bg-[#1F5CAB] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#0F2B52]"
+          >
+            Zur Startseite
+          </Link>
+        </div>
+      </ContentShell>
+    )
+  }
+  return (
+    <ContentShell className="py-8 lg:py-12">
+      <CheckoutSteps currentStep={currentStep} />
+      {submitError ? (
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
+          {submitError}
+        </div>
+      ) : null}
+      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px] lg:gap-12">
+        <div className="min-w-0">
+          <CheckoutForm onValidSubmit={handleCheckoutSubmit} />
+        </div>
+        <div className="lg:sticky lg:top-24 lg:self-start">
+          <CheckoutOrderSummary />
+          <div className="mt-6">
+            <PaymentMethods />
+          </div>
+          <button
+            type="submit"
+            form="checkout-form"
+            disabled={checkoutLoading}
+            className="mt-6 hidden w-full rounded-full bg-[#1F5CAB] py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-[#0F2B52] disabled:opacity-60 lg:block"
+          >
+            {checkoutLoading ? 'Wird verarbeitet…' : 'Jetzt bezahlen'}
+          </button>
+        </div>
+      </div>
+      <div className="mt-8 flex flex-col gap-3 lg:flex-row lg:justify-end lg:gap-4">
+        <button
+          type="button"
+          onClick={() => setCurrentStep(currentStep === 'payment' ? 'shipping' : 'payment')}
+          className="hidden w-full rounded-full border-2 border-[#DBE9F9] bg-white py-3.5 text-sm font-semibold text-[#1F5CAB] transition hover:bg-[#F7FAFF] lg:inline-flex lg:max-w-[200px] lg:justify-center"
+        >
+          {currentStep === 'payment' ? 'Zurück' : 'Weiter zur Zahlung'}
+        </button>
+        <button
+          type="submit"
+          form="checkout-form"
+          disabled={checkoutLoading}
+          className="sticky bottom-20 z-10 w-full rounded-full bg-[#1F5CAB] py-3.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#0F2B52] disabled:opacity-60 sm:bottom-4 lg:relative lg:bottom-0 lg:max-w-[240px]"
+        >
+          {checkoutLoading ? 'Wird verarbeitet…' : 'Jetzt bezahlen'}
+        </button>
+      </div>
+    </ContentShell>
+  )
 }
 ````
 
@@ -21460,121 +21644,6 @@ export function ShippingMethod({ value, onChange, error }: ShippingMethodProps) 
       </ul>
       {error ? <p className="mt-1.5 text-sm text-red-600" role="alert">{error}</p> : null}
     </div>
-  )
-}
-````
-
-## File: src/features/checkout/components/ShippingPageContent.tsx
-````typescript
-'use client'
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { useQuery } from '@apollo/client'
-import { useCartStore } from '@/shared/lib/cartStore'
-import { getFormattedCart } from '@/shared/lib/functions'
-import { GET_CART } from '@/features/cart/api/queries'
-import { useCheckoutStore } from '../store/checkout.store'
-import { CheckoutSteps } from './CheckoutSteps'
-import { ShippingForm } from './ShippingForm'
-import { CheckoutOrderSummary } from './OrderSummary'
-import { ContentShell } from '@/shared/components/ContentShell.component'
-import type { CheckoutShippingInput } from '../lib/checkoutSchema'
-import {
-  buildCartSignature,
-  mapCartToTrackingItems,
-  pushToDataLayerOnce,
-  type DataLayerEcommerceEvent,
-} from '@/lib/tracking'
-import { parseCartPriceString } from '@/shared/lib/functions'
-const CART_PATH = '/cart'
-const PAYMENT_PATH = '/checkout/payment'
-export function ShippingPageContent() {
-  const router = useRouter()
-  const { cart, syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
-  const { shippingData, setShippingData, setSelectedShipping } = useCheckoutStore()
-  const { data } = useQuery(GET_CART, { notifyOnNetworkStatusChange: true })
-  useEffect(() => {
-    if (!data) return
-    const updatedCart = getFormattedCart(data)
-    if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
-      clearWooCommerceSession()
-      return
-    }
-    if (updatedCart) syncWithWooCommerce(updatedCart)
-  }, [data, clearWooCommerceSession, syncWithWooCommerce])
-  const hasItems = (cart?.products?.length ?? 0) > 0
-  const handleValidSubmit = (formData: CheckoutShippingInput) => {
-    const cartSignature = buildCartSignature(cart)
-    const items = mapCartToTrackingItems(cart)
-    const totalValue = parseCartPriceString(cart?.totals?.total)
-    if (items.length > 0 && cartSignature) {
-      const shippingEvent: DataLayerEcommerceEvent = {
-        event: 'add_shipping_info',
-        ecommerce: {
-          value: totalValue,
-          currency: 'EUR',
-          shipping_tier: formData.shippingMethod,
-          items,
-        },
-      }
-      pushToDataLayerOnce(`add_shipping_info_${formData.shippingMethod}_${cartSignature}`, shippingEvent)
-    }
-    setShippingData(formData)
-    setSelectedShipping(formData.shippingMethod)
-    router.push(PAYMENT_PATH)
-  }
-  useEffect(() => {
-    const items = mapCartToTrackingItems(cart)
-    if (items.length === 0) return
-    const cartSignature = buildCartSignature(cart)
-    if (!cartSignature) return
-    const totalValue = parseCartPriceString(cart?.totals?.total)
-    const beginCheckoutEvent: DataLayerEcommerceEvent = {
-      event: 'begin_checkout',
-      ecommerce: {
-        value: totalValue,
-        currency: 'EUR',
-        items,
-      },
-    }
-    pushToDataLayerOnce(`begin_checkout_${cartSignature}`, beginCheckoutEvent)
-  }, [cart])
-  if (!hasItems) {
-    return (
-      <ContentShell className="py-12">
-        <CheckoutSteps currentStep="shipping" />
-        <div className="mt-8 rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
-          <h2 className="text-xl font-bold text-[#1F5CAB]">Keine Artikel im Warenkorb</h2>
-          <p className="mt-2 text-sm text-[#1F5CAB]/80">
-            Legen Sie zuerst Artikel in den Warenkorb, um zur Kasse zu gehen.
-          </p>
-          <Link
-            href={CART_PATH}
-            className="mt-6 inline-flex items-center justify-center rounded-full bg-[#1F5CAB] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#0F2B52]"
-          >
-            Zum Warenkorb
-          </Link>
-        </div>
-      </ContentShell>
-    )
-  }
-  return (
-    <ContentShell className="py-8 lg:py-12">
-      <CheckoutSteps currentStep="shipping" showChangeShipping={false} />
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px] lg:gap-12">
-        <div className="min-w-0">
-          <ShippingForm
-          initialData={shippingData ?? undefined}
-          onValidSubmit={handleValidSubmit}
-          submitLabel="Weiter zur Zahlung"
-        />
-        </div>
-        <div className="lg:sticky lg:top-24 lg:self-start">
-          <CheckoutOrderSummary />
-        </div>
-      </div>
-    </ContentShell>
   )
 }
 ````
@@ -23555,184 +23624,6 @@ export function pageview(url: string): void {
   const id = getGaMeasurementId()
   if (!id) return
   window.gtag('config', id, { page_path: url })
-}
-````
-
-## File: src/lib/customizer-types.ts
-````typescript
-export interface CustomizerMaterial {
-  name: string
-  price: number | string
-}
-export interface CustomizerColor {
-  color: string
-  subtitle: string
-  image_url?: string
-}
-export interface CustomizerDimensions {
-  dimension_image_url?: string
-  dimension_b_image_url?: string
-  dimension_c_image_url?: string
-  dimension_description?: string
-  description_b?: string
-  description_c?: string
-  minimum_value?: number
-  weight_per_csm?: number
-  price_per_square_meter?: number
-}
-export interface CustomizerEdgeOption {
-  subtitle: string
-  price: number | string
-  cm?: string
-  pl_handler?: 'by length' | 'per meter' | 'fixed' | string
-  weight?: number
-  image_url?: string
-}
-export type CustomizerTopEdge = CustomizerEdgeOption & {
-  top_tarpaulin_price?: number | string
-  top_tarpaulin__subtitle?: string
-  select_top_cm?: string
-  top_pl_handler?: string
-  top_tarpaulin_weight?: number
-}
-export type CustomizerLeftEdge = CustomizerEdgeOption & {
-  left_tarpaulin_price?: number | string
-  left_tarpaulin__subtitle?: string
-  select_left_cm?: string
-  left_pl_handler?: string
-  left_tarpaulin_weight?: number
-}
-export type CustomizerRightEdge = CustomizerEdgeOption & {
-  right_tarpaulin_price?: number | string
-  right_tarpaulin__subtitle?: string
-  select_right_cm?: string
-  right_pl_handler?: string
-  right_tarpaulin_weight?: number
-}
-export type CustomizerBottomEdge = CustomizerEdgeOption & {
-  bottom_tarpaulin_price?: number | string
-  bottom_tarpaulin__subtitle?: string
-  select_bottom_cm?: string
-  bottom_pl_handler?: string
-  bottom_tarpaulin_weight?: number
-}
-export interface CustomizerEyelet {
-  eyelet_tarpaulin_price?: number | string
-  eyelet_tarpaulin__subtitle?: string
-  select_eyelet_cm?: string
-  eyelet_pl_handler?: string
-  eyelet_weight?: number
-  image_url?: string
-}
-export interface CustomizerClosureType {
-  closure_type_tarpaulin_price?: number | string
-  closure_type_tarpaulin__subtitle?: string
-  select_closure_type_cm?: string
-  closure_type_pl_handler?: string
-  closure_type_weight?: number
-  image_url?: string
-}
-export interface CustomizerWindowData {
-  split_window_image?: string
-  window_dimention_image?: string
-  window_dimention_description?: string
-  window_price_per_square_meter?: number
-  window_full_price_square_meter?: number
-  split_max_pieces?: number
-  price_per_window?: number
-  window_price_of_empoly?: number
-}
-export interface CustomizerDoorData {
-  door_dimention_image?: string
-  door_dimention_description?: string
-  door_price?: number
-}
-export interface CustomizerDoorExtra {
-  door_extras_price?: number | string
-  door_extras__subtitle?: string
-  door_extra_indluded?: string
-  door_extra_weight?: number
-  door_extra_per_piece?: string
-  door_extra_pl?: string
-  image_url?: string
-}
-export interface CustomizerMainExtra {
-  main_extras_price?: number | string
-  main_extras__subtitle?: string
-  main_extra_indluded?: string
-  main_extra_per_piece?: string
-  main_extra_pl?: string
-  main_extra_weight?: number | string
-  main_extra_required?: string
-  image_url?: string
-}
-export interface CustomizerClosure {
-  front_closure_price?: number | string
-  front_closure_price_two?: number | string
-  front_closure__subtitle?: string
-  front_clouser_cm?: string
-  front_clouser_weight?: number
-  front_clouser_pl_handler?: string
-  image_url?: string
-}
-export interface CustomizerBackClosure {
-  back_closure_price?: number | string
-  back_closure_price_two?: number | string
-  back_closure__subtitle?: string
-  back_clouser_cm?: string
-  back_clouser_weight?: number
-  back_clouser_pl_handler?: string
-  image_url?: string
-}
-export interface CustomizerClosureExtra {
-  price?: number | string
-  subtitle?: string
-  included?: string
-  cm_selector?: string
-  pl_handler?: string
-  weight?: number
-  image_url?: string
-  front_clouser_extra__subtitle?: string
-  front_clouser_extra_price?: number | string
-  front_clouser_extra_selector?: string
-  back_clouser_extra__subtitle?: string
-  back_clouser_extra_price?: number | string
-  back_clouser_extra_selector?: string
-  [key: string]: unknown
-}
-export interface CustomizerCalculationUnit {
-  product_type: 'tarpulin' | 'lounge' | 'trailer' | string
-  unit_selector: 'squaremeter' | 'cubicmeter' | string
-}
-export interface CustomizerConfig {
-  id: number
-  product_id: string
-  product_title: string
-  material: CustomizerMaterial[] | null
-  colors: CustomizerColor[] | null
-  dimentions: CustomizerDimensions | null
-  top_tarpaulin: CustomizerTopEdge[] | null
-  left_tarpaulin: CustomizerLeftEdge[] | null
-  right_tarpaulin: CustomizerRightEdge[] | null
-  bottom_tarpaulin: CustomizerBottomEdge[] | null
-  window_data: CustomizerWindowData | null
-  door_data: CustomizerDoorData | null
-  extras: CustomizerDoorExtra[] | null
-  main_extra: CustomizerMainExtra[] | null
-  calculation_unit: CustomizerCalculationUnit | null
-  front_side: unknown
-  back_side: unknown
-  eyelets: CustomizerEyelet[] | null
-  closure_type: CustomizerClosureType[] | null
-  front_clouser: CustomizerClosure[] | null
-  back_clouser: CustomizerBackClosure[] | null
-  front_clouser_extra: CustomizerClosureExtra[] | null
-  back_clouser_extra: CustomizerClosureExtra[] | null
-}
-export interface CustomizerApiResponse {
-  success: boolean
-  data?: CustomizerConfig
-  message?: string
 }
 ````
 
@@ -26860,265 +26751,6 @@ export async function fetchPostBySlugFromAPI(slug: string): Promise<BlogPost | n
 }
 ````
 
-## File: src/features/cart/components/CartPageContent/CartPageContent.tsx
-````typescript
-'use client'
-import { useEffect, useRef } from 'react'
-import Image from 'next/image'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useMutation, useQuery } from '@apollo/client'
-import { v4 as uuidv4 } from 'uuid'
-import { useCartStore } from '@/shared/lib/cartStore'
-import {
-  decodePriceDisplay,
-  getAbsoluteImageUrl,
-  getFormattedCart,
-  getUpdatedItems,
-  parseCartPriceString,
-  type IProductRootObject,
-} from '@/shared/lib/functions'
-import {
-  buildCartItemId,
-  mapCartToTrackingItems,
-  pushToDataLayer,
-  roundTrackingValue,
-  type DataLayerEcommerceEvent,
-} from '@/lib/tracking'
-import { GET_CART } from '../../api/queries'
-import { UPDATE_CART } from '@/shared/lib/GQL_MUTATIONS'
-import { OrderSummary } from '../OrderSummary/OrderSummary'
-import { useCheckoutStore } from '@/features/checkout/store/checkout.store'
-import { type PaymentMethodId } from '@/features/checkout/types/checkout.types'
-import { usePaymentOptions } from '@/features/checkout/hooks/usePaymentOptions'
-import { ExpressCheckout } from '@/features/checkout/components/ExpressCheckout'
-import { ContentShell } from '@/shared/components/ContentShell.component'
-const SHIPPING_PATH = '/checkout/shipping'
-const PAYMENT_PATH = '/checkout/payment'
-const SHOP_PATH = '/shop'
-export function CartPageContent() {
-  const router = useRouter()
-  const { cart, syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
-  const { shippingData, setSelectedPayment } = useCheckoutStore()
-  const viewCartFiredRef = useRef(false)
-  const {
-    data: paymentOptions,
-    loading: paymentOptionsLoading,
-    error: paymentOptionsError,
-    refresh: refreshPaymentOptions,
-  } = usePaymentOptions()
-  const { data, loading } = useQuery(GET_CART, {
-    notifyOnNetworkStatusChange: true,
-  })
-  useEffect(() => {
-    if (!data) return
-    const updatedCart = getFormattedCart(data)
-    if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
-      clearWooCommerceSession()
-      return
-    }
-    if (updatedCart) syncWithWooCommerce(updatedCart)
-  }, [data, clearWooCommerceSession, syncWithWooCommerce])
-  useEffect(() => {
-    if (viewCartFiredRef.current) return
-    const items = mapCartToTrackingItems(cart)
-    if (items.length === 0) return
-    viewCartFiredRef.current = true
-    pushToDataLayer({
-      event: 'view_cart',
-      ecommerce: {
-        currency: 'EUR',
-        value: parseCartPriceString(cart?.totals?.total),
-        items,
-      },
-    })
-  }, [cart])
-  const [updateCart, { loading: updateCartLoading }] = useMutation(UPDATE_CART, {
-    refetchQueries: [{ query: GET_CART }],
-    awaitRefetchQueries: false,
-  })
-  const handleQuantityUpdate = async (cartKey: string, quantity: number) => {
-    const products = (data?.cart?.contents?.nodes ?? []) as IProductRootObject[]
-    if (!products.length) return
-    const nextQuantity = Math.max(0, quantity)
-    if (nextQuantity === 0) {
-      const removedProduct = cart?.products.find((p) => p.cartKey === cartKey)
-      if (removedProduct) {
-        const removeEvent: DataLayerEcommerceEvent = {
-          event: 'remove_from_cart',
-          ecommerce: {
-            currency: 'EUR',
-            value: roundTrackingValue(removedProduct.price * removedProduct.qty),
-            items: [
-              {
-                item_id: buildCartItemId(removedProduct),
-                item_name: removedProduct.name,
-                price: roundTrackingValue(removedProduct.price),
-                quantity: removedProduct.qty,
-              },
-            ],
-          },
-        }
-        pushToDataLayer(removeEvent)
-      }
-    }
-    const items = getUpdatedItems(products, nextQuantity, cartKey)
-    await updateCart({
-      variables: {
-        input: {
-          clientMutationId: uuidv4(),
-          items,
-        },
-      },
-    })
-  }
-  const handleExpressActivation = (gatewayId: PaymentMethodId) => {
-    setSelectedPayment(gatewayId)
-    router.push(shippingData ? PAYMENT_PATH : SHIPPING_PATH)
-  }
-  const products = cart?.products ?? []
-  const hasItems = products.length > 0
-  const cartTotals = cart?.totals ?? {
-    subtotal: '0,00 €',
-    subtotalTax: '0,00 €',
-    shippingTax: '0,00 €',
-    shippingTotal: '0,00 €',
-    total: '0,00 €',
-    totalTax: '0,00 €',
-    feeTax: '0,00 €',
-    feeTotal: '0,00 €',
-    discountTax: '0,00 €',
-    discountTotal: '0,00 €',
-  }
-  if (!hasItems && !loading) {
-    return (
-      <ContentShell className="py-12">
-        <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
-          <h1 className="text-2xl font-bold text-[#1F5CAB]">Ihr Warenkorb ist leer</h1>
-          <p className="mt-2 text-sm text-[#1F5CAB]/80">
-            Legen Sie zuerst Produkte in den Warenkorb, bevor Sie den Express Checkout starten.
-          </p>
-          <Link
-            href={SHOP_PATH}
-            className="mt-6 inline-flex items-center justify-center rounded-full bg-[#1F5CAB] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#0F2B52]"
-          >
-            Zum Shop
-          </Link>
-        </div>
-      </ContentShell>
-    )
-  }
-  return (
-    <ContentShell className="py-8 lg:py-12">
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-12">
-        <div className="min-w-0 space-y-6">
-          <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-bold text-[#1F5CAB]">Warenkorb</h1>
-                <p className="mt-1 text-sm text-[#1F5CAB]/75">
-                  Pruefen Sie Ihre Artikel und starten Sie danach den Checkout.
-                </p>
-              </div>
-              {updateCartLoading ? (
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#1F5CAB]">
-                  Warenkorb wird aktualisiert...
-                </span>
-              ) : null}
-            </div>
-            <div className="mt-6 space-y-4">
-              {((data?.cart?.contents?.nodes ?? []) as IProductRootObject[]).map((item) => {
-                const product = item.product.node
-                const cartProduct = products.find((entry) => entry.cartKey === item.key)
-                const imageUrl = product.image?.sourceUrl
-                  ? getAbsoluteImageUrl(product.image.sourceUrl)
-                  : '/placeholder.png'
-                return (
-                  <article
-                    key={item.key}
-                    className="grid gap-4 rounded-2xl border border-[#DBE9F9] bg-white p-4 md:grid-cols-[96px_minmax(0,1fr)_120px]"
-                  >
-                    <div className="relative h-24 overflow-hidden rounded-xl bg-[#DBE9F9]">
-                      <Image
-                        src={imageUrl}
-                        alt={product.image?.title ?? product.name}
-                        fill
-                        className="object-cover"
-                        sizes="96px"
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <h2 className="text-lg font-semibold text-[#1F5CAB]">{product.name}</h2>
-                      <p className="mt-1 text-sm text-[#1F5CAB]/70">
-                        Artikelpreis: {decodePriceDisplay(cartProduct?.unitPriceDisplay ?? product.price ?? item.subtotal)}
-                      </p>
-                      {cartProduct?.configurationSummary?.length ? (
-                        <dl className="mt-3 grid gap-1 rounded-xl bg-[#F7FAFF] p-3 text-xs text-[#1F5CAB]/85">
-                          {cartProduct.configurationSummary.map((entry) => (
-                              <div key={`${item.key}-${entry.label}`} className="flex justify-between gap-3">
-                                <dt className="font-semibold text-[#1F5CAB]">{entry.label}</dt>
-                                <dd className="text-right">{entry.value}</dd>
-                              </div>
-                            ))}
-                        </dl>
-                      ) : null}
-                      <div className="mt-4 flex flex-wrap items-center gap-3">
-                        <label className="text-sm text-[#1F5CAB]">
-                          Menge
-                          <input
-                            type="number"
-                            min={1}
-                            value={item.quantity}
-                            onChange={(event) => {
-                              const nextQuantity = Number.parseInt(event.target.value, 10)
-                              if (!Number.isFinite(nextQuantity)) return
-                              void handleQuantityUpdate(item.key, nextQuantity)
-                            }}
-                            className="ml-3 w-20 rounded-xl border border-[#DBE9F9] px-3 py-2 text-[#1F5CAB] focus:border-[#1F5CAB] focus:outline-none"
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void handleQuantityUpdate(item.key, 0)
-                          }}
-                          className="rounded-full border border-[#DBE9F9] px-4 py-2 text-sm font-semibold text-[#1F5CAB] transition hover:border-[#1F5CAB] hover:bg-[#F7FAFF]"
-                        >
-                          Entfernen
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex items-start justify-between gap-3 md:flex-col md:items-end">
-                      <p className="text-lg font-bold text-[#1F5CAB]">{decodePriceDisplay(item.subtotal)}</p>
-                      {cartProduct?.hasConfiguration ? (
-                        <p className="text-sm text-[#1F5CAB]/65">inkl. Konfiguration</p>
-                      ) : null}
-                    </div>
-                  </article>
-                )
-              })}
-            </div>
-          </div>
-          <ExpressCheckout
-            title="Express Buttons"
-            subtitle="Starten Sie direkt mit PayPal, Klarna oder Ihrer bevorzugten Zahlungsart."
-            gateways={paymentOptions?.gateways ?? []}
-            loading={paymentOptionsLoading}
-            error={paymentOptionsError}
-            context="cart"
-            onActivateGateway={handleExpressActivation}
-            onRefresh={refreshPaymentOptions}
-          />
-        </div>
-        <div className="lg:sticky lg:top-24 lg:self-start">
-          <OrderSummary totals={cartTotals} />
-        </div>
-      </div>
-    </ContentShell>
-  )
-}
-````
-
 ## File: src/features/checkout/components/CardPaymentForm.tsx
 ````typescript
 'use client'
@@ -27162,82 +26794,121 @@ export function CardPaymentForm({
 }
 ````
 
-## File: src/features/checkout/store/checkout.store.ts
+## File: src/features/checkout/components/ShippingPageContent.tsx
 ````typescript
 'use client'
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import type {
-  CheckoutStepId,
-  ShippingMethodId,
-  PaymentMethodId,
-  CheckoutFormShipping,
-} from '../types/checkout.types'
-import type { OrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
-export type { OrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
-export interface LastCompletedOrderSnapshot {
-  orderNumber?: number | string | null
-  databaseId?: string | null
-  date?: string | null
-  status?: string | null
-  orderKey?: string | null
-  receipt?: OrderReceiptSnapshot | null
-  completedAt: number
-}
-interface CheckoutState {
-  currentStep: CheckoutStepId
-  selectedShipping: ShippingMethodId
-  selectedPayment: PaymentMethodId
-  orderCompleted: boolean
-  lastCompletedOrder: LastCompletedOrderSnapshot | null
-  shippingData: CheckoutFormShipping | null
-  setCurrentStep: (step: CheckoutStepId) => void
-  setSelectedShipping: (id: ShippingMethodId) => void
-  setSelectedPayment: (id: PaymentMethodId) => void
-  setOrderCompleted: (value: boolean) => void
-  setLastCompletedOrder: (value: LastCompletedOrderSnapshot | null) => void
-  setShippingData: (data: CheckoutFormShipping | null) => void
-  reset: () => void
-}
-const DEFAULT_SHIPPING: ShippingMethodId = 'free_shipping'
-const DEFAULT_PAYMENT: PaymentMethodId = 'bacs'
-export const useCheckoutStore = create<CheckoutState>()(
-  persist(
-    (set) => ({
-      currentStep: 'shipping',
-      selectedShipping: DEFAULT_SHIPPING,
-      selectedPayment: DEFAULT_PAYMENT,
-      orderCompleted: false,
-      lastCompletedOrder: null,
-      shippingData: null,
-      setCurrentStep: (currentStep) => set({ currentStep }),
-      setSelectedShipping: (selectedShipping) => set({ selectedShipping }),
-      setSelectedPayment: (selectedPayment) => set({ selectedPayment }),
-      setOrderCompleted: (orderCompleted) => set({ orderCompleted }),
-      setLastCompletedOrder: (lastCompletedOrder) => set({ lastCompletedOrder }),
-      setShippingData: (shippingData) => set({ shippingData }),
-      reset: () =>
-        set({
-          currentStep: 'shipping',
-          selectedShipping: DEFAULT_SHIPPING,
-          selectedPayment: DEFAULT_PAYMENT,
-          orderCompleted: false,
-          lastCompletedOrder: null,
-          shippingData: null,
-        }),
-    }),
-    {
-      name: 'checkout-store',
-      partialize: (state) => ({
-        shippingData: state.shippingData,
-        selectedShipping: state.selectedShipping,
-        selectedPayment: state.selectedPayment,
-        orderCompleted: state.orderCompleted,
-        lastCompletedOrder: state.lastCompletedOrder,
-      }),
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { useQuery } from '@apollo/client'
+import { useCartStore } from '@/shared/lib/cartStore'
+import { getFormattedCart } from '@/shared/lib/functions'
+import { GET_CART } from '@/features/cart/api/queries'
+import { useCheckoutStore } from '../store/checkout.store'
+import { hasActivePendingExternalPayment } from '../store/checkout.store'
+import { CheckoutSteps } from './CheckoutSteps'
+import { ShippingForm } from './ShippingForm'
+import { CheckoutOrderSummary } from './OrderSummary'
+import { ContentShell } from '@/shared/components/ContentShell.component'
+import type { CheckoutShippingInput } from '../lib/checkoutSchema'
+import {
+  buildCartSignature,
+  mapCartToTrackingItems,
+  pushToDataLayerOnce,
+  type DataLayerEcommerceEvent,
+} from '@/lib/tracking'
+import { parseCartPriceString } from '@/shared/lib/functions'
+const CART_PATH = '/cart'
+const PAYMENT_PATH = '/checkout/payment'
+export function ShippingPageContent() {
+  const router = useRouter()
+  const { cart, syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
+  const { shippingData, setShippingData, setSelectedShipping } = useCheckoutStore()
+  const { data } = useQuery(GET_CART, { notifyOnNetworkStatusChange: true })
+  useEffect(() => {
+    if (!data) return
+    const updatedCart = getFormattedCart(data)
+    if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
+      if (hasActivePendingExternalPayment(useCheckoutStore.getState().pendingExternalPayment)) return
+      clearWooCommerceSession()
+      return
     }
+    if (updatedCart) syncWithWooCommerce(updatedCart)
+  }, [data, clearWooCommerceSession, syncWithWooCommerce])
+  const hasItems = (cart?.products?.length ?? 0) > 0
+  const handleValidSubmit = (formData: CheckoutShippingInput) => {
+    const cartSignature = buildCartSignature(cart)
+    const items = mapCartToTrackingItems(cart)
+    const totalValue = parseCartPriceString(cart?.totals?.total)
+    if (items.length > 0 && cartSignature) {
+      const shippingEvent: DataLayerEcommerceEvent = {
+        event: 'add_shipping_info',
+        ecommerce: {
+          value: totalValue,
+          currency: 'EUR',
+          shipping_tier: formData.shippingMethod,
+          items,
+        },
+      }
+      pushToDataLayerOnce(`add_shipping_info_${formData.shippingMethod}_${cartSignature}`, shippingEvent)
+    }
+    setShippingData(formData)
+    setSelectedShipping(formData.shippingMethod)
+    router.push(PAYMENT_PATH)
+  }
+  useEffect(() => {
+    const items = mapCartToTrackingItems(cart)
+    if (items.length === 0) return
+    const cartSignature = buildCartSignature(cart)
+    if (!cartSignature) return
+    const totalValue = parseCartPriceString(cart?.totals?.total)
+    const beginCheckoutEvent: DataLayerEcommerceEvent = {
+      event: 'begin_checkout',
+      ecommerce: {
+        value: totalValue,
+        currency: 'EUR',
+        items,
+      },
+    }
+    pushToDataLayerOnce(`begin_checkout_${cartSignature}`, beginCheckoutEvent)
+  }, [cart])
+  if (!hasItems) {
+    return (
+      <ContentShell className="py-12">
+        <CheckoutSteps currentStep="shipping" />
+        <div className="mt-8 rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
+          <h2 className="text-xl font-bold text-[#1F5CAB]">Keine Artikel im Warenkorb</h2>
+          <p className="mt-2 text-sm text-[#1F5CAB]/80">
+            Legen Sie zuerst Artikel in den Warenkorb, um zur Kasse zu gehen.
+          </p>
+          <Link
+            href={CART_PATH}
+            className="mt-6 inline-flex items-center justify-center rounded-full bg-[#1F5CAB] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#0F2B52]"
+          >
+            Zum Warenkorb
+          </Link>
+        </div>
+      </ContentShell>
+    )
+  }
+  return (
+    <ContentShell className="py-8 lg:py-12">
+      <CheckoutSteps currentStep="shipping" showChangeShipping={false} />
+      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px] lg:gap-12">
+        <div className="min-w-0">
+          <ShippingForm
+          initialData={shippingData ?? undefined}
+          onValidSubmit={handleValidSubmit}
+          submitLabel="Weiter zur Zahlung"
+        />
+        </div>
+        <div className="lg:sticky lg:top-24 lg:self-start">
+          <CheckoutOrderSummary />
+        </div>
+      </div>
+    </ContentShell>
   )
-)
+}
 ````
 
 ## File: src/features/checkout/index.ts
@@ -28846,6 +28517,267 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ````
 
+## File: src/features/cart/components/CartPageContent/CartPageContent.tsx
+````typescript
+'use client'
+import { useEffect, useRef } from 'react'
+import Image from 'next/image'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useMutation, useQuery } from '@apollo/client'
+import { v4 as uuidv4 } from 'uuid'
+import { useCartStore } from '@/shared/lib/cartStore'
+import {
+  decodePriceDisplay,
+  getAbsoluteImageUrl,
+  getFormattedCart,
+  getUpdatedItems,
+  parseCartPriceString,
+  type IProductRootObject,
+} from '@/shared/lib/functions'
+import {
+  buildCartItemId,
+  mapCartToTrackingItems,
+  pushToDataLayer,
+  roundTrackingValue,
+  type DataLayerEcommerceEvent,
+} from '@/lib/tracking'
+import { GET_CART } from '../../api/queries'
+import { UPDATE_CART } from '@/shared/lib/GQL_MUTATIONS'
+import { OrderSummary } from '../OrderSummary/OrderSummary'
+import { useCheckoutStore } from '@/features/checkout/store/checkout.store'
+import { hasActivePendingExternalPayment } from '@/features/checkout/store/checkout.store'
+import { type PaymentMethodId } from '@/features/checkout/types/checkout.types'
+import { usePaymentOptions } from '@/features/checkout/hooks/usePaymentOptions'
+import { ExpressCheckout } from '@/features/checkout/components/ExpressCheckout'
+import { ContentShell } from '@/shared/components/ContentShell.component'
+const SHIPPING_PATH = '/checkout/shipping'
+const PAYMENT_PATH = '/checkout/payment'
+const SHOP_PATH = '/shop'
+export function CartPageContent() {
+  const router = useRouter()
+  const { cart, syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
+  const { shippingData, setSelectedPayment } = useCheckoutStore()
+  const viewCartFiredRef = useRef(false)
+  const {
+    data: paymentOptions,
+    loading: paymentOptionsLoading,
+    error: paymentOptionsError,
+    refresh: refreshPaymentOptions,
+  } = usePaymentOptions()
+  const { data, loading } = useQuery(GET_CART, {
+    notifyOnNetworkStatusChange: true,
+  })
+  useEffect(() => {
+    if (!data) return
+    const updatedCart = getFormattedCart(data)
+    if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
+      if (hasActivePendingExternalPayment(useCheckoutStore.getState().pendingExternalPayment)) return
+      clearWooCommerceSession()
+      return
+    }
+    if (updatedCart) syncWithWooCommerce(updatedCart)
+  }, [data, clearWooCommerceSession, syncWithWooCommerce])
+  useEffect(() => {
+    if (viewCartFiredRef.current) return
+    const items = mapCartToTrackingItems(cart)
+    if (items.length === 0) return
+    viewCartFiredRef.current = true
+    pushToDataLayer({
+      event: 'view_cart',
+      ecommerce: {
+        currency: 'EUR',
+        value: parseCartPriceString(cart?.totals?.total),
+        items,
+      },
+    })
+  }, [cart])
+  const [updateCart, { loading: updateCartLoading }] = useMutation(UPDATE_CART, {
+    refetchQueries: [{ query: GET_CART }],
+    awaitRefetchQueries: false,
+  })
+  const handleQuantityUpdate = async (cartKey: string, quantity: number) => {
+    const products = (data?.cart?.contents?.nodes ?? []) as IProductRootObject[]
+    if (!products.length) return
+    const nextQuantity = Math.max(0, quantity)
+    if (nextQuantity === 0) {
+      const removedProduct = cart?.products.find((p) => p.cartKey === cartKey)
+      if (removedProduct) {
+        const removeEvent: DataLayerEcommerceEvent = {
+          event: 'remove_from_cart',
+          ecommerce: {
+            currency: 'EUR',
+            value: roundTrackingValue(removedProduct.price * removedProduct.qty),
+            items: [
+              {
+                item_id: buildCartItemId(removedProduct),
+                item_name: removedProduct.name,
+                price: roundTrackingValue(removedProduct.price),
+                quantity: removedProduct.qty,
+              },
+            ],
+          },
+        }
+        pushToDataLayer(removeEvent)
+      }
+    }
+    const items = getUpdatedItems(products, nextQuantity, cartKey)
+    await updateCart({
+      variables: {
+        input: {
+          clientMutationId: uuidv4(),
+          items,
+        },
+      },
+    })
+  }
+  const handleExpressActivation = (gatewayId: PaymentMethodId) => {
+    setSelectedPayment(gatewayId)
+    router.push(shippingData ? PAYMENT_PATH : SHIPPING_PATH)
+  }
+  const products = cart?.products ?? []
+  const hasItems = products.length > 0
+  const cartTotals = cart?.totals ?? {
+    subtotal: '0,00 €',
+    subtotalTax: '0,00 €',
+    shippingTax: '0,00 €',
+    shippingTotal: '0,00 €',
+    total: '0,00 €',
+    totalTax: '0,00 €',
+    feeTax: '0,00 €',
+    feeTotal: '0,00 €',
+    discountTax: '0,00 €',
+    discountTotal: '0,00 €',
+  }
+  if (!hasItems && !loading) {
+    return (
+      <ContentShell className="py-12">
+        <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
+          <h1 className="text-2xl font-bold text-[#1F5CAB]">Ihr Warenkorb ist leer</h1>
+          <p className="mt-2 text-sm text-[#1F5CAB]/80">
+            Legen Sie zuerst Produkte in den Warenkorb, bevor Sie den Express Checkout starten.
+          </p>
+          <Link
+            href={SHOP_PATH}
+            className="mt-6 inline-flex items-center justify-center rounded-full bg-[#1F5CAB] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#0F2B52]"
+          >
+            Zum Shop
+          </Link>
+        </div>
+      </ContentShell>
+    )
+  }
+  return (
+    <ContentShell className="py-8 lg:py-12">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-12">
+        <div className="min-w-0 space-y-6">
+          <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-[#1F5CAB]">Warenkorb</h1>
+                <p className="mt-1 text-sm text-[#1F5CAB]/75">
+                  Pruefen Sie Ihre Artikel und starten Sie danach den Checkout.
+                </p>
+              </div>
+              {updateCartLoading ? (
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#1F5CAB]">
+                  Warenkorb wird aktualisiert...
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-6 space-y-4">
+              {((data?.cart?.contents?.nodes ?? []) as IProductRootObject[]).map((item) => {
+                const product = item.product.node
+                const cartProduct = products.find((entry) => entry.cartKey === item.key)
+                const imageUrl = product.image?.sourceUrl
+                  ? getAbsoluteImageUrl(product.image.sourceUrl)
+                  : '/placeholder.png'
+                return (
+                  <article
+                    key={item.key}
+                    className="grid gap-4 rounded-2xl border border-[#DBE9F9] bg-white p-4 md:grid-cols-[96px_minmax(0,1fr)_120px]"
+                  >
+                    <div className="relative h-24 overflow-hidden rounded-xl bg-[#DBE9F9]">
+                      <Image
+                        src={imageUrl}
+                        alt={product.image?.title ?? product.name}
+                        fill
+                        className="object-cover"
+                        sizes="96px"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="text-lg font-semibold text-[#1F5CAB]">{product.name}</h2>
+                      <p className="mt-1 text-sm text-[#1F5CAB]/70">
+                        Artikelpreis: {decodePriceDisplay(cartProduct?.unitPriceDisplay ?? product.price ?? item.subtotal)}
+                      </p>
+                      {cartProduct?.configurationSummary?.length ? (
+                        <dl className="mt-3 grid gap-1 rounded-xl bg-[#F7FAFF] p-3 text-xs text-[#1F5CAB]/85">
+                          {cartProduct.configurationSummary.map((entry) => (
+                              <div key={`${item.key}-${entry.label}`} className="flex justify-between gap-3">
+                                <dt className="font-semibold text-[#1F5CAB]">{entry.label}</dt>
+                                <dd className="text-right">{entry.value}</dd>
+                              </div>
+                            ))}
+                        </dl>
+                      ) : null}
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <label className="text-sm text-[#1F5CAB]">
+                          Menge
+                          <input
+                            type="number"
+                            min={1}
+                            value={item.quantity}
+                            onChange={(event) => {
+                              const nextQuantity = Number.parseInt(event.target.value, 10)
+                              if (!Number.isFinite(nextQuantity)) return
+                              void handleQuantityUpdate(item.key, nextQuantity)
+                            }}
+                            className="ml-3 w-20 rounded-xl border border-[#DBE9F9] px-3 py-2 text-[#1F5CAB] focus:border-[#1F5CAB] focus:outline-none"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleQuantityUpdate(item.key, 0)
+                          }}
+                          className="rounded-full border border-[#DBE9F9] px-4 py-2 text-sm font-semibold text-[#1F5CAB] transition hover:border-[#1F5CAB] hover:bg-[#F7FAFF]"
+                        >
+                          Entfernen
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-start justify-between gap-3 md:flex-col md:items-end">
+                      <p className="text-lg font-bold text-[#1F5CAB]">{decodePriceDisplay(item.subtotal)}</p>
+                      {cartProduct?.hasConfiguration ? (
+                        <p className="text-sm text-[#1F5CAB]/65">inkl. Konfiguration</p>
+                      ) : null}
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          </div>
+          <ExpressCheckout
+            title="Express Buttons"
+            subtitle="Starten Sie direkt mit PayPal, Klarna oder Ihrer bevorzugten Zahlungsart."
+            gateways={paymentOptions?.gateways ?? []}
+            loading={paymentOptionsLoading}
+            error={paymentOptionsError}
+            context="cart"
+            onActivateGateway={handleExpressActivation}
+            onRefresh={refreshPaymentOptions}
+          />
+        </div>
+        <div className="lg:sticky lg:top-24 lg:self-start">
+          <OrderSummary totals={cartTotals} />
+        </div>
+      </div>
+    </ContentShell>
+  )
+}
+````
+
 ## File: src/features/checkout/lib/build-order-receipt-snapshot.ts
 ````typescript
 import type { Cart, CartTotals } from '@/shared/types/cart'
@@ -28921,6 +28853,106 @@ export function buildOrderReceiptSnapshot(
     paymentMethodLabel,
   }
 }
+````
+
+## File: src/features/checkout/store/checkout.store.ts
+````typescript
+'use client'
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import type {
+  CheckoutStepId,
+  ShippingMethodId,
+  PaymentMethodId,
+  CheckoutFormShipping,
+} from '../types/checkout.types'
+import type { OrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
+export type { OrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
+export interface LastCompletedOrderSnapshot {
+  orderNumber?: number | string | null
+  databaseId?: string | null
+  date?: string | null
+  status?: string | null
+  orderKey?: string | null
+  receipt?: OrderReceiptSnapshot | null
+  completedAt: number
+}
+export interface PendingExternalPaymentSnapshot {
+  provider: PaymentMethodId
+  startedAt: number
+  orderId?: string | null
+  orderKey?: string | null
+  status?: string | null
+}
+const PENDING_EXTERNAL_PAYMENT_MAX_AGE_MS = 6 * 60 * 60 * 1000
+export function hasActivePendingExternalPayment(
+  pendingExternalPayment: PendingExternalPaymentSnapshot | null | undefined
+): boolean {
+  if (!pendingExternalPayment) return false
+  return Date.now() - pendingExternalPayment.startedAt < PENDING_EXTERNAL_PAYMENT_MAX_AGE_MS
+}
+interface CheckoutState {
+  currentStep: CheckoutStepId
+  selectedShipping: ShippingMethodId
+  selectedPayment: PaymentMethodId
+  orderCompleted: boolean
+  lastCompletedOrder: LastCompletedOrderSnapshot | null
+  pendingExternalPayment: PendingExternalPaymentSnapshot | null
+  shippingData: CheckoutFormShipping | null
+  setCurrentStep: (step: CheckoutStepId) => void
+  setSelectedShipping: (id: ShippingMethodId) => void
+  setSelectedPayment: (id: PaymentMethodId) => void
+  setOrderCompleted: (value: boolean) => void
+  setLastCompletedOrder: (value: LastCompletedOrderSnapshot | null) => void
+  setPendingExternalPayment: (value: PendingExternalPaymentSnapshot | null) => void
+  clearPendingExternalPayment: () => void
+  setShippingData: (data: CheckoutFormShipping | null) => void
+  reset: () => void
+}
+const DEFAULT_SHIPPING: ShippingMethodId = 'free_shipping'
+const DEFAULT_PAYMENT: PaymentMethodId = 'bacs'
+export const useCheckoutStore = create<CheckoutState>()(
+  persist(
+    (set) => ({
+      currentStep: 'shipping',
+      selectedShipping: DEFAULT_SHIPPING,
+      selectedPayment: DEFAULT_PAYMENT,
+      orderCompleted: false,
+      lastCompletedOrder: null,
+      pendingExternalPayment: null,
+      shippingData: null,
+      setCurrentStep: (currentStep) => set({ currentStep }),
+      setSelectedShipping: (selectedShipping) => set({ selectedShipping }),
+      setSelectedPayment: (selectedPayment) => set({ selectedPayment }),
+      setOrderCompleted: (orderCompleted) => set({ orderCompleted }),
+      setLastCompletedOrder: (lastCompletedOrder) => set({ lastCompletedOrder }),
+      setPendingExternalPayment: (pendingExternalPayment) => set({ pendingExternalPayment }),
+      clearPendingExternalPayment: () => set({ pendingExternalPayment: null }),
+      setShippingData: (shippingData) => set({ shippingData }),
+      reset: () =>
+        set({
+          currentStep: 'shipping',
+          selectedShipping: DEFAULT_SHIPPING,
+          selectedPayment: DEFAULT_PAYMENT,
+          orderCompleted: false,
+          lastCompletedOrder: null,
+          pendingExternalPayment: null,
+          shippingData: null,
+        }),
+    }),
+    {
+      name: 'checkout-store',
+      partialize: (state) => ({
+        shippingData: state.shippingData,
+        selectedShipping: state.selectedShipping,
+        selectedPayment: state.selectedPayment,
+        orderCompleted: state.orderCompleted,
+        lastCompletedOrder: state.lastCompletedOrder,
+        pendingExternalPayment: state.pendingExternalPayment,
+      }),
+    }
+  )
+)
 ````
 
 ## File: src/features/home/sections/Hero/data.ts
@@ -31693,520 +31725,6 @@ export interface ConfiguratorState {
 }
 ````
 
-## File: src/features/checkout/components/PaymentPageContent.tsx
-````typescript
-'use client'
-import { useEffect, useState, startTransition, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
-import { useQuery, useMutation } from '@apollo/client'
-import { useCartStore } from '@/shared/lib/cartStore'
-import { getFormattedCart, createCheckoutData } from '@/shared/lib/functions'
-import { GET_CART } from '@/features/cart/api/queries'
-import { APPLY_COUPON, CHECKOUT_MUTATION, REMOVE_COUPONS } from '@/shared/lib/GQL_MUTATIONS'
-import type { IAppliedCoupon } from '@/shared/types/graphql'
-import type { ICheckoutDataProps } from '@/shared/types/checkout'
-import type { CheckoutFormShipping } from '../types/checkout.types'
-import { useCheckoutStore } from '../store/checkout.store'
-import { CheckoutSteps } from './CheckoutSteps'
-import { PaymentMethods } from './PaymentMethods'
-import { CardPaymentForm } from './CardPaymentForm'
-import { PayPalPanel } from './PayPalPanel'
-import { KlarnaPanel } from './KlarnaPanel'
-import { BankTransferPanel } from './BankTransferPanel'
-import { CheckoutOrderSummary } from './OrderSummary'
-import { ContentShell } from '@/shared/components/ContentShell.component'
-import { PAYMENT_METHOD_IDS } from '../types/checkout.types'
-import type { PaymentMethodId } from '../types/checkout.types'
-import { ExpressCheckout } from './ExpressCheckout'
-import { usePaymentOptions } from '../hooks/usePaymentOptions'
-import {
-  buildBankTransferCheckoutCandidates,
-  buildCardCheckoutCandidates,
-} from '../lib/payment-gateways'
-import { buildOrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
-import {
-  isWooCommerceOrderReceivedRedirect,
-  parseWooOrderReceivedUrl,
-} from '../lib/woo-order-received-redirect'
-const SHIPPING_PATH = '/checkout/shipping'
-const THANK_YOU_PATH = '/thank-you'
-interface CheckoutMutationResponse {
-  checkout?: {
-    result?: string | null
-    redirect?: string | null
-    order?: {
-      id?: string | null
-      databaseId?: string | number | null
-      orderNumber?: number | string | null
-      date?: string | null
-      status?: string | null
-    } | null
-  } | null
-}
-const PROVIDER_PAYMENT_METHOD_CANDIDATES: Record<'card' | 'paypal' | 'klarna', string[]> = {
-  card: ['woocommerce_payments', 'wcpay', 'stripe', 'stripe_cc', 'stripe_credit_card', 'credit_card'],
-  paypal: ['ppcp', 'ppcp-gateway', 'paypal'],
-  klarna: ['stripe_klarna', 'woocommerce_payments_klarna', 'klarna_payments', 'klarna'],
-}
-function toCheckoutDataProps(data: CheckoutFormShipping, paymentMethod: string): ICheckoutDataProps {
-  return {
-    firstName: data.firstName,
-    lastName: data.lastName,
-    email: data.email,
-    phone: data.phone,
-    address1: data.address1,
-    address2: data.address2 ?? '',
-    city: data.city,
-    postcode: data.postcode,
-    country: data.country,
-    state: data.state ?? '',
-    company: '',
-    paymentMethod,
-    shipToDifferentAddress: data.shipToDifferentAddress,
-    shippingFirstName: data.shippingFirstName,
-    shippingLastName: data.shippingLastName,
-    shippingAddress1: data.shippingAddress1,
-    shippingAddress2: data.shippingAddress2,
-    shippingPostcode: data.shippingPostcode,
-    shippingCity: data.shippingCity,
-    shippingCountry: data.shippingCountry,
-    shippingState: data.shippingState,
-  }
-}
-export function PaymentPageContent() {
-  const router = useRouter()
-  const { syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
-  const { shippingData, selectedPayment, setSelectedPayment, setOrderCompleted, setLastCompletedOrder } =
-    useCheckoutStore()
-  const { data, refetch } = useQuery(GET_CART, { notifyOnNetworkStatusChange: true })
-  const {
-    data: paymentOptions,
-    loading: paymentOptionsLoading,
-    error: paymentOptionsError,
-    refresh: refreshPaymentOptions,
-  } = usePaymentOptions()
-  useEffect(() => {
-    if (!data) return
-    const updatedCart = getFormattedCart(data)
-    if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
-      clearWooCommerceSession()
-      return
-    }
-    if (updatedCart) syncWithWooCommerce(updatedCart)
-  }, [data, clearWooCommerceSession, syncWithWooCommerce])
-  const [submitError, setSubmitError] = useState<string | null>(null)
-  const [couponCode, setCouponCode] = useState('')
-  const [couponFeedback, setCouponFeedback] = useState<string | null>(null)
-  const [couponError, setCouponError] = useState<string | null>(null)
-  const [guardPassed, setGuardPassed] = useState(false)
-  const [providerLoading, setProviderLoading] = useState<PaymentMethodId | null>(null)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const state = useCheckoutStore.getState()
-      const products = useCartStore.getState().cart?.products ?? []
-      if (!state.shippingData || products.length === 0) {
-        startTransition(() => router.replace(SHIPPING_PATH))
-      } else {
-        setGuardPassed(true)
-      }
-    }, 350)
-    return () => clearTimeout(timer)
-  }, [router])
-  useEffect(() => {
-    if (!paymentOptions?.gateways?.length) return
-    const selectedGateway = paymentOptions.gateways.find((gateway) => gateway.id === selectedPayment)
-    if (selectedGateway?.available) return
-    const fallback = paymentOptions.gateways.find((gateway) => gateway.available && gateway.frontendReady)
-    if (fallback && fallback.id !== selectedPayment) {
-      setSelectedPayment(fallback.id)
-    }
-  }, [paymentOptions, selectedPayment, setSelectedPayment])
-  const [checkoutMutation, { loading: checkoutLoading }] = useMutation<CheckoutMutationResponse>(CHECKOUT_MUTATION)
-  const [applyCouponMutation, { loading: couponApplying }] = useMutation(APPLY_COUPON)
-  const [removeCouponsMutation, { loading: couponRemoving }] = useMutation(REMOVE_COUPONS)
-  const tryProviderCheckoutMutation = async (
-    paymentMethod: 'card' | 'paypal' | 'klarna',
-    formData: CheckoutFormShipping,
-  ): Promise<{
-    redirectUrl: string | null
-    checkout: CheckoutMutationResponse['checkout'] | null
-  }> => {
-    const methodCandidates = PROVIDER_PAYMENT_METHOD_CANDIDATES[paymentMethod]
-    for (const wcPaymentMethod of methodCandidates) {
-      try {
-        const orderProps = toCheckoutDataProps(formData, wcPaymentMethod)
-        const input = createCheckoutData(orderProps)
-        const { data: mutationData } = await checkoutMutation({ variables: { input } })
-        const checkout = mutationData?.checkout ?? null
-        const redirectUrl = checkout?.redirect ?? null
-        if (redirectUrl) {
-          return { redirectUrl, checkout }
-        }
-      } catch {
-        // Continue with next gateway candidate.
-      }
-    }
-    return { redirectUrl: null, checkout: null }
-  }
-  const finalizeSuccessfulOrder = (
-    checkout: CheckoutMutationResponse['checkout'] | null | undefined,
-    redirectUrl: string | null,
-  ) => {
-    if (!shippingData) return
-    const order = checkout?.order
-    const parsedFromWoo =
-      redirectUrl && isWooCommerceOrderReceivedRedirect(redirectUrl)
-        ? parseWooOrderReceivedUrl(redirectUrl)
-        : { orderId: null, orderKey: null }
-    const paymentLabel =
-      paymentOptions?.gateways?.find((g) => g.id === selectedPayment)?.label?.trim() ||
-      (selectedPayment === PAYMENT_METHOD_IDS.BANK ? 'Direkte Banküberweisung' : 'Onlinezahlung')
-    const cartSnapshot = useCartStore.getState().cart
-    const receipt =
-      cartSnapshot && cartSnapshot.products.length > 0
-        ? buildOrderReceiptSnapshot(cartSnapshot, shippingData, paymentLabel)
-        : null
-    const dbFromGraphql =
-      order?.databaseId !== undefined && order?.databaseId !== null ? String(order.databaseId) : null
-    setLastCompletedOrder({
-      orderNumber: order?.orderNumber ?? parsedFromWoo.orderId,
-      databaseId: dbFromGraphql ?? parsedFromWoo.orderId,
-      date: order?.date ?? null,
-      status: order?.status ?? null,
-      orderKey: parsedFromWoo.orderKey,
-      completedAt: Date.now(),
-      receipt,
-    })
-    setOrderCompleted(true)
-    clearWooCommerceSession()
-    router.push(THANK_YOU_PATH)
-  }
-  const handlePlaceOrder = async () => {
-    if (!shippingData) return
-    setSubmitError(null)
-    const bankGateway = paymentOptions?.gateways?.find((gateway) => gateway.id === PAYMENT_METHOD_IDS.BANK)
-    const wcMethodCandidates = buildBankTransferCheckoutCandidates(bankGateway)
-    let lastErrorMessage = 'Bestellung konnte nicht abgeschlossen werden. Bitte erneut versuchen.'
-    for (const wcMethod of wcMethodCandidates) {
-      try {
-        const orderProps = toCheckoutDataProps(shippingData, wcMethod)
-        const input = createCheckoutData(orderProps)
-        const result = await checkoutMutation({ variables: { input } })
-        if (result.errors?.length) {
-          lastErrorMessage = result.errors.map((e) => e.message).filter(Boolean).join(' ') || lastErrorMessage
-          continue
-        }
-        const mutationData = result.data
-        const redirectUrl = mutationData?.checkout?.redirect ?? null
-        if (redirectUrl && !isWooCommerceOrderReceivedRedirect(redirectUrl)) {
-          window.location.assign(redirectUrl)
-          return
-        }
-        finalizeSuccessfulOrder(mutationData?.checkout, redirectUrl)
-        return
-      } catch (error) {
-        lastErrorMessage =
-          error instanceof Error && error.message.trim() ? error.message.trim() : lastErrorMessage
-      }
-    }
-    setSubmitError(lastErrorMessage)
-  }
-  const handleProviderRedirect = async (paymentMethod: 'card' | 'paypal' | 'klarna') => {
-    if (!shippingData) return
-    setSubmitError(null)
-    setProviderLoading(paymentMethod)
-    setSelectedPayment(paymentMethod)
-    try {
-      const { redirectUrl: directRedirectUrl, checkout: directCheckout } =
-        await tryProviderCheckoutMutation(paymentMethod, shippingData)
-      if (directRedirectUrl) {
-        if (isWooCommerceOrderReceivedRedirect(directRedirectUrl)) {
-          finalizeSuccessfulOrder(directCheckout, directRedirectUrl)
-          return
-        }
-        window.location.assign(directRedirectUrl)
-        return
-      }
-      const gateway =
-        paymentMethod === PAYMENT_METHOD_IDS.CARD
-          ? paymentOptions?.gateways?.find((candidate) => candidate.id === PAYMENT_METHOD_IDS.CARD)
-          : undefined
-      const checkoutMethod =
-        paymentMethod === PAYMENT_METHOD_IDS.CARD
-          ? buildCardCheckoutCandidates(gateway)[0] ?? PAYMENT_METHOD_IDS.CARD
-          : paymentMethod
-      const orderProps = toCheckoutDataProps(shippingData, checkoutMethod)
-      const checkoutInput = createCheckoutData(orderProps)
-      const response = await fetch('/api/checkout/provider-redirect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: paymentMethod,
-          checkoutInput,
-        }),
-      })
-      const payload = (await response.json().catch(() => ({}))) as {
-        redirectUrl?: string
-        error?: string
-      }
-      const redirectUrl = payload.redirectUrl
-      if (!redirectUrl) {
-        setSubmitError(
-          payload.error ??
-            'Die Provider-Weiterleitung fehlt. Bitte pruefen Sie WooCommerce-Gateway, Session und Store API.'
-        )
-        return
-      }
-      window.location.assign(redirectUrl)
-    } catch {
-      setSubmitError('Zahlung konnte nicht gestartet werden. Bitte erneut versuchen.')
-    } finally {
-      setProviderLoading(null)
-    }
-  }
-  const handleExpressActivation = (gatewayId: PaymentMethodId) => {
-    if (gatewayId === PAYMENT_METHOD_IDS.CARD) {
-      void handleProviderRedirect('card')
-      return
-    }
-    if (gatewayId === PAYMENT_METHOD_IDS.WALLET) {
-      void handleProviderRedirect('card')
-      return
-    }
-    if (gatewayId === PAYMENT_METHOD_IDS.PAYPAL) {
-      void handleProviderRedirect('paypal')
-      return
-    }
-    if (gatewayId === PAYMENT_METHOD_IDS.KLARNA) {
-      void handleProviderRedirect('klarna')
-      return
-    }
-    setSelectedPayment(gatewayId)
-  }
-  const syncCartFromLatestQuery = async () => {
-    const result = await refetch()
-    const updatedCart = result.data ? getFormattedCart(result.data) : undefined
-    if (!updatedCart && !result.data?.cart?.contents?.nodes?.length) {
-      clearWooCommerceSession()
-      return
-    }
-    if (updatedCart) syncWithWooCommerce(updatedCart)
-  }
-  const handleApplyCoupon = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const normalizedCode = couponCode.trim()
-    if (!normalizedCode) {
-      setCouponError('Bitte geben Sie einen Gutscheincode ein.')
-      setCouponFeedback(null)
-      return
-    }
-    setCouponError(null)
-    setCouponFeedback(null)
-    try {
-      await applyCouponMutation({
-        variables: {
-          input: {
-            clientMutationId: `apply-coupon-${Date.now()}`,
-            code: normalizedCode,
-          },
-        },
-      })
-      await syncCartFromLatestQuery()
-      setCouponFeedback(`Gutscheincode ${normalizedCode} wurde angewendet.`)
-      setCouponCode('')
-    } catch (error) {
-      const message = error instanceof Error && error.message.trim()
-        ? error.message.trim()
-        : 'Der Gutscheincode konnte nicht angewendet werden.'
-      setCouponError(message)
-    }
-  }
-  const handleRemoveCoupon = async (code: string) => {
-    setCouponError(null)
-    setCouponFeedback(null)
-    try {
-      await removeCouponsMutation({
-        variables: {
-          input: {
-            clientMutationId: `remove-coupon-${Date.now()}`,
-            codes: [code],
-          },
-        },
-      })
-      await syncCartFromLatestQuery()
-      setCouponFeedback(`Gutscheincode ${code} wurde entfernt.`)
-    } catch (error) {
-      const message = error instanceof Error && error.message.trim()
-        ? error.message.trim()
-        : 'Der Gutscheincode konnte nicht entfernt werden.'
-      setCouponError(message)
-    }
-  }
-  if (!guardPassed) {
-    return (
-      <ContentShell className="py-12">
-        <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
-          <p className="text-[#1F5CAB]/90">Lade...</p>
-        </div>
-      </ContentShell>
-    )
-  }
-  const selectedGateway = paymentOptions?.gateways.find((gateway) => gateway.id === selectedPayment)
-  const appliedCoupons: IAppliedCoupon[] = data?.cart?.appliedCoupons ?? []
-  const couponMutationLoading = couponApplying || couponRemoving
-  return (
-    <ContentShell className="py-8 lg:py-12">
-      <CheckoutSteps currentStep="payment" showChangeShipping />
-      {submitError ? (
-        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
-          {submitError}
-        </div>
-      ) : null}
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px] lg:gap-12">
-        <div className="min-w-0 space-y-6">
-          <ExpressCheckout
-            title="Express Checkout"
-            subtitle="Starten Sie direkt mit Ihrer bevorzugten Zahlungsart."
-            gateways={paymentOptions?.gateways ?? []}
-            loading={paymentOptionsLoading}
-            error={paymentOptionsError}
-            context="payment"
-            providerLoading={providerLoading}
-            onActivateGateway={handleExpressActivation}
-            onRefresh={refreshPaymentOptions}
-          />
-          <PaymentMethods
-            options={paymentOptions?.gateways}
-            loading={paymentOptionsLoading}
-          />
-          <section className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6 shadow-[0_8px_24px_rgba(31,92,171,0.06)]">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-bold text-[#1F5CAB]">Gutscheincode</h2>
-                <p className="mt-1 text-sm text-[#1F5CAB]/75">
-                  Loesen Sie hier Ihren WooCommerce-Gutschein ein.
-                </p>
-              </div>
-              {couponMutationLoading ? (
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#1F5CAB]">
-                  Gutschein wird aktualisiert...
-                </span>
-              ) : null}
-            </div>
-            <form className="mt-5 flex flex-col gap-3 sm:flex-row" onSubmit={handleApplyCoupon}>
-              <input
-                type="text"
-                value={couponCode}
-                onChange={(event) => setCouponCode(event.target.value)}
-                placeholder="z. B. PLANENADLER10"
-                autoComplete="off"
-                className="min-w-0 flex-1 rounded-xl border border-[#B9D4F2] bg-white px-4 py-3 text-sm text-[#1F5CAB] outline-none transition placeholder:text-[#1F5CAB]/45 focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
-                disabled={couponMutationLoading}
-              />
-              <button
-                type="submit"
-                className="inline-flex items-center justify-center rounded-full bg-[#1F5CAB] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0F2B52] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={couponMutationLoading}
-              >
-                Gutschein anwenden
-              </button>
-            </form>
-            {couponError ? (
-              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
-                {couponError}
-              </div>
-            ) : null}
-            {couponFeedback ? (
-              <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-                {couponFeedback}
-              </div>
-            ) : null}
-            {appliedCoupons.length > 0 ? (
-              <div className="mt-5">
-                <p className="text-sm font-semibold text-[#1F5CAB]">Aktive Gutscheine</p>
-                <ul className="mt-3 space-y-3">
-                  {appliedCoupons.map((coupon) => (
-                    <li
-                      key={coupon.code}
-                      className="flex flex-col gap-3 rounded-xl border border-[#DBE9F9] bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div>
-                        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#1F5CAB]">
-                          {coupon.code}
-                        </p>
-                        {coupon.description ? (
-                          <p className="mt-1 text-sm text-[#1F5CAB]/75">{coupon.description}</p>
-                        ) : null}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void handleRemoveCoupon(coupon.code)
-                        }}
-                        className="inline-flex items-center justify-center rounded-full border border-[#B9D4F2] px-4 py-2 text-sm font-semibold text-[#1F5CAB] transition hover:border-[#1F5CAB] hover:bg-[#F7FAFF] disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={couponMutationLoading}
-                      >
-                        Entfernen
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </section>
-          {selectedPayment === PAYMENT_METHOD_IDS.CARD ? (
-            <CardPaymentForm
-              onContinue={() => {
-                void handleProviderRedirect('card')
-              }}
-              isSubmitting={providerLoading === PAYMENT_METHOD_IDS.CARD}
-              helperText={selectedGateway?.helperText}
-            />
-          ) : null}
-          {selectedPayment === PAYMENT_METHOD_IDS.PAYPAL ? (
-            <PayPalPanel
-              onContinue={() => {
-                void handleProviderRedirect('paypal')
-              }}
-              isSubmitting={providerLoading === PAYMENT_METHOD_IDS.PAYPAL}
-            />
-          ) : null}
-          {selectedPayment === PAYMENT_METHOD_IDS.KLARNA ? (
-            <KlarnaPanel
-              onContinue={() => {
-                void handleProviderRedirect('klarna')
-              }}
-              isSubmitting={providerLoading === PAYMENT_METHOD_IDS.KLARNA}
-            />
-          ) : null}
-          {selectedPayment === PAYMENT_METHOD_IDS.BANK ? (
-            <BankTransferPanel
-              onPlaceOrder={handlePlaceOrder}
-              isSubmitting={checkoutLoading}
-            />
-          ) : null}
-          {selectedPayment === PAYMENT_METHOD_IDS.WALLET ? (
-            <CardPaymentForm
-              title="Apple Pay / Google Pay"
-              introText="Wenn dein Browser oder Geraet Apple Pay oder Google Pay unterstuetzt, zeigt Stripe die passende Wallet-Option an."
-              buttonLabel="Mit Wallet fortfahren"
-              onContinue={() => {
-                void handleProviderRedirect('card')
-              }}
-              isSubmitting={providerLoading === PAYMENT_METHOD_IDS.CARD}
-              helperText={selectedGateway?.helperText}
-            />
-          ) : null}
-        </div>
-        <div className="lg:sticky lg:top-24 lg:self-start">
-          <CheckoutOrderSummary />
-        </div>
-      </div>
-    </ContentShell>
-  )
-}
-````
-
 ## File: src/features/checkout/lib/payment-gateways.ts
 ````typescript
 import type { PaymentMethodId } from '../types/checkout.types'
@@ -32382,6 +31900,566 @@ export function resolveCheckoutGateways(
       helperText: gateway.helperText?.(available, frontendReady),
     }
   })
+}
+````
+
+## File: src/features/checkout/components/PaymentPageContent.tsx
+````typescript
+'use client'
+import { useEffect, useState, startTransition, type FormEvent } from 'react'
+import { useRouter } from 'next/navigation'
+import { useQuery, useMutation } from '@apollo/client'
+import { useCartStore } from '@/shared/lib/cartStore'
+import { getFormattedCart, createCheckoutData } from '@/shared/lib/functions'
+import { GET_CART } from '@/features/cart/api/queries'
+import { APPLY_COUPON, CHECKOUT_MUTATION, REMOVE_COUPONS } from '@/shared/lib/GQL_MUTATIONS'
+import type { IAppliedCoupon } from '@/shared/types/graphql'
+import type { ICheckoutDataProps } from '@/shared/types/checkout'
+import type { CheckoutFormShipping } from '../types/checkout.types'
+import { useCheckoutStore } from '../store/checkout.store'
+import { hasActivePendingExternalPayment } from '../store/checkout.store'
+import { CheckoutSteps } from './CheckoutSteps'
+import { PaymentMethods } from './PaymentMethods'
+import { CardPaymentForm } from './CardPaymentForm'
+import { PayPalPanel } from './PayPalPanel'
+import { KlarnaPanel } from './KlarnaPanel'
+import { BankTransferPanel } from './BankTransferPanel'
+import { CheckoutOrderSummary } from './OrderSummary'
+import { ContentShell } from '@/shared/components/ContentShell.component'
+import { PAYMENT_METHOD_IDS } from '../types/checkout.types'
+import type { PaymentMethodId } from '../types/checkout.types'
+import { ExpressCheckout } from './ExpressCheckout'
+import { usePaymentOptions } from '../hooks/usePaymentOptions'
+import {
+  buildBankTransferCheckoutCandidates,
+  buildCardCheckoutCandidates,
+} from '../lib/payment-gateways'
+import { buildOrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
+import {
+  isWooCommerceOrderReceivedRedirect,
+  parseWooOrderReceivedUrl,
+} from '../lib/woo-order-received-redirect'
+const SHIPPING_PATH = '/checkout/shipping'
+const THANK_YOU_PATH = '/thank-you'
+function isPaidOrderStatus(status: string | null | undefined): boolean {
+  if (!status) return false
+  const normalized = status.trim().toLowerCase()
+  return normalized === 'processing' || normalized === 'completed'
+}
+interface CheckoutMutationResponse {
+  checkout?: {
+    result?: string | null
+    redirect?: string | null
+    order?: {
+      id?: string | null
+      databaseId?: string | number | null
+      orderNumber?: number | string | null
+      date?: string | null
+      status?: string | null
+    } | null
+  } | null
+}
+const PROVIDER_PAYMENT_METHOD_CANDIDATES: Record<'card' | 'paypal' | 'klarna', string[]> = {
+  card: ['woocommerce_payments', 'wcpay', 'stripe', 'stripe_cc', 'stripe_credit_card', 'credit_card'],
+  paypal: ['ppcp', 'ppcp-gateway', 'paypal'],
+  klarna: ['stripe_klarna', 'woocommerce_payments_klarna', 'klarna_payments', 'klarna'],
+}
+function toCheckoutDataProps(data: CheckoutFormShipping, paymentMethod: string): ICheckoutDataProps {
+  return {
+    firstName: data.firstName,
+    lastName: data.lastName,
+    email: data.email,
+    phone: data.phone,
+    address1: data.address1,
+    address2: data.address2 ?? '',
+    city: data.city,
+    postcode: data.postcode,
+    country: data.country,
+    state: data.state ?? '',
+    company: '',
+    paymentMethod,
+    shipToDifferentAddress: data.shipToDifferentAddress,
+    shippingFirstName: data.shippingFirstName,
+    shippingLastName: data.shippingLastName,
+    shippingAddress1: data.shippingAddress1,
+    shippingAddress2: data.shippingAddress2,
+    shippingPostcode: data.shippingPostcode,
+    shippingCity: data.shippingCity,
+    shippingCountry: data.shippingCountry,
+    shippingState: data.shippingState,
+  }
+}
+export function PaymentPageContent() {
+  const router = useRouter()
+  const { syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
+  const {
+    shippingData,
+    selectedPayment,
+    setSelectedPayment,
+    setOrderCompleted,
+    setLastCompletedOrder,
+    pendingExternalPayment,
+    setPendingExternalPayment,
+    clearPendingExternalPayment,
+  } = useCheckoutStore()
+  const { data, refetch } = useQuery(GET_CART, { notifyOnNetworkStatusChange: true })
+  const {
+    data: paymentOptions,
+    loading: paymentOptionsLoading,
+    error: paymentOptionsError,
+    refresh: refreshPaymentOptions,
+  } = usePaymentOptions()
+  useEffect(() => {
+    if (!data) return
+    const updatedCart = getFormattedCart(data)
+    if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
+      if (hasActivePendingExternalPayment(pendingExternalPayment)) return
+      clearWooCommerceSession()
+      return
+    }
+    if (updatedCart) syncWithWooCommerce(updatedCart)
+  }, [data, clearWooCommerceSession, pendingExternalPayment, syncWithWooCommerce])
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [couponCode, setCouponCode] = useState('')
+  const [couponFeedback, setCouponFeedback] = useState<string | null>(null)
+  const [couponError, setCouponError] = useState<string | null>(null)
+  const [guardPassed, setGuardPassed] = useState(false)
+  const [providerLoading, setProviderLoading] = useState<PaymentMethodId | null>(null)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const state = useCheckoutStore.getState()
+      const products = useCartStore.getState().cart?.products ?? []
+      if (!state.shippingData || products.length === 0) {
+        startTransition(() => router.replace(SHIPPING_PATH))
+      } else {
+        setGuardPassed(true)
+      }
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [router])
+  useEffect(() => {
+    if (!paymentOptions?.gateways?.length) return
+    const selectedGateway = paymentOptions.gateways.find((gateway) => gateway.id === selectedPayment)
+    if (selectedGateway?.available) return
+    const fallback = paymentOptions.gateways.find((gateway) => gateway.available && gateway.frontendReady)
+    if (fallback && fallback.id !== selectedPayment) {
+      setSelectedPayment(fallback.id)
+    }
+  }, [paymentOptions, selectedPayment, setSelectedPayment])
+  const [checkoutMutation, { loading: checkoutLoading }] = useMutation<CheckoutMutationResponse>(CHECKOUT_MUTATION)
+  const [applyCouponMutation, { loading: couponApplying }] = useMutation(APPLY_COUPON)
+  const [removeCouponsMutation, { loading: couponRemoving }] = useMutation(REMOVE_COUPONS)
+  const tryProviderCheckoutMutation = async (
+    paymentMethod: 'card' | 'paypal' | 'klarna',
+    formData: CheckoutFormShipping,
+  ): Promise<{
+    redirectUrl: string | null
+    checkout: CheckoutMutationResponse['checkout'] | null
+  }> => {
+    const methodCandidates = PROVIDER_PAYMENT_METHOD_CANDIDATES[paymentMethod]
+    for (const wcPaymentMethod of methodCandidates) {
+      try {
+        const orderProps = toCheckoutDataProps(formData, wcPaymentMethod)
+        const input = createCheckoutData(orderProps)
+        const { data: mutationData } = await checkoutMutation({ variables: { input } })
+        const checkout = mutationData?.checkout ?? null
+        const redirectUrl = checkout?.redirect ?? null
+        if (redirectUrl) {
+          return { redirectUrl, checkout }
+        }
+      } catch {
+        // Continue with next gateway candidate.
+      }
+    }
+    return { redirectUrl: null, checkout: null }
+  }
+  const finalizeSuccessfulOrder = (
+    checkout: CheckoutMutationResponse['checkout'] | null | undefined,
+    redirectUrl: string | null,
+  ) => {
+    if (!shippingData) return
+    const order = checkout?.order
+    const parsedFromWoo =
+      redirectUrl && isWooCommerceOrderReceivedRedirect(redirectUrl)
+        ? parseWooOrderReceivedUrl(redirectUrl)
+        : { orderId: null, orderKey: null }
+    const paymentLabel =
+      paymentOptions?.gateways?.find((g) => g.id === selectedPayment)?.label?.trim() ||
+      (selectedPayment === PAYMENT_METHOD_IDS.BANK ? 'Direkte Banküberweisung' : 'Onlinezahlung')
+    const cartSnapshot = useCartStore.getState().cart
+    const receipt =
+      cartSnapshot && cartSnapshot.products.length > 0
+        ? buildOrderReceiptSnapshot(cartSnapshot, shippingData, paymentLabel)
+        : null
+    const dbFromGraphql =
+      order?.databaseId !== undefined && order?.databaseId !== null ? String(order.databaseId) : null
+    setLastCompletedOrder({
+      orderNumber: order?.orderNumber ?? parsedFromWoo.orderId,
+      databaseId: dbFromGraphql ?? parsedFromWoo.orderId,
+      date: order?.date ?? null,
+      status: order?.status ?? null,
+      orderKey: parsedFromWoo.orderKey,
+      completedAt: Date.now(),
+      receipt,
+    })
+    setOrderCompleted(true)
+    clearPendingExternalPayment()
+    clearWooCommerceSession()
+    router.push(THANK_YOU_PATH)
+  }
+  const handlePlaceOrder = async () => {
+    if (!shippingData) return
+    setSubmitError(null)
+    const bankGateway = paymentOptions?.gateways?.find((gateway) => gateway.id === PAYMENT_METHOD_IDS.BANK)
+    const wcMethodCandidates = buildBankTransferCheckoutCandidates(bankGateway)
+    let lastErrorMessage = 'Bestellung konnte nicht abgeschlossen werden. Bitte erneut versuchen.'
+    for (const wcMethod of wcMethodCandidates) {
+      try {
+        const orderProps = toCheckoutDataProps(shippingData, wcMethod)
+        const input = createCheckoutData(orderProps)
+        const result = await checkoutMutation({ variables: { input } })
+        if (result.errors?.length) {
+          lastErrorMessage = result.errors.map((e) => e.message).filter(Boolean).join(' ') || lastErrorMessage
+          continue
+        }
+        const mutationData = result.data
+        const redirectUrl = mutationData?.checkout?.redirect ?? null
+        if (redirectUrl && !isWooCommerceOrderReceivedRedirect(redirectUrl)) {
+          window.location.assign(redirectUrl)
+          return
+        }
+        finalizeSuccessfulOrder(mutationData?.checkout, redirectUrl)
+        return
+      } catch (error) {
+        lastErrorMessage =
+          error instanceof Error && error.message.trim() ? error.message.trim() : lastErrorMessage
+      }
+    }
+    setSubmitError(lastErrorMessage)
+  }
+  const handleProviderRedirect = async (paymentMethod: 'card' | 'paypal' | 'klarna') => {
+    if (!shippingData) return
+    setSubmitError(null)
+    setProviderLoading(paymentMethod)
+    setSelectedPayment(paymentMethod)
+    try {
+      const { redirectUrl: directRedirectUrl, checkout: directCheckout } =
+        await tryProviderCheckoutMutation(paymentMethod, shippingData)
+      if (directRedirectUrl) {
+        if (isWooCommerceOrderReceivedRedirect(directRedirectUrl)) {
+          if (!isPaidOrderStatus(directCheckout?.order?.status)) {
+            const parsed = parseWooOrderReceivedUrl(directRedirectUrl)
+            setPendingExternalPayment({
+              provider: paymentMethod,
+              startedAt: Date.now(),
+              orderId: parsed.orderId,
+              orderKey: parsed.orderKey,
+              status: directCheckout?.order?.status ?? null,
+            })
+            setSubmitError(
+              'Die externe Zahlung wurde noch nicht abgeschlossen. Dein Warenkorb bleibt erhalten, damit du eine andere Zahlungsart waehlen oder spaeter fortsetzen kannst.'
+            )
+            return
+          }
+          finalizeSuccessfulOrder(directCheckout, directRedirectUrl)
+          return
+        }
+        setPendingExternalPayment({
+          provider: paymentMethod,
+          startedAt: Date.now(),
+          status: directCheckout?.order?.status ?? null,
+        })
+        window.location.assign(directRedirectUrl)
+        return
+      }
+      const gateway =
+        paymentMethod === PAYMENT_METHOD_IDS.CARD
+          ? paymentOptions?.gateways?.find((candidate) => candidate.id === PAYMENT_METHOD_IDS.CARD)
+          : undefined
+      const checkoutMethod =
+        paymentMethod === PAYMENT_METHOD_IDS.CARD
+          ? buildCardCheckoutCandidates(gateway)[0] ?? PAYMENT_METHOD_IDS.CARD
+          : paymentMethod
+      const orderProps = toCheckoutDataProps(shippingData, checkoutMethod)
+      const checkoutInput = createCheckoutData(orderProps)
+      const response = await fetch('/api/checkout/provider-redirect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: paymentMethod,
+          checkoutInput,
+        }),
+      })
+      const payload = (await response.json().catch(() => ({}))) as {
+        redirectUrl?: string
+        error?: string
+      }
+      const redirectUrl = payload.redirectUrl
+      if (!redirectUrl) {
+        setSubmitError(
+          payload.error ??
+            'Die Provider-Weiterleitung fehlt. Bitte pruefen Sie WooCommerce-Gateway, Session und Store API.'
+        )
+        return
+      }
+      setPendingExternalPayment({
+        provider: paymentMethod,
+        startedAt: Date.now(),
+      })
+      window.location.assign(redirectUrl)
+    } catch {
+      setSubmitError('Zahlung konnte nicht gestartet werden. Bitte erneut versuchen.')
+    } finally {
+      setProviderLoading(null)
+    }
+  }
+  const handleExpressActivation = (gatewayId: PaymentMethodId) => {
+    if (gatewayId === PAYMENT_METHOD_IDS.CARD) {
+      void handleProviderRedirect('card')
+      return
+    }
+    if (gatewayId === PAYMENT_METHOD_IDS.WALLET) {
+      void handleProviderRedirect('card')
+      return
+    }
+    if (gatewayId === PAYMENT_METHOD_IDS.PAYPAL) {
+      void handleProviderRedirect('paypal')
+      return
+    }
+    if (gatewayId === PAYMENT_METHOD_IDS.KLARNA) {
+      void handleProviderRedirect('klarna')
+      return
+    }
+    setSelectedPayment(gatewayId)
+  }
+  const syncCartFromLatestQuery = async () => {
+    const result = await refetch()
+    const updatedCart = result.data ? getFormattedCart(result.data) : undefined
+    if (!updatedCart && !result.data?.cart?.contents?.nodes?.length) {
+      clearWooCommerceSession()
+      return
+    }
+    if (updatedCart) syncWithWooCommerce(updatedCart)
+  }
+  const handleApplyCoupon = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const normalizedCode = couponCode.trim()
+    if (!normalizedCode) {
+      setCouponError('Bitte geben Sie einen Gutscheincode ein.')
+      setCouponFeedback(null)
+      return
+    }
+    setCouponError(null)
+    setCouponFeedback(null)
+    try {
+      await applyCouponMutation({
+        variables: {
+          input: {
+            clientMutationId: `apply-coupon-${Date.now()}`,
+            code: normalizedCode,
+          },
+        },
+      })
+      await syncCartFromLatestQuery()
+      setCouponFeedback(`Gutscheincode ${normalizedCode} wurde angewendet.`)
+      setCouponCode('')
+    } catch (error) {
+      const message = error instanceof Error && error.message.trim()
+        ? error.message.trim()
+        : 'Der Gutscheincode konnte nicht angewendet werden.'
+      setCouponError(message)
+    }
+  }
+  const handleRemoveCoupon = async (code: string) => {
+    setCouponError(null)
+    setCouponFeedback(null)
+    try {
+      await removeCouponsMutation({
+        variables: {
+          input: {
+            clientMutationId: `remove-coupon-${Date.now()}`,
+            codes: [code],
+          },
+        },
+      })
+      await syncCartFromLatestQuery()
+      setCouponFeedback(`Gutscheincode ${code} wurde entfernt.`)
+    } catch (error) {
+      const message = error instanceof Error && error.message.trim()
+        ? error.message.trim()
+        : 'Der Gutscheincode konnte nicht entfernt werden.'
+      setCouponError(message)
+    }
+  }
+  if (!guardPassed) {
+    return (
+      <ContentShell className="py-12">
+        <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
+          <p className="text-[#1F5CAB]/90">Lade...</p>
+        </div>
+      </ContentShell>
+    )
+  }
+  const selectedGateway = paymentOptions?.gateways.find((gateway) => gateway.id === selectedPayment)
+  const appliedCoupons: IAppliedCoupon[] = data?.cart?.appliedCoupons ?? []
+  const couponMutationLoading = couponApplying || couponRemoving
+  const hasPendingExternalPayment = hasActivePendingExternalPayment(pendingExternalPayment)
+  return (
+    <ContentShell className="py-8 lg:py-12">
+      <CheckoutSteps currentStep="payment" showChangeShipping />
+      {submitError ? (
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
+          {submitError}
+        </div>
+      ) : null}
+      {hasPendingExternalPayment ? (
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          Eine externe Zahlung wurde gestartet, aber noch nicht abgeschlossen. Deine Artikel bleiben im Checkout,
+          bis die Bestellung erfolgreich beendet wurde.
+        </div>
+      ) : null}
+      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px] lg:gap-12">
+        <div className="min-w-0 space-y-6">
+          <ExpressCheckout
+            title="Express Checkout"
+            subtitle="Starten Sie direkt mit Ihrer bevorzugten Zahlungsart."
+            gateways={paymentOptions?.gateways ?? []}
+            loading={paymentOptionsLoading}
+            error={paymentOptionsError}
+            context="payment"
+            providerLoading={providerLoading}
+            onActivateGateway={handleExpressActivation}
+            onRefresh={refreshPaymentOptions}
+          />
+          <PaymentMethods
+            options={paymentOptions?.gateways}
+            loading={paymentOptionsLoading}
+          />
+          <section className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6 shadow-[0_8px_24px_rgba(31,92,171,0.06)]">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-[#1F5CAB]">Gutscheincode</h2>
+                <p className="mt-1 text-sm text-[#1F5CAB]/75">
+                  Loesen Sie hier Ihren WooCommerce-Gutschein ein.
+                </p>
+              </div>
+              {couponMutationLoading ? (
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#1F5CAB]">
+                  Gutschein wird aktualisiert...
+                </span>
+              ) : null}
+            </div>
+            <form className="mt-5 flex flex-col gap-3 sm:flex-row" onSubmit={handleApplyCoupon}>
+              <input
+                type="text"
+                value={couponCode}
+                onChange={(event) => setCouponCode(event.target.value)}
+                placeholder="z. B. PLANENADLER10"
+                autoComplete="off"
+                className="min-w-0 flex-1 rounded-xl border border-[#B9D4F2] bg-white px-4 py-3 text-sm text-[#1F5CAB] outline-none transition placeholder:text-[#1F5CAB]/45 focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                disabled={couponMutationLoading}
+              />
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded-full bg-[#1F5CAB] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0F2B52] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={couponMutationLoading}
+              >
+                Gutschein anwenden
+              </button>
+            </form>
+            {couponError ? (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
+                {couponError}
+              </div>
+            ) : null}
+            {couponFeedback ? (
+              <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+                {couponFeedback}
+              </div>
+            ) : null}
+            {appliedCoupons.length > 0 ? (
+              <div className="mt-5">
+                <p className="text-sm font-semibold text-[#1F5CAB]">Aktive Gutscheine</p>
+                <ul className="mt-3 space-y-3">
+                  {appliedCoupons.map((coupon) => (
+                    <li
+                      key={coupon.code}
+                      className="flex flex-col gap-3 rounded-xl border border-[#DBE9F9] bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#1F5CAB]">
+                          {coupon.code}
+                        </p>
+                        {coupon.description ? (
+                          <p className="mt-1 text-sm text-[#1F5CAB]/75">{coupon.description}</p>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleRemoveCoupon(coupon.code)
+                        }}
+                        className="inline-flex items-center justify-center rounded-full border border-[#B9D4F2] px-4 py-2 text-sm font-semibold text-[#1F5CAB] transition hover:border-[#1F5CAB] hover:bg-[#F7FAFF] disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={couponMutationLoading}
+                      >
+                        Entfernen
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </section>
+          {selectedPayment === PAYMENT_METHOD_IDS.CARD ? (
+            <CardPaymentForm
+              onContinue={() => {
+                void handleProviderRedirect('card')
+              }}
+              isSubmitting={providerLoading === PAYMENT_METHOD_IDS.CARD}
+              helperText={selectedGateway?.helperText}
+            />
+          ) : null}
+          {selectedPayment === PAYMENT_METHOD_IDS.PAYPAL ? (
+            <PayPalPanel
+              onContinue={() => {
+                void handleProviderRedirect('paypal')
+              }}
+              isSubmitting={providerLoading === PAYMENT_METHOD_IDS.PAYPAL}
+            />
+          ) : null}
+          {selectedPayment === PAYMENT_METHOD_IDS.KLARNA ? (
+            <KlarnaPanel
+              onContinue={() => {
+                void handleProviderRedirect('klarna')
+              }}
+              isSubmitting={providerLoading === PAYMENT_METHOD_IDS.KLARNA}
+            />
+          ) : null}
+          {selectedPayment === PAYMENT_METHOD_IDS.BANK ? (
+            <BankTransferPanel
+              onPlaceOrder={handlePlaceOrder}
+              isSubmitting={checkoutLoading}
+            />
+          ) : null}
+          {selectedPayment === PAYMENT_METHOD_IDS.WALLET ? (
+            <CardPaymentForm
+              title="Apple Pay / Google Pay"
+              introText="Wenn dein Browser oder Geraet Apple Pay oder Google Pay unterstuetzt, zeigt Stripe die passende Wallet-Option an."
+              buttonLabel="Mit Wallet fortfahren"
+              onContinue={() => {
+                void handleProviderRedirect('card')
+              }}
+              isSubmitting={providerLoading === PAYMENT_METHOD_IDS.CARD}
+              helperText={selectedGateway?.helperText}
+            />
+          ) : null}
+        </div>
+        <div className="lg:sticky lg:top-24 lg:self-start">
+          <CheckoutOrderSummary />
+        </div>
+      </div>
+    </ContentShell>
+  )
 }
 ````
 
