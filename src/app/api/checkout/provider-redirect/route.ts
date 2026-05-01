@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac } from 'crypto'
 import { fetchCustomerAccount } from '@/features/auth/api/fetchCustomerAccount'
+import { readWooSessionTokenFromRequest } from '@/lib/woo-session-cookie'
 
 type Provider = 'card' | 'klarna' | 'paypal'
 
@@ -238,7 +239,8 @@ function isReplayDetected(response: Response, data: Record<string, unknown>): bo
 async function postCustomEndpoint(
   upstreamUrl: string,
   cookie: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  wooSessionToken?: string | null
 ): Promise<{ response: Response; data: Record<string, unknown> }> {
   let response: Response | null = null
   let data: Record<string, unknown> = {}
@@ -252,6 +254,9 @@ async function postCustomEndpoint(
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(cookie ? { cookie } : {}),
+    }
+    if (wooSessionToken) {
+      headers['woocommerce-session'] = `Session ${wooSessionToken}`
     }
 
     if (isPlanenadlerCustomEndpoint(upstreamUrl) && process.env.WC_PROVIDER_API_SECRET) {
@@ -408,6 +413,7 @@ export async function POST(request: NextRequest) {
   }
 
   const cookie = request.headers.get('cookie') ?? ''
+  const wooSessionToken = readWooSessionTokenFromRequest(request)
 
   try {
     if (isStoreApiCheckoutUrl(upstreamUrl)) {
@@ -442,7 +448,12 @@ export async function POST(request: NextRequest) {
     if (typeof body.cancelUrl === 'string' && body.cancelUrl.trim()) {
       upstreamPayload.cancelUrl = body.cancelUrl.trim()
     }
-    const { response: upstream, data } = await postCustomEndpoint(upstreamUrl, cookie, upstreamPayload)
+    const { response: upstream, data } = await postCustomEndpoint(
+      upstreamUrl,
+      cookie,
+      upstreamPayload,
+      wooSessionToken
+    )
 
     const location = upstream.headers.get('location')
     if (location && upstream.status >= 300 && upstream.status <= 399) {
