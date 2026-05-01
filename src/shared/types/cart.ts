@@ -14,6 +14,12 @@ export interface CartConfigurationEntry {
   value: string;
 }
 
+export interface CartRestoreInput {
+  productId: number;
+  quantity: number;
+  extraData?: string;
+}
+
 export interface CartTotals {
   subtotal: string;
   subtotalTax: string;
@@ -50,6 +56,7 @@ export interface CartProduct {
   configurationId?: string;
   configurationSummary: CartConfigurationEntry[];
   hasConfiguration: boolean;
+  restoreInput: CartRestoreInput;
 }
 
 export interface Cart {

@@ -291,6 +291,7 @@ export const getFormattedCart = (data: IFormattedCartProps) => {
 
   givenProducts.forEach((item) => {
     const givenProduct = item.product.node;
+    const extraEntries = Array.isArray(item.extraData) ? item.extraData : []
 
     const totalNumeric = parseCartPriceString(item.total)
     const subtotalNumeric = parseCartPriceString(item.subtotal)
@@ -340,6 +341,11 @@ export const getFormattedCart = (data: IFormattedCartProps) => {
       configurationId,
       configurationSummary,
       hasConfiguration,
+      restoreInput: {
+        productId: item.variation?.node?.databaseId ?? givenProduct.productId ?? givenProduct.databaseId,
+        quantity: item.quantity,
+        extraData: extraEntries.length > 0 ? JSON.stringify(Object.fromEntries(extraEntries.map((entry) => [entry.key, entry.value]))) : undefined,
+      },
     };
 
     totalProductsCount += item.quantity;
