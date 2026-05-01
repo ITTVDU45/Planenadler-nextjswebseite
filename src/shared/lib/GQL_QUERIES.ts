@@ -266,6 +266,13 @@ export const GET_CART = gql`
         }
       }
 
+      appliedCoupons {
+        code
+        discountAmount
+        discountTax
+        description
+      }
+
       subtotal
       subtotalTax
       shippingTax

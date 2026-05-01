@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState, startTransition } from 'react'
+import { useEffect, useState, startTransition, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation } from '@apollo/client'
 import { useCartStore } from '@/shared/lib/cartStore'
 import { getFormattedCart, createCheckoutData } from '@/shared/lib/functions'
 import { GET_CART } from '@/features/cart/api/queries'
-import { CHECKOUT_MUTATION } from '@/shared/lib/GQL_MUTATIONS'
+import { APPLY_COUPON, CHECKOUT_MUTATION, REMOVE_COUPONS } from '@/shared/lib/GQL_MUTATIONS'
+import type { IAppliedCoupon } from '@/shared/types/graphql'
 import type { ICheckoutDataProps } from '@/shared/types/checkout'
 import type { CheckoutFormShipping } from '../types/checkout.types'
 import { useCheckoutStore } from '../store/checkout.store'
@@ -87,7 +88,7 @@ export function PaymentPageContent() {
   const { shippingData, selectedPayment, setSelectedPayment, setOrderCompleted, setLastCompletedOrder } =
     useCheckoutStore()
 
-  const { data } = useQuery(GET_CART, { notifyOnNetworkStatusChange: true })
+  const { data, refetch } = useQuery(GET_CART, { notifyOnNetworkStatusChange: true })
   const {
     data: paymentOptions,
     loading: paymentOptionsLoading,
@@ -106,6 +107,9 @@ export function PaymentPageContent() {
   }, [data, clearWooCommerceSession, syncWithWooCommerce])
 
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [couponCode, setCouponCode] = useState('')
+  const [couponFeedback, setCouponFeedback] = useState<string | null>(null)
+  const [couponError, setCouponError] = useState<string | null>(null)
   const [guardPassed, setGuardPassed] = useState(false)
   const [providerLoading, setProviderLoading] = useState<PaymentMethodId | null>(null)
 
@@ -136,6 +140,8 @@ export function PaymentPageContent() {
   }, [paymentOptions, selectedPayment, setSelectedPayment])
 
   const [checkoutMutation, { loading: checkoutLoading }] = useMutation<CheckoutMutationResponse>(CHECKOUT_MUTATION)
+  const [applyCouponMutation, { loading: couponApplying }] = useMutation(APPLY_COUPON)
+  const [removeCouponsMutation, { loading: couponRemoving }] = useMutation(REMOVE_COUPONS)
 
   const tryProviderCheckoutMutation = async (
     paymentMethod: 'card' | 'paypal' | 'klarna',
@@ -317,6 +323,72 @@ export function PaymentPageContent() {
     setSelectedPayment(gatewayId)
   }
 
+  const syncCartFromLatestQuery = async () => {
+    const result = await refetch()
+    const updatedCart = result.data ? getFormattedCart(result.data) : undefined
+    if (!updatedCart && !result.data?.cart?.contents?.nodes?.length) {
+      clearWooCommerceSession()
+      return
+    }
+    if (updatedCart) syncWithWooCommerce(updatedCart)
+  }
+
+  const handleApplyCoupon = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const normalizedCode = couponCode.trim()
+    if (!normalizedCode) {
+      setCouponError('Bitte geben Sie einen Gutscheincode ein.')
+      setCouponFeedback(null)
+      return
+    }
+
+    setCouponError(null)
+    setCouponFeedback(null)
+
+    try {
+      await applyCouponMutation({
+        variables: {
+          input: {
+            clientMutationId: `apply-coupon-${Date.now()}`,
+            code: normalizedCode,
+          },
+        },
+      })
+      await syncCartFromLatestQuery()
+      setCouponFeedback(`Gutscheincode ${normalizedCode} wurde angewendet.`)
+      setCouponCode('')
+    } catch (error) {
+      const message = error instanceof Error && error.message.trim()
+        ? error.message.trim()
+        : 'Der Gutscheincode konnte nicht angewendet werden.'
+      setCouponError(message)
+    }
+  }
+
+  const handleRemoveCoupon = async (code: string) => {
+    setCouponError(null)
+    setCouponFeedback(null)
+
+    try {
+      await removeCouponsMutation({
+        variables: {
+          input: {
+            clientMutationId: `remove-coupon-${Date.now()}`,
+            codes: [code],
+          },
+        },
+      })
+      await syncCartFromLatestQuery()
+      setCouponFeedback(`Gutscheincode ${code} wurde entfernt.`)
+    } catch (error) {
+      const message = error instanceof Error && error.message.trim()
+        ? error.message.trim()
+        : 'Der Gutscheincode konnte nicht entfernt werden.'
+      setCouponError(message)
+    }
+  }
+
   if (!guardPassed) {
     return (
       <ContentShell className="py-12">
@@ -328,6 +400,8 @@ export function PaymentPageContent() {
   }
 
   const selectedGateway = paymentOptions?.gateways.find((gateway) => gateway.id === selectedPayment)
+  const appliedCoupons: IAppliedCoupon[] = data?.cart?.appliedCoupons ?? []
+  const couponMutationLoading = couponApplying || couponRemoving
 
   return (
     <ContentShell className="py-8 lg:py-12">
@@ -357,6 +431,85 @@ export function PaymentPageContent() {
             options={paymentOptions?.gateways}
             loading={paymentOptionsLoading}
           />
+
+          <section className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6 shadow-[0_8px_24px_rgba(31,92,171,0.06)]">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-[#1F5CAB]">Gutscheincode</h2>
+                <p className="mt-1 text-sm text-[#1F5CAB]/75">
+                  Loesen Sie hier Ihren WooCommerce-Gutschein ein.
+                </p>
+              </div>
+              {couponMutationLoading ? (
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#1F5CAB]">
+                  Gutschein wird aktualisiert...
+                </span>
+              ) : null}
+            </div>
+
+            <form className="mt-5 flex flex-col gap-3 sm:flex-row" onSubmit={handleApplyCoupon}>
+              <input
+                type="text"
+                value={couponCode}
+                onChange={(event) => setCouponCode(event.target.value)}
+                placeholder="z. B. PLANENADLER10"
+                autoComplete="off"
+                className="min-w-0 flex-1 rounded-xl border border-[#B9D4F2] bg-white px-4 py-3 text-sm text-[#1F5CAB] outline-none transition placeholder:text-[#1F5CAB]/45 focus:border-[#1F5CAB] focus:ring-2 focus:ring-[#1F5CAB]/15"
+                disabled={couponMutationLoading}
+              />
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded-full bg-[#1F5CAB] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0F2B52] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={couponMutationLoading}
+              >
+                Gutschein anwenden
+              </button>
+            </form>
+
+            {couponError ? (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
+                {couponError}
+              </div>
+            ) : null}
+            {couponFeedback ? (
+              <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+                {couponFeedback}
+              </div>
+            ) : null}
+
+            {appliedCoupons.length > 0 ? (
+              <div className="mt-5">
+                <p className="text-sm font-semibold text-[#1F5CAB]">Aktive Gutscheine</p>
+                <ul className="mt-3 space-y-3">
+                  {appliedCoupons.map((coupon) => (
+                    <li
+                      key={coupon.code}
+                      className="flex flex-col gap-3 rounded-xl border border-[#DBE9F9] bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[#1F5CAB]">
+                          {coupon.code}
+                        </p>
+                        {coupon.description ? (
+                          <p className="mt-1 text-sm text-[#1F5CAB]/75">{coupon.description}</p>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleRemoveCoupon(coupon.code)
+                        }}
+                        className="inline-flex items-center justify-center rounded-full border border-[#B9D4F2] px-4 py-2 text-sm font-semibold text-[#1F5CAB] transition hover:border-[#1F5CAB] hover:bg-[#F7FAFF] disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={couponMutationLoading}
+                      >
+                        Entfernen
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </section>
 
           {selectedPayment === PAYMENT_METHOD_IDS.CARD ? (
             <CardPaymentForm

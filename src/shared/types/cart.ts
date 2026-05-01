@@ -27,6 +27,13 @@ export interface CartTotals {
   discountTotal: string;
 }
 
+export interface CartAppliedCoupon {
+  code: string;
+  discountAmount?: string | null;
+  discountTax?: string | null;
+  description?: string | null;
+}
+
 export interface CartProduct {
   cartKey: string;
   name: string;
@@ -50,4 +57,5 @@ export interface Cart {
   totalProductsCount: number;
   totalProductsPrice: string;
   totals: CartTotals;
+  appliedCoupons: CartAppliedCoupon[];
 }

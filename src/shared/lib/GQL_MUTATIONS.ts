@@ -178,6 +178,23 @@ export const CHECKOUT_MUTATION = gql`
     }
   }
 `;
+
+export const APPLY_COUPON = gql`
+  mutation ApplyCoupon($input: ApplyCouponInput!) {
+    applyCoupon(input: $input) {
+      clientMutationId
+    }
+  }
+`;
+
+export const REMOVE_COUPONS = gql`
+  mutation RemoveCoupons($input: RemoveCouponsInput!) {
+    removeCoupons(input: $input) {
+      clientMutationId
+    }
+  }
+`;
+
 export const UPDATE_CART = gql`
   mutation ($input: UpdateItemQuantitiesInput!) {
     updateItemQuantities(input: $input) {

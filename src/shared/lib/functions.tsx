@@ -279,6 +279,12 @@ export const getFormattedCart = (data: IFormattedCartProps) => {
     totalProductsCount: 0,
     totalProductsPrice: data.cart.total,
     totals,
+    appliedCoupons: (data.cart.appliedCoupons ?? []).map((coupon) => ({
+      code: coupon.code,
+      discountAmount: coupon.discountAmount ?? null,
+      discountTax: coupon.discountTax ?? null,
+      description: coupon.description ?? null,
+    })),
   };
 
   let totalProductsCount = 0;

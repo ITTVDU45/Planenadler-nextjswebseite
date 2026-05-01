@@ -77,6 +77,13 @@ export interface ICartItemExtraDataEntry {
   value: string;
 }
 
+export interface IAppliedCoupon {
+  code: string;
+  discountAmount?: string | null;
+  discountTax?: string | null;
+  description?: string | null;
+}
+
 /**
  * A single cart item node from GET_CART query response.
  * Represents one line item in the WooCommerce cart.
@@ -119,6 +126,7 @@ export interface IUpdateCartMutationArgs {
 export interface IFormattedCartProps {
   cart: {
     contents: { nodes: ICartItemNode[] };
+    appliedCoupons?: IAppliedCoupon[] | null;
     subtotal: string;
     subtotalTax: string;
     shippingTax: string;

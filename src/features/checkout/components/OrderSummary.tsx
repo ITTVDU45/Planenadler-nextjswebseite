@@ -24,6 +24,7 @@ export function CheckoutOrderSummary() {
     discountTax: '0,00 €',
     discountTotal: '0,00 €',
   }
+  const appliedCoupons = cart?.appliedCoupons ?? []
 
   return (
     <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6 shadow-[0_8px_24px_rgba(31,92,171,0.06)]">
@@ -76,6 +77,14 @@ export function CheckoutOrderSummary() {
               <dt className="text-[#1F5CAB]/80">Zwischensumme</dt>
               <dd className="font-medium text-[#1F5CAB]">{decodePriceDisplay(totals.subtotal)}</dd>
             </div>
+            {parseCartPriceString(totals.discountTotal) > 0 ? (
+              <div className="flex justify-between">
+                <dt className="text-[#1F5CAB]/80">
+                  Rabatt{appliedCoupons.length > 0 ? ` (${appliedCoupons.map((coupon) => coupon.code).join(', ')})` : ''}
+                </dt>
+                <dd className="font-medium text-[#1F5CAB]">-{decodePriceDisplay(totals.discountTotal)}</dd>
+              </div>
+            ) : null}
             <div className="flex justify-between">
               <dt className="text-[#1F5CAB]/80">Versand</dt>
               <dd className="font-medium text-[#1F5CAB]">
