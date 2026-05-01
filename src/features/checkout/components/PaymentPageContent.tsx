@@ -337,12 +337,18 @@ export function PaymentPageContent() {
         paymentMethod === 'paypal' || paymentMethod === 'klarna'
           ? `${baseUrl}${CHECKOUT_PROVIDER_CALLBACK_PATH}?provider=${paymentMethod}&status=cancel`
           : undefined
+      const checkoutItems =
+        useCartStore
+          .getState()
+          .cart?.products.map((product) => product.restoreInput)
+          .filter((item) => item.productId > 0 && item.quantity > 0) ?? []
       const response = await fetch('/api/checkout/provider-redirect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: paymentMethod,
           checkoutInput,
+          checkoutItems,
           returnUrl,
           cancelUrl,
         }),

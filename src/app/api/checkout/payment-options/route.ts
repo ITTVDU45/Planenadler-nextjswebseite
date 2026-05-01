@@ -35,13 +35,15 @@ function resolveWordPressOrigin(): string {
 }
 
 function resolveStoreApiCheckoutUrl(): string {
-  const explicit =
-    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim() ??
-    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim() ??
-    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim() ??
-    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim() ??
-    ''
-  if (explicit) return explicit
+  const candidates = [
+    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim(),
+    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
+    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
+  ].filter((value): value is string => Boolean(value))
+
+  for (const candidate of candidates) {
+    if (isStoreApiCheckoutUrl(candidate)) return candidate
+  }
 
   const origin = resolveWordPressOrigin()
   return origin ? `${origin}/wp-json/wc/store/v1/checkout` : ''
