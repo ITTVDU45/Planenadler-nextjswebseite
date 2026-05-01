@@ -12,6 +12,7 @@ import LoadingSpinner from '@/shared/components/LoadingSpinner.component';
 import { GET_CART } from '@/features/cart/api/queries';
 import { CHECKOUT_MUTATION } from '@/shared/lib/GQL_MUTATIONS';
 import { useCartStore } from '@/shared/lib/cartStore';
+import { useCheckoutStore, hasActivePendingExternalPayment } from '@/features/checkout/store/checkout.store';
 
 // Utils
 import { getFormattedCart, createCheckoutData } from '@/shared/lib/functions';
@@ -34,6 +35,7 @@ const CheckoutForm = () => {
     if (!data) return;
     const updatedCart = getFormattedCart(data);
     if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
+      if (hasActivePendingExternalPayment(useCheckoutStore.getState().pendingExternalPayment)) return;
       clearWooCommerceSession();
       return;
     }

@@ -26,6 +26,7 @@ import { GET_CART } from '../../api/queries'
 import { UPDATE_CART } from '@/shared/lib/GQL_MUTATIONS'
 import { OrderSummary } from '../OrderSummary/OrderSummary'
 import { useCheckoutStore } from '@/features/checkout/store/checkout.store'
+import { hasActivePendingExternalPayment } from '@/features/checkout/store/checkout.store'
 import { type PaymentMethodId } from '@/features/checkout/types/checkout.types'
 import { usePaymentOptions } from '@/features/checkout/hooks/usePaymentOptions'
 import { ExpressCheckout } from '@/features/checkout/components/ExpressCheckout'
@@ -55,6 +56,7 @@ export function CartPageContent() {
     if (!data) return
     const updatedCart = getFormattedCart(data)
     if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
+      if (hasActivePendingExternalPayment(useCheckoutStore.getState().pendingExternalPayment)) return
       clearWooCommerceSession()
       return
     }

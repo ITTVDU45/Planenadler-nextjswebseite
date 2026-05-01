@@ -11,6 +11,7 @@ import type { IAppliedCoupon } from '@/shared/types/graphql'
 import type { ICheckoutDataProps } from '@/shared/types/checkout'
 import type { CheckoutFormShipping } from '../types/checkout.types'
 import { useCheckoutStore } from '../store/checkout.store'
+import { hasActivePendingExternalPayment } from '../store/checkout.store'
 import { CheckoutSteps } from './CheckoutSteps'
 import { PaymentMethods } from './PaymentMethods'
 import { CardPaymentForm } from './CardPaymentForm'
@@ -35,6 +36,12 @@ import {
 
 const SHIPPING_PATH = '/checkout/shipping'
 const THANK_YOU_PATH = '/thank-you'
+
+function isPaidOrderStatus(status: string | null | undefined): boolean {
+  if (!status) return false
+  const normalized = status.trim().toLowerCase()
+  return normalized === 'processing' || normalized === 'completed'
+}
 
 interface CheckoutMutationResponse {
   checkout?: {
@@ -85,8 +92,16 @@ function toCheckoutDataProps(data: CheckoutFormShipping, paymentMethod: string):
 export function PaymentPageContent() {
   const router = useRouter()
   const { syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
-  const { shippingData, selectedPayment, setSelectedPayment, setOrderCompleted, setLastCompletedOrder } =
-    useCheckoutStore()
+  const {
+    shippingData,
+    selectedPayment,
+    setSelectedPayment,
+    setOrderCompleted,
+    setLastCompletedOrder,
+    pendingExternalPayment,
+    setPendingExternalPayment,
+    clearPendingExternalPayment,
+  } = useCheckoutStore()
 
   const { data, refetch } = useQuery(GET_CART, { notifyOnNetworkStatusChange: true })
   const {
@@ -100,11 +115,12 @@ export function PaymentPageContent() {
     if (!data) return
     const updatedCart = getFormattedCart(data)
     if (!updatedCart && !data?.cart?.contents?.nodes?.length) {
+      if (hasActivePendingExternalPayment(pendingExternalPayment)) return
       clearWooCommerceSession()
       return
     }
     if (updatedCart) syncWithWooCommerce(updatedCart)
-  }, [data, clearWooCommerceSession, syncWithWooCommerce])
+  }, [data, clearWooCommerceSession, pendingExternalPayment, syncWithWooCommerce])
 
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [couponCode, setCouponCode] = useState('')
@@ -205,6 +221,7 @@ export function PaymentPageContent() {
       receipt,
     })
     setOrderCompleted(true)
+    clearPendingExternalPayment()
     clearWooCommerceSession()
     router.push(THANK_YOU_PATH)
   }
@@ -255,9 +272,28 @@ export function PaymentPageContent() {
         await tryProviderCheckoutMutation(paymentMethod, shippingData)
       if (directRedirectUrl) {
         if (isWooCommerceOrderReceivedRedirect(directRedirectUrl)) {
+          if (!isPaidOrderStatus(directCheckout?.order?.status)) {
+            const parsed = parseWooOrderReceivedUrl(directRedirectUrl)
+            setPendingExternalPayment({
+              provider: paymentMethod,
+              startedAt: Date.now(),
+              orderId: parsed.orderId,
+              orderKey: parsed.orderKey,
+              status: directCheckout?.order?.status ?? null,
+            })
+            setSubmitError(
+              'Die externe Zahlung wurde noch nicht abgeschlossen. Dein Warenkorb bleibt erhalten, damit du eine andere Zahlungsart waehlen oder spaeter fortsetzen kannst.'
+            )
+            return
+          }
           finalizeSuccessfulOrder(directCheckout, directRedirectUrl)
           return
         }
+        setPendingExternalPayment({
+          provider: paymentMethod,
+          startedAt: Date.now(),
+          status: directCheckout?.order?.status ?? null,
+        })
         window.location.assign(directRedirectUrl)
         return
       }
@@ -294,6 +330,10 @@ export function PaymentPageContent() {
         return
       }
 
+      setPendingExternalPayment({
+        provider: paymentMethod,
+        startedAt: Date.now(),
+      })
       window.location.assign(redirectUrl)
     } catch {
       setSubmitError('Zahlung konnte nicht gestartet werden. Bitte erneut versuchen.')
@@ -402,6 +442,7 @@ export function PaymentPageContent() {
   const selectedGateway = paymentOptions?.gateways.find((gateway) => gateway.id === selectedPayment)
   const appliedCoupons: IAppliedCoupon[] = data?.cart?.appliedCoupons ?? []
   const couponMutationLoading = couponApplying || couponRemoving
+  const hasPendingExternalPayment = hasActivePendingExternalPayment(pendingExternalPayment)
 
   return (
     <ContentShell className="py-8 lg:py-12">
@@ -410,6 +451,12 @@ export function PaymentPageContent() {
       {submitError ? (
         <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
           {submitError}
+        </div>
+      ) : null}
+      {hasPendingExternalPayment ? (
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          Eine externe Zahlung wurde gestartet, aber noch nicht abgeschlossen. Deine Artikel bleiben im Checkout,
+          bis die Bestellung erfolgreich beendet wurde.
         </div>
       ) : null}
 
