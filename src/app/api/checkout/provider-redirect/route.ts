@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac } from 'crypto'
+import { fetchCustomerAccount } from '@/features/auth/api/fetchCustomerAccount'
 
 type Provider = 'card' | 'klarna' | 'paypal'
 
 interface BodyShape {
   provider?: Provider
   checkoutInput?: unknown
+  returnUrl?: string
+  cancelUrl?: string
 }
 
 interface CheckoutInputShape {
@@ -37,6 +40,10 @@ interface CheckoutInputShape {
 }
 
 type JsonPayload = Record<string, unknown>
+
+function resolveGraphqlUrl(): string {
+  return process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim() || ''
+}
 
 function resolveWordPressOrigin(): string {
   const candidates = [
@@ -204,6 +211,23 @@ function extractErrorMessage(data: Record<string, unknown>, fallback: string): s
 
 async function parseJsonSafe(response: Response): Promise<Record<string, unknown>> {
   return (await response.json().catch(() => ({}))) as Record<string, unknown>
+}
+
+async function resolveSignedCustomerContext(request: NextRequest): Promise<{
+  customerEmail?: string
+  customerId?: number
+}> {
+  const graphqlUrl = resolveGraphqlUrl()
+  const cookie = request.headers.get('cookie') ?? ''
+  if (!graphqlUrl || !cookie) return {}
+
+  const customer = await fetchCustomerAccount(graphqlUrl, cookie)
+  if (!customer?.databaseId || !customer.email) return {}
+
+  return {
+    customerEmail: customer.email,
+    customerId: customer.databaseId,
+  }
 }
 
 function isReplayDetected(response: Response, data: Record<string, unknown>): boolean {
@@ -399,6 +423,24 @@ export async function POST(request: NextRequest) {
     const upstreamPayload: Record<string, unknown> = {
       provider,
       checkoutInput: body.checkoutInput ?? null,
+    }
+    const checkoutInput = (body.checkoutInput ?? {}) as CheckoutInputShape
+    const signedCustomerContext = await resolveSignedCustomerContext(request)
+    const billingEmail = checkoutInput.billing?.email?.trim()
+    if (billingEmail) {
+      upstreamPayload.customerEmail = billingEmail
+    }
+    if (signedCustomerContext.customerEmail) {
+      upstreamPayload.loggedInCustomerEmail = signedCustomerContext.customerEmail
+    }
+    if (signedCustomerContext.customerId) {
+      upstreamPayload.customerId = signedCustomerContext.customerId
+    }
+    if (typeof body.returnUrl === 'string' && body.returnUrl.trim()) {
+      upstreamPayload.returnUrl = body.returnUrl.trim()
+    }
+    if (typeof body.cancelUrl === 'string' && body.cancelUrl.trim()) {
+      upstreamPayload.cancelUrl = body.cancelUrl.trim()
     }
     const { response: upstream, data } = await postCustomEndpoint(upstreamUrl, cookie, upstreamPayload)
 

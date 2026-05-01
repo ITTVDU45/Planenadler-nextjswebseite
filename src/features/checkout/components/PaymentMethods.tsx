@@ -93,6 +93,8 @@ export function PaymentMethods({ hideWallet = false, options, loading = false }:
     }
   }, [resolvedOptions, selectedPayment, setSelectedPayment])
 
+  const isOptionSelectable = (option: CheckoutGatewayOption) => option.available && option.frontendReady
+
   return (
     <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6">
       <h2 className="mb-4 text-lg font-bold text-[#1F5CAB]">Zahlungsart</h2>
@@ -106,7 +108,7 @@ export function PaymentMethods({ hideWallet = false, options, loading = false }:
           <li key={option.id}>
             <label
               className={`flex items-start gap-3 rounded-xl border-2 p-4 transition ${
-                option.available ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'
+                isOptionSelectable(option) ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'
               } ${
                 selectedPayment === option.id
                   ? 'border-[#1F5CAB] bg-white shadow-sm'
@@ -118,8 +120,9 @@ export function PaymentMethods({ hideWallet = false, options, loading = false }:
                 name="paymentMethod"
                 value={option.id}
                 checked={selectedPayment === option.id}
-                disabled={!option.available}
+                disabled={!isOptionSelectable(option)}
                 onChange={() => {
+                  if (!isOptionSelectable(option)) return
                   setSelectedPayment(option.id)
 
                   const items = mapCartToTrackingItems(cart)

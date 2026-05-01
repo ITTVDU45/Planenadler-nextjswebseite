@@ -47,6 +47,20 @@ function resolveStoreApiCheckoutUrl(): string {
   return origin ? `${origin}/wp-json/wc/store/v1/checkout` : ''
 }
 
+function isStoreApiCheckoutUrl(url: string): boolean {
+  return /\/wp-json\/wc\/store\/v1\/checkout\/?$/.test(url)
+}
+
+function hasCustomProviderCheckoutEndpoint(): boolean {
+  const candidates = [
+    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
+    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
+    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
+  ].filter((value): value is string => Boolean(value))
+
+  return candidates.some((value) => !isStoreApiCheckoutUrl(value))
+}
+
 function toStoreApiCartUrl(checkoutUrl: string): string {
   return checkoutUrl.replace(/\/checkout\/?$/i, '/cart')
 }
@@ -124,8 +138,9 @@ export async function GET(request: NextRequest) {
       : []
     const cartItems = Array.isArray(cartData.items) ? cartData.items : []
     const hasStripeKey = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim())
+    const hasCustomProviderCheckout = hasCustomProviderCheckoutEndpoint()
 
-    let gateways = resolveCheckoutGateways(availablePaymentMethods, hasStripeKey)
+    let gateways = resolveCheckoutGateways(availablePaymentMethods, hasStripeKey, hasCustomProviderCheckout)
 
     const explicitBankId = process.env.WC_CHECKOUT_BANK_PAYMENT_METHOD_ID?.trim()
     if (explicitBankId) {

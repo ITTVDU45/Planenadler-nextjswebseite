@@ -92,6 +92,14 @@ export function OrderThankYouContent() {
           return Number.isFinite(v) && v >= 0 ? v : undefined
         })()
       : undefined
+  const shippingValue =
+    receipt != null
+      ? parseCartPriceString(receipt.totals.shippingTotal) + parseCartPriceString(receipt.totals.feeTotal)
+      : 0
+  const showFreeShippingAmount =
+    receipt != null &&
+    shippingValue === 0 &&
+    parseCartPriceString(receipt.totals.discountTotal) > 0
 
   useEffect(() => {
     if (!hydrated) return
@@ -263,9 +271,9 @@ export function OrderThankYouContent() {
               <div className="flex justify-between">
                 <dt className="text-[#1F5CAB]/80">Versand</dt>
                 <dd className="font-medium text-[#1F5CAB]">
-                  {parseCartPriceString(receipt.totals.shippingTotal) +
-                    parseCartPriceString(receipt.totals.feeTotal) ===
-                  0
+                  {showFreeShippingAmount
+                    ? '0,00 €'
+                    : shippingValue === 0
                     ? 'Preis auf Anfrage'
                     : decodePriceDisplay(getEffectiveShippingTotal(receipt.totals))}
                 </dd>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState, startTransition, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation } from '@apollo/client'
 import { useCartStore } from '@/shared/lib/cartStore'
 import { getFormattedCart, createCheckoutData } from '@/shared/lib/functions'
@@ -36,6 +36,7 @@ import {
 
 const SHIPPING_PATH = '/checkout/shipping'
 const THANK_YOU_PATH = '/thank-you'
+const CHECKOUT_PROVIDER_CALLBACK_PATH = '/checkout/provider-callback'
 
 function isPaidOrderStatus(status: string | null | undefined): boolean {
   if (!status) return false
@@ -91,6 +92,7 @@ function toCheckoutDataProps(data: CheckoutFormShipping, paymentMethod: string):
 
 export function PaymentPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { syncWithWooCommerce, clearWooCommerceSession } = useCartStore()
   const {
     shippingData,
@@ -156,6 +158,21 @@ export function PaymentPageContent() {
       setSelectedPayment(fallback.id)
     }
   }, [paymentOptions, selectedPayment, setSelectedPayment])
+
+  useEffect(() => {
+    if (!searchParams) return
+    const provider = searchParams.get('provider')
+    const status = searchParams.get('status')
+
+    if (provider !== 'paypal' && provider !== 'klarna' && provider !== 'card') return
+    if (status === 'cancel') {
+      setSubmitError('Die externe Zahlung wurde abgebrochen. Deine Artikel sind weiterhin im Checkout und du kannst eine andere Zahlungsart waehlen.')
+      return
+    }
+    if (status === 'success') {
+      setCouponFeedback('Die Rueckkehr vom Zahlungsanbieter war erfolgreich. Wir pruefen jetzt den Zahlungsstatus deiner Bestellung.')
+    }
+  }, [searchParams])
 
   const [checkoutMutation, { loading: checkoutLoading }] = useMutation<CheckoutMutationResponse>(CHECKOUT_MUTATION)
   const [applyCouponMutation, { loading: couponApplying }] = useMutation(APPLY_COUPON)
@@ -311,12 +328,23 @@ export function PaymentPageContent() {
           : paymentMethod
       const orderProps = toCheckoutDataProps(shippingData, checkoutMethod)
       const checkoutInput = createCheckoutData(orderProps)
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+      const returnUrl =
+        paymentMethod === 'paypal' || paymentMethod === 'klarna'
+          ? `${baseUrl}${CHECKOUT_PROVIDER_CALLBACK_PATH}?provider=${paymentMethod}&status=success`
+          : undefined
+      const cancelUrl =
+        paymentMethod === 'paypal' || paymentMethod === 'klarna'
+          ? `${baseUrl}${CHECKOUT_PROVIDER_CALLBACK_PATH}?provider=${paymentMethod}&status=cancel`
+          : undefined
       const response = await fetch('/api/checkout/provider-redirect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: paymentMethod,
           checkoutInput,
+          returnUrl,
+          cancelUrl,
         }),
       })
 

@@ -79,7 +79,10 @@ function getFirstMatch(availableMethodIds: string[], aliases: string[]): string 
   return undefined
 }
 
-export function getGatewayDefinitions(hasStripePublishableKey: boolean): GatewayDefinition[] {
+export function getGatewayDefinitions(
+  hasStripePublishableKey: boolean,
+  hasCustomProviderCheckout: boolean
+): GatewayDefinition[] {
   return [
     {
       id: 'paypal',
@@ -87,7 +90,14 @@ export function getGatewayDefinitions(hasStripePublishableKey: boolean): Gateway
       description: 'Direkt zu PayPal weiterleiten',
       aliases: PAYPAL_ALIASES,
       action: 'redirect',
-      frontendReady: () => true,
+      frontendReady: () => hasCustomProviderCheckout,
+      helperText: (available, frontendReady) => {
+        if (!available) return undefined
+        if (!frontendReady) {
+          return 'PayPal ist im Backend verfuegbar, benoetigt im Headless-Checkout aber einen WordPress-Provider-Endpoint mit returnUrl/cancelUrl.'
+        }
+        return undefined
+      },
     },
     {
       id: 'klarna',
@@ -95,7 +105,14 @@ export function getGatewayDefinitions(hasStripePublishableKey: boolean): Gateway
       description: 'Direkt zu Klarna weiterleiten',
       aliases: KLARNA_ALIASES,
       action: 'redirect',
-      frontendReady: () => true,
+      frontendReady: () => hasCustomProviderCheckout,
+      helperText: (available, frontendReady) => {
+        if (!available) return undefined
+        if (!frontendReady) {
+          return 'Klarna ist im Backend verfuegbar, benoetigt im Headless-Checkout aber einen WordPress-Provider-Endpoint mit returnUrl/cancelUrl.'
+        }
+        return undefined
+      },
     },
     {
       id: 'card',
@@ -164,9 +181,10 @@ export function buildCardCheckoutCandidates(gateway: CheckoutGatewayOption | und
 
 export function resolveCheckoutGateways(
   availableMethodIds: string[],
-  hasStripePublishableKey: boolean
+  hasStripePublishableKey: boolean,
+  hasCustomProviderCheckout: boolean
 ): CheckoutGatewayOption[] {
-  return getGatewayDefinitions(hasStripePublishableKey).map((gateway) => {
+  return getGatewayDefinitions(hasStripePublishableKey, hasCustomProviderCheckout).map((gateway) => {
     const available = hasAlias(availableMethodIds, gateway.aliases)
     const frontendReady = available && gateway.frontendReady(availableMethodIds)
     return {
