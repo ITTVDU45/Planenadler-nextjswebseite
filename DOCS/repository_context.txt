@@ -19466,6 +19466,74 @@ reference](https://developers.google.com/analytics/devguides/collection/ga4/refe
     });
 ````
 
+## File: src/app/(shop)/product/[slug]/components/ProductGallery.tsx
+````typescript
+'use client'
+import { useMemo, useState } from 'react'
+import Image from 'next/image'
+import { cn } from '@/lib/utils'
+import type { ProductImage } from './types'
+interface ProductGalleryProps {
+  mainImage: ProductImage
+  images: ProductImage[]
+  className?: string
+}
+export default function ProductGallery({ mainImage, images, className }: ProductGalleryProps) {
+  const items = useMemo(() => {
+    const all = [mainImage, ...images]
+    const seen = new Map<string, ProductImage>()
+    all.forEach((item) => {
+      if (item.src && !seen.has(item.src)) {
+        seen.set(item.src, item)
+      }
+    })
+    return Array.from(seen.values())
+  }, [images, mainImage])
+  const [activeSrc, setActiveSrc] = useState(items[0]?.src ?? mainImage.src)
+  const activeItem = items.find((item) => item.src === activeSrc) ?? items[0] ?? mainImage
+  return (
+    <div className={cn('space-y-4', className)}>
+      <div className="relative aspect-[5/4] w-full overflow-hidden rounded-2xl bg-[#F7FAFE]">
+        <Image
+          src={activeItem.src}
+          alt={activeItem.alt}
+          fill
+          priority
+          sizes="(max-width: 768px) 100vw, 45vw"
+          className="object-contain p-5"
+        />
+      </div>
+      <div className="grid grid-cols-5 gap-2 sm:grid-cols-6 lg:grid-cols-5">
+        {items.map((item, index) => {
+          const isActive = item.src === activeItem.src
+          return (
+            <button
+              key={`${item.src}-${index}`}
+              type="button"
+              onClick={() => setActiveSrc(item.src)}
+              className={cn(
+                'relative aspect-square overflow-hidden rounded-xl border bg-white transition',
+                isActive ? 'border-[#1F5CAB] shadow-[0_6px_16px_rgba(15,43,82,0.12)]' : 'border-[#E5ECF8] hover:border-[#BCD3EE]',
+              )}
+              aria-label={`Bild ${index + 1} anzeigen`}
+              aria-current={isActive ? 'true' : 'false'}
+            >
+              <Image
+                src={item.src}
+                alt={item.alt}
+                fill
+                sizes="80px"
+                className="object-contain p-1"
+              />
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+````
+
 ## File: src/app/(shop)/product/[slug]/components/ProductHero.tsx
 ````typescript
 'use client'
@@ -24989,65 +25057,6 @@ body > div,
 }
 ````
 
-## File: src/shared/types/cart.ts
-````typescript
-/**
- * Cart-specific types for Zustand store and cart operations.
- * These represent the client-side cart state shape.
- */
-export interface CartProductImage {
-  sourceUrl?: string;
-  srcSet?: string;
-  title: string;
-}
-export interface CartConfigurationEntry {
-  label: string;
-  value: string;
-}
-export interface CartTotals {
-  subtotal: string;
-  subtotalTax: string;
-  shippingTax: string;
-  shippingTotal: string;
-  total: string;
-  totalTax: string;
-  feeTax: string;
-  feeTotal: string;
-  discountTax: string;
-  discountTotal: string;
-}
-export interface CartAppliedCoupon {
-  code: string;
-  discountAmount?: string | null;
-  discountTax?: string | null;
-  description?: string | null;
-}
-export interface CartProduct {
-  cartKey: string;
-  name: string;
-  qty: number;
-  price: number;
-  unitPriceDisplay: string;
-  totalPrice: string;
-  subtotalDisplay: string;
-  totalDisplay: string;
-  image: CartProductImage;
-  productId: number;
-  slug?: string;
-  variant?: string;
-  configurationId?: string;
-  configurationSummary: CartConfigurationEntry[];
-  hasConfiguration: boolean;
-}
-export interface Cart {
-  products: CartProduct[];
-  totalProductsCount: number;
-  totalProductsPrice: string;
-  totals: CartTotals;
-  appliedCoupons: CartAppliedCoupon[];
-}
-````
-
 ## File: src/shared/types/graphql.ts
 ````typescript
 /**
@@ -28315,6 +28324,71 @@ export const UPDATE_CART = gql`
 `;
 ````
 
+## File: src/shared/types/cart.ts
+````typescript
+/**
+ * Cart-specific types for Zustand store and cart operations.
+ * These represent the client-side cart state shape.
+ */
+export interface CartProductImage {
+  sourceUrl?: string;
+  srcSet?: string;
+  title: string;
+}
+export interface CartConfigurationEntry {
+  label: string;
+  value: string;
+}
+export interface CartRestoreInput {
+  productId: number;
+  quantity: number;
+  extraData?: string;
+}
+export interface CartTotals {
+  subtotal: string;
+  subtotalTax: string;
+  shippingTax: string;
+  shippingTotal: string;
+  total: string;
+  totalTax: string;
+  feeTax: string;
+  feeTotal: string;
+  discountTax: string;
+  discountTotal: string;
+}
+export interface CartAppliedCoupon {
+  code: string;
+  discountAmount?: string | null;
+  discountTax?: string | null;
+  description?: string | null;
+}
+export interface CartProduct {
+  cartKey: string;
+  name: string;
+  qty: number;
+  price: number;
+  unitPriceDisplay: string;
+  totalPrice: string;
+  subtotalDisplay: string;
+  totalDisplay: string;
+  image: CartProductImage;
+  productId: number;
+  slug?: string;
+  variant?: string;
+  configurationId?: string;
+  configurationSummary: CartConfigurationEntry[];
+  hasConfiguration: boolean;
+  restoreInput: CartRestoreInput;
+}
+export interface Cart {
+  products: CartProduct[];
+  totalProductsCount: number;
+  totalProductsPrice: string;
+  totals: CartTotals;
+  appliedCoupons: CartAppliedCoupon[];
+}
+````
+
 ## File: src/app/(shop)/product/[slug]/components/ProductTabs.tsx
 ````typescript
 'use client'
@@ -29640,423 +29714,6 @@ const Stickynav = () => {
 export default Stickynav;
 ````
 
-## File: src/shared/lib/functions.tsx
-````typescript
-/*eslint complexity: ["error", 20]*/
-import { v4 as uuidv4 } from 'uuid';
-import { ChangeEvent } from 'react';
-import type { CartProduct, Cart, CartConfigurationEntry, CartTotals } from '@/shared/types/cart';
-import type { ICheckoutDataProps } from '@/shared/types/checkout';
-import type {
-  ICartItemNode,
-  IUpdateCartMutationArgs,
-  IFormattedCartProps,
-} from '@/shared/types/graphql';
-const CONFIGURATION_SUMMARY_KEY = 'planenadler_configuration_summary'
-const CONFIGURATION_ID_KEY = 'planenadler_configuration_id'
-const CONFIGURATION_LABELS: Record<string, string> = {
-  fabric: 'Material',
-  colors: 'Farbe',
-  width: 'Laenge A',
-  height_right: 'Hoehe rechts B',
-  height_left: 'Hoehe links C',
-  trailer_width: 'Anhaengerbreite A',
-  trailer_length: 'Anhaengerlaenge B',
-  trailer_height: 'Planenhoehe C',
-  rectangular_length: 'Laenge A',
-  rectangular_width: 'Breite B',
-  rectangular_height: 'Hoehe C',
-  side_a: 'Seite A',
-  side_b: 'Seite B',
-  side_c: 'Seite C',
-  side_f: 'Seite F',
-  side_h: 'Hoehe H',
-  has_top_edge: 'Obere Seite',
-  has_edge_left_0: 'Linke Seite',
-  has_edge_right_0: 'Rechte Seite',
-  has_edge_bottom_0: 'Untere Seite',
-  eyelet_edge: 'Oesen',
-  closureType: 'Verschlussart',
-  front_clouser: 'Frontverschluss',
-  back_clouser: 'Rueckverschluss',
-  window_width: 'Fensterbreite',
-  window_height: 'Fensterhoehe',
-  door_width: 'Tuerbreite',
-  door_height: 'Tuerhoehe',
-  door_offset_left: 'Tuerabstand links',
-}
-// Re-export types that other files import from here
-export type { ICartItemNode } from '@/shared/types/graphql';
-export type { ICheckoutDataProps } from '@/shared/types/checkout';
-export type { IUpdateCartItem } from '@/shared/types/graphql';
-export type { IUpdateCartInput } from '@/shared/types/graphql';
-export type { IUpdateCartVariables } from '@/shared/types/graphql';
-export type { IUpdateCartMutationArgs } from '@/shared/types/graphql';
-// Keep backward-compatible alias for IProductRootObject → ICartItemNode
-export type IProductRootObject = ICartItemNode;
-export type IUpdateCartRootObject = IUpdateCartMutationArgs;
-type TUpdatedItems = { key: string; quantity: number }[];
-/** Graues SVG-Platzhalterbild (kein Netzwerk), für next/image nutzbar */
-export const PLACEHOLDER_IMAGE_DATA_URL =
-  'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZTVlN2ViIi8+PC9zdmc+';
-/**
- * Preis-String für Anzeige normalisieren: HTML-Entitäten wie &nbsp; durch echte Zeichen ersetzen.
- */
-export const decodePriceDisplay = (price: string | undefined | null): string => {
-  if (price == null || typeof price !== 'string') return '';
-  return price
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&euro;/gi, '€')
-    .replace(/&#8364;/gi, '€')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
-    .trim();
-};
-/**
- * Add empty character after currency symbol
- * @param {string} price The price string that we input
- * @param {string} symbol Currency symbol to add empty character/padding after
- */
-export const paddedPrice = (price: string, symbol: string) =>
-  price.split(symbol).join(`${symbol} `);
-/**
- * Shorten inputted string (usually product description) to a maximum of length
- * @param {string} input The string that we input
- * @param {number} length The length that we want to shorten the text to
- */
-export const trimmedStringToLength = (input: string, length: number) => {
-  if (input.length > length) {
-    const subStr = input.substring(0, length);
-    return `${subStr}...`;
-  }
-  return input;
-};
-/**
- * Filter variant price. Changes "kr198.00 - kr299.00" to kr299.00 or kr198 depending on the side variable
- * @param {String} side Which side of the string to return (which side of the "-" symbol)
- * @param {String} price The inputted price that we need to convert
- */
-export const filteredVariantPrice = (price: string, side: string) => {
-  if ('right' === side) {
-    return price.substring(price.length, price.indexOf('-')).replace('-', '');
-  }
-  return price.substring(0, price.indexOf('-')).replace('-', '');
-};
-/**
- * Erreichbare Produktbild-URL für next/image.
- * - Relative URLs werden mit der WordPress-Basis-URL ergänzt.
- * - Absolute URLs mit nicht erreichbarem Host (z. B. Docker-Name "wordpress")
- *   werden auf die konfigurierte GraphQL-Basis umgeschrieben, damit der Browser
- *   die Bilder laden kann.
- */
-export const getAbsoluteImageUrl = (url: string | undefined | null): string => {
-  if (!url || typeof url !== 'string') return '';
-  const base = process.env.NEXT_PUBLIC_GRAPHQL_URL ?? '';
-  const origin = base.replace(/\/graphql\/?$/i, '');
-  // Relativ → absolute URL mit WordPress-Origin
-  if (!/^https?:\/\//i.test(url)) {
-    return origin ? `${origin}${url.startsWith('/') ? url : `/${url}`}` : url;
-  }
-  // Absolute URL: Host prüfen. localhost/127.0.0.1 sind vom Browser erreichbar.
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.toLowerCase();
-    if (host === 'localhost' || host === '127.0.0.1') return url;
-    // Anderer Host (z. B. "wordpress" in Docker) → Origin ersetzen
-    if (origin) {
-      return `${origin}${parsed.pathname}${parsed.search}`;
-    }
-  } catch {
-    // Ungültige URL
-  }
-  return url;
-};
-/**
- * Parst WooCommerce-Preisstring (z. B. "19,99 €" oder "0,00 €") zu einer Zahl.
- * Unterstützt deutsches Format (Komma als Dezimaltrenner) und Punkt.
- */
-export function parseCartPriceString(priceStr: string | undefined | null): number {
-  if (priceStr == null || typeof priceStr !== 'string') return 0
-  const trimmed = priceStr.trim().replace(/\s+/g, '')
-  // Nur Ziffern, Komma, Punkt, Minus behalten
-  const cleaned = trimmed.replace(/[^0-9.,-]/g, '')
-  if (!cleaned) return 0
-  // Deutsches Format: 1.234,56 → 1234.56
-  const hasComma = cleaned.includes(',')
-  const normalized = hasComma
-    ? cleaned.replace(/\./g, '').replace(',', '.')
-    : cleaned
-  const value = Number.parseFloat(normalized)
-  return Number.isFinite(value) ? value : 0
-}
-export function formatCartPriceValue(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return 'Preis auf Anfrage'
-  }
-  return new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: 'EUR',
-  }).format(value)
-}
-export function getEffectiveShippingTotal(totals: CartTotals): string {
-  const shipping = parseCartPriceString(totals.shippingTotal)
-  const shippingTax = parseCartPriceString(totals.shippingTax)
-  const fee = parseCartPriceString(totals.feeTotal)
-  const feeTax = parseCartPriceString(totals.feeTax)
-  return formatCartPriceValue(shipping + shippingTax + fee + feeTax)
-}
-function decodeConfigurationSummary(
-  item: ICartItemNode,
-): { summary: CartConfigurationEntry[]; configurationId?: string; hasConfiguration: boolean } {
-  const extraEntries = Array.isArray(item.extraData) ? item.extraData : []
-  const configurationId = extraEntries.find((entry) => entry.key === CONFIGURATION_ID_KEY)?.value
-  const summaryEntry = extraEntries.find((entry) => entry.key === CONFIGURATION_SUMMARY_KEY)?.value
-  if (summaryEntry) {
-    try {
-      const parsed = JSON.parse(summaryEntry) as Array<{ label?: unknown; value?: unknown }>
-      if (Array.isArray(parsed)) {
-        const summary = parsed
-          .map((entry) => ({
-            label: typeof entry?.label === 'string' ? entry.label.trim() : '',
-            value: typeof entry?.value === 'string' ? entry.value.trim() : '',
-          }))
-          .filter((entry) => entry.label.length > 0 && entry.value.length > 0)
-        return {
-          summary,
-          configurationId,
-          hasConfiguration: summary.length > 0,
-        }
-      }
-    } catch {
-      /* ignore malformed summary */
-    }
-  }
-  const fallbackSummary = extraEntries
-    .filter((entry) => {
-      if (!entry?.key || !entry?.value) return false
-      if (entry.key in CONFIGURATION_LABELS) return true
-      return (
-        entry.key.startsWith('Extra_') ||
-        entry.key.startsWith('Door_Extra_') ||
-        entry.key.startsWith('Zubeh') ||
-        entry.key === 'planenadler_sketch_file_name'
-      )
-    })
-    .map((entry) => {
-      if (entry.key === 'planenadler_sketch_file_name') {
-        return { label: 'Skizze', value: entry.value }
-      }
-      if (entry.key.startsWith('Extra_')) {
-        return { label: 'Extras', value: entry.value }
-      }
-      if (entry.key.startsWith('Door_Extra_')) {
-        return { label: 'Tuer-Extras', value: entry.value }
-      }
-      if (entry.key.startsWith('Zubeh')) {
-        return { label: 'Zubehoer', value: entry.value }
-      }
-      return { label: CONFIGURATION_LABELS[entry.key] ?? entry.key, value: entry.value }
-    })
-  return {
-    summary: fallbackSummary,
-    configurationId,
-    hasConfiguration: fallbackSummary.length > 0,
-  }
-}
-/**
- * Returns cart data in the required format.
- * @param {IFormattedCartProps} data Cart data from GraphQL
- */
-export const getFormattedCart = (data: IFormattedCartProps) => {
-  if (!data?.cart?.contents?.nodes?.length) {
-    return;
-  }
-  const givenProducts = data.cart.contents.nodes;
-  const totals: CartTotals = {
-    subtotal: data.cart.subtotal,
-    subtotalTax: data.cart.subtotalTax,
-    shippingTax: data.cart.shippingTax,
-    shippingTotal: data.cart.shippingTotal,
-    total: data.cart.total,
-    totalTax: data.cart.totalTax,
-    feeTax: data.cart.feeTax,
-    feeTotal: data.cart.feeTotal,
-    discountTax: data.cart.discountTax,
-    discountTotal: data.cart.discountTotal,
-  }
-  const formattedCart: Cart = {
-    products: [],
-    totalProductsCount: 0,
-    totalProductsPrice: data.cart.total,
-    totals,
-    appliedCoupons: (data.cart.appliedCoupons ?? []).map((coupon) => ({
-      code: coupon.code,
-      discountAmount: coupon.discountAmount ?? null,
-      discountTax: coupon.discountTax ?? null,
-      description: coupon.description ?? null,
-    })),
-  };
-  let totalProductsCount = 0;
-  givenProducts.forEach((item) => {
-    const givenProduct = item.product.node;
-    const totalNumeric = parseCartPriceString(item.total)
-    const subtotalNumeric = parseCartPriceString(item.subtotal)
-    let totalValue = totalNumeric > 0 ? totalNumeric : subtotalNumeric
-    if (totalValue <= 0 && givenProduct.price) {
-      totalValue = parseCartPriceString(givenProduct.price) * item.quantity
-    }
-    const unitPrice = item.quantity > 0 ? totalValue / item.quantity : 0
-    const {
-      summary: configurationSummary,
-      configurationId,
-      hasConfiguration,
-    } = decodeConfigurationSummary(item)
-    const variantAttributes = item.variation?.node.attributes?.nodes ?? []
-    const variant = variantAttributes.length > 0
-      ? variantAttributes.map((a) => a.value).filter(Boolean).join(' / ')
-      : undefined
-    const product: CartProduct = {
-      productId: givenProduct.productId ?? givenProduct.databaseId,
-      cartKey: item.key,
-      name: givenProduct.name,
-      qty: item.quantity,
-      price: unitPrice,
-      unitPriceDisplay: formatCartPriceValue(unitPrice),
-      totalPrice: item.total,
-      subtotalDisplay: item.subtotal,
-      totalDisplay: item.total,
-      image: givenProduct.image?.sourceUrl
-        ? {
-            sourceUrl: givenProduct.image.sourceUrl,
-            srcSet: givenProduct.image.srcSet,
-            title: givenProduct.image.title,
-          }
-        : {
-            sourceUrl:
-              process.env.NEXT_PUBLIC_PLACEHOLDER_SMALL_IMAGE_URL ||
-              PLACEHOLDER_IMAGE_DATA_URL,
-            srcSet:
-              process.env.NEXT_PUBLIC_PLACEHOLDER_SMALL_IMAGE_URL ||
-              PLACEHOLDER_IMAGE_DATA_URL,
-            title: givenProduct.name,
-          },
-      slug: givenProduct.slug,
-      variant,
-      configurationId,
-      configurationSummary,
-      hasConfiguration,
-    };
-    totalProductsCount += item.quantity;
-    formattedCart.products.push(product);
-  });
-  formattedCart.totalProductsCount = totalProductsCount;
-  return formattedCart;
-};
-export const createCheckoutData = (order: ICheckoutDataProps) => {
-  const shipToDifferentAddress = Boolean(order.shipToDifferentAddress);
-  return {
-    clientMutationId: uuidv4(),
-    billing: {
-      firstName: order.firstName,
-      lastName: order.lastName,
-      address1: order.address1,
-      address2: order.address2 ?? '',
-      city: order.city,
-      country: order.country,
-      state: order.state ?? '',
-      postcode: order.postcode,
-      email: order.email,
-      phone: order.phone,
-      company: order.company ?? '',
-    },
-    shipping: shipToDifferentAddress
-      ? {
-          firstName: order.shippingFirstName ?? order.firstName,
-          lastName: order.shippingLastName ?? order.lastName,
-          address1: order.shippingAddress1 ?? order.address1,
-          address2: order.shippingAddress2 ?? '',
-          city: order.shippingCity ?? order.city,
-          country: order.shippingCountry ?? order.country,
-          state: order.shippingState ?? '',
-          postcode: order.shippingPostcode ?? order.postcode,
-          email: order.email,
-          phone: order.phone,
-          company: '',
-        }
-      : {
-          firstName: order.firstName,
-          lastName: order.lastName,
-          address1: order.address1,
-          address2: order.address2 ?? '',
-          city: order.city,
-          country: order.country,
-          state: order.state ?? '',
-          postcode: order.postcode,
-          email: order.email,
-          phone: order.phone,
-          company: order.company ?? '',
-        },
-    shipToDifferentAddress,
-    paymentMethod: order.paymentMethod,
-    isPaid: false,
-    transactionId: uuidv4(),
-  };
-};
-/**
- * Get the updated items in the below format required for mutation input.
- *
- * Creates an array in above format with the newQty (updated Qty ).
- *
- */
-export const getUpdatedItems = (
-  products: ICartItemNode[],
-  newQty: number,
-  cartKey: string,
-) => {
-  const updatedItems: TUpdatedItems = products.map((cartItem) => ({
-    key: cartItem.key,
-    quantity: cartItem.key === cartKey ? newQty : cartItem.quantity,
-  }));
-  return updatedItems;
-};
-/*
- * When user changes the quantity, update the cart in localStorage
- * Also update the cart in the global Context
- */
-export const handleQuantityChange = (
-  event: ChangeEvent<HTMLInputElement>,
-  cartKey: string,
-  cart: ICartItemNode[],
-  updateCart: (variables: IUpdateCartMutationArgs) => void,
-  updateCartProcessing: boolean,
-) => {
-  if (typeof window !== 'undefined') {
-    event.stopPropagation();
-    // Return if the previous update cart mutation request is still processing
-    if (updateCartProcessing || !cart) {
-      return;
-    }
-    // If the user tries to delete the count of product, set that to 1 by default ( This will not allow him to reduce it less than zero )
-    const newQty = event.target.value ? parseInt(event.target.value, 10) : 1;
-    if (cart.length) {
-      const updatedItems = getUpdatedItems(cart, newQty, cartKey);
-      updateCart({
-        variables: {
-          input: {
-            clientMutationId: uuidv4(),
-            items: updatedItems,
-          },
-        },
-      });
-    }
-  }
-};
-````
-
 ## File: src/app/api/checkout/payment-options/route.ts
 ````typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -30348,6 +30005,429 @@ export function TopBar() {
 }
 ````
 
+## File: src/shared/lib/functions.tsx
+````typescript
+/*eslint complexity: ["error", 20]*/
+import { v4 as uuidv4 } from 'uuid';
+import { ChangeEvent } from 'react';
+import type { CartProduct, Cart, CartConfigurationEntry, CartTotals } from '@/shared/types/cart';
+import type { ICheckoutDataProps } from '@/shared/types/checkout';
+import type {
+  ICartItemNode,
+  IUpdateCartMutationArgs,
+  IFormattedCartProps,
+} from '@/shared/types/graphql';
+const CONFIGURATION_SUMMARY_KEY = 'planenadler_configuration_summary'
+const CONFIGURATION_ID_KEY = 'planenadler_configuration_id'
+const CONFIGURATION_LABELS: Record<string, string> = {
+  fabric: 'Material',
+  colors: 'Farbe',
+  width: 'Laenge A',
+  height_right: 'Hoehe rechts B',
+  height_left: 'Hoehe links C',
+  trailer_width: 'Anhaengerbreite A',
+  trailer_length: 'Anhaengerlaenge B',
+  trailer_height: 'Planenhoehe C',
+  rectangular_length: 'Laenge A',
+  rectangular_width: 'Breite B',
+  rectangular_height: 'Hoehe C',
+  side_a: 'Seite A',
+  side_b: 'Seite B',
+  side_c: 'Seite C',
+  side_f: 'Seite F',
+  side_h: 'Hoehe H',
+  has_top_edge: 'Obere Seite',
+  has_edge_left_0: 'Linke Seite',
+  has_edge_right_0: 'Rechte Seite',
+  has_edge_bottom_0: 'Untere Seite',
+  eyelet_edge: 'Oesen',
+  closureType: 'Verschlussart',
+  front_clouser: 'Frontverschluss',
+  back_clouser: 'Rueckverschluss',
+  window_width: 'Fensterbreite',
+  window_height: 'Fensterhoehe',
+  door_width: 'Tuerbreite',
+  door_height: 'Tuerhoehe',
+  door_offset_left: 'Tuerabstand links',
+}
+// Re-export types that other files import from here
+export type { ICartItemNode } from '@/shared/types/graphql';
+export type { ICheckoutDataProps } from '@/shared/types/checkout';
+export type { IUpdateCartItem } from '@/shared/types/graphql';
+export type { IUpdateCartInput } from '@/shared/types/graphql';
+export type { IUpdateCartVariables } from '@/shared/types/graphql';
+export type { IUpdateCartMutationArgs } from '@/shared/types/graphql';
+// Keep backward-compatible alias for IProductRootObject → ICartItemNode
+export type IProductRootObject = ICartItemNode;
+export type IUpdateCartRootObject = IUpdateCartMutationArgs;
+type TUpdatedItems = { key: string; quantity: number }[];
+/** Graues SVG-Platzhalterbild (kein Netzwerk), für next/image nutzbar */
+export const PLACEHOLDER_IMAGE_DATA_URL =
+  'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZTVlN2ViIi8+PC9zdmc+';
+/**
+ * Preis-String für Anzeige normalisieren: HTML-Entitäten wie &nbsp; durch echte Zeichen ersetzen.
+ */
+export const decodePriceDisplay = (price: string | undefined | null): string => {
+  if (price == null || typeof price !== 'string') return '';
+  return price
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&euro;/gi, '€')
+    .replace(/&#8364;/gi, '€')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .trim();
+};
+/**
+ * Add empty character after currency symbol
+ * @param {string} price The price string that we input
+ * @param {string} symbol Currency symbol to add empty character/padding after
+ */
+export const paddedPrice = (price: string, symbol: string) =>
+  price.split(symbol).join(`${symbol} `);
+/**
+ * Shorten inputted string (usually product description) to a maximum of length
+ * @param {string} input The string that we input
+ * @param {number} length The length that we want to shorten the text to
+ */
+export const trimmedStringToLength = (input: string, length: number) => {
+  if (input.length > length) {
+    const subStr = input.substring(0, length);
+    return `${subStr}...`;
+  }
+  return input;
+};
+/**
+ * Filter variant price. Changes "kr198.00 - kr299.00" to kr299.00 or kr198 depending on the side variable
+ * @param {String} side Which side of the string to return (which side of the "-" symbol)
+ * @param {String} price The inputted price that we need to convert
+ */
+export const filteredVariantPrice = (price: string, side: string) => {
+  if ('right' === side) {
+    return price.substring(price.length, price.indexOf('-')).replace('-', '');
+  }
+  return price.substring(0, price.indexOf('-')).replace('-', '');
+};
+/**
+ * Erreichbare Produktbild-URL für next/image.
+ * - Relative URLs werden mit der WordPress-Basis-URL ergänzt.
+ * - Absolute URLs mit nicht erreichbarem Host (z. B. Docker-Name "wordpress")
+ *   werden auf die konfigurierte GraphQL-Basis umgeschrieben, damit der Browser
+ *   die Bilder laden kann.
+ */
+export const getAbsoluteImageUrl = (url: string | undefined | null): string => {
+  if (!url || typeof url !== 'string') return '';
+  const base = process.env.NEXT_PUBLIC_GRAPHQL_URL ?? '';
+  const origin = base.replace(/\/graphql\/?$/i, '');
+  // Relativ → absolute URL mit WordPress-Origin
+  if (!/^https?:\/\//i.test(url)) {
+    return origin ? `${origin}${url.startsWith('/') ? url : `/${url}`}` : url;
+  }
+  // Absolute URL: Host prüfen. localhost/127.0.0.1 sind vom Browser erreichbar.
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1') return url;
+    // Anderer Host (z. B. "wordpress" in Docker) → Origin ersetzen
+    if (origin) {
+      return `${origin}${parsed.pathname}${parsed.search}`;
+    }
+  } catch {
+    // Ungültige URL
+  }
+  return url;
+};
+/**
+ * Parst WooCommerce-Preisstring (z. B. "19,99 €" oder "0,00 €") zu einer Zahl.
+ * Unterstützt deutsches Format (Komma als Dezimaltrenner) und Punkt.
+ */
+export function parseCartPriceString(priceStr: string | undefined | null): number {
+  if (priceStr == null || typeof priceStr !== 'string') return 0
+  const trimmed = priceStr.trim().replace(/\s+/g, '')
+  // Nur Ziffern, Komma, Punkt, Minus behalten
+  const cleaned = trimmed.replace(/[^0-9.,-]/g, '')
+  if (!cleaned) return 0
+  // Deutsches Format: 1.234,56 → 1234.56
+  const hasComma = cleaned.includes(',')
+  const normalized = hasComma
+    ? cleaned.replace(/\./g, '').replace(',', '.')
+    : cleaned
+  const value = Number.parseFloat(normalized)
+  return Number.isFinite(value) ? value : 0
+}
+export function formatCartPriceValue(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 'Preis auf Anfrage'
+  }
+  return new Intl.NumberFormat('de-DE', {
+    style: 'currency',
+    currency: 'EUR',
+  }).format(value)
+}
+export function getEffectiveShippingTotal(totals: CartTotals): string {
+  const shipping = parseCartPriceString(totals.shippingTotal)
+  const shippingTax = parseCartPriceString(totals.shippingTax)
+  const fee = parseCartPriceString(totals.feeTotal)
+  const feeTax = parseCartPriceString(totals.feeTax)
+  return formatCartPriceValue(shipping + shippingTax + fee + feeTax)
+}
+function decodeConfigurationSummary(
+  item: ICartItemNode,
+): { summary: CartConfigurationEntry[]; configurationId?: string; hasConfiguration: boolean } {
+  const extraEntries = Array.isArray(item.extraData) ? item.extraData : []
+  const configurationId = extraEntries.find((entry) => entry.key === CONFIGURATION_ID_KEY)?.value
+  const summaryEntry = extraEntries.find((entry) => entry.key === CONFIGURATION_SUMMARY_KEY)?.value
+  if (summaryEntry) {
+    try {
+      const parsed = JSON.parse(summaryEntry) as Array<{ label?: unknown; value?: unknown }>
+      if (Array.isArray(parsed)) {
+        const summary = parsed
+          .map((entry) => ({
+            label: typeof entry?.label === 'string' ? entry.label.trim() : '',
+            value: typeof entry?.value === 'string' ? entry.value.trim() : '',
+          }))
+          .filter((entry) => entry.label.length > 0 && entry.value.length > 0)
+        return {
+          summary,
+          configurationId,
+          hasConfiguration: summary.length > 0,
+        }
+      }
+    } catch {
+      /* ignore malformed summary */
+    }
+  }
+  const fallbackSummary = extraEntries
+    .filter((entry) => {
+      if (!entry?.key || !entry?.value) return false
+      if (entry.key in CONFIGURATION_LABELS) return true
+      return (
+        entry.key.startsWith('Extra_') ||
+        entry.key.startsWith('Door_Extra_') ||
+        entry.key.startsWith('Zubeh') ||
+        entry.key === 'planenadler_sketch_file_name'
+      )
+    })
+    .map((entry) => {
+      if (entry.key === 'planenadler_sketch_file_name') {
+        return { label: 'Skizze', value: entry.value }
+      }
+      if (entry.key.startsWith('Extra_')) {
+        return { label: 'Extras', value: entry.value }
+      }
+      if (entry.key.startsWith('Door_Extra_')) {
+        return { label: 'Tuer-Extras', value: entry.value }
+      }
+      if (entry.key.startsWith('Zubeh')) {
+        return { label: 'Zubehoer', value: entry.value }
+      }
+      return { label: CONFIGURATION_LABELS[entry.key] ?? entry.key, value: entry.value }
+    })
+  return {
+    summary: fallbackSummary,
+    configurationId,
+    hasConfiguration: fallbackSummary.length > 0,
+  }
+}
+/**
+ * Returns cart data in the required format.
+ * @param {IFormattedCartProps} data Cart data from GraphQL
+ */
+export const getFormattedCart = (data: IFormattedCartProps) => {
+  if (!data?.cart?.contents?.nodes?.length) {
+    return;
+  }
+  const givenProducts = data.cart.contents.nodes;
+  const totals: CartTotals = {
+    subtotal: data.cart.subtotal,
+    subtotalTax: data.cart.subtotalTax,
+    shippingTax: data.cart.shippingTax,
+    shippingTotal: data.cart.shippingTotal,
+    total: data.cart.total,
+    totalTax: data.cart.totalTax,
+    feeTax: data.cart.feeTax,
+    feeTotal: data.cart.feeTotal,
+    discountTax: data.cart.discountTax,
+    discountTotal: data.cart.discountTotal,
+  }
+  const formattedCart: Cart = {
+    products: [],
+    totalProductsCount: 0,
+    totalProductsPrice: data.cart.total,
+    totals,
+    appliedCoupons: (data.cart.appliedCoupons ?? []).map((coupon) => ({
+      code: coupon.code,
+      discountAmount: coupon.discountAmount ?? null,
+      discountTax: coupon.discountTax ?? null,
+      description: coupon.description ?? null,
+    })),
+  };
+  let totalProductsCount = 0;
+  givenProducts.forEach((item) => {
+    const givenProduct = item.product.node;
+    const extraEntries = Array.isArray(item.extraData) ? item.extraData : []
+    const totalNumeric = parseCartPriceString(item.total)
+    const subtotalNumeric = parseCartPriceString(item.subtotal)
+    let totalValue = totalNumeric > 0 ? totalNumeric : subtotalNumeric
+    if (totalValue <= 0 && givenProduct.price) {
+      totalValue = parseCartPriceString(givenProduct.price) * item.quantity
+    }
+    const unitPrice = item.quantity > 0 ? totalValue / item.quantity : 0
+    const {
+      summary: configurationSummary,
+      configurationId,
+      hasConfiguration,
+    } = decodeConfigurationSummary(item)
+    const variantAttributes = item.variation?.node.attributes?.nodes ?? []
+    const variant = variantAttributes.length > 0
+      ? variantAttributes.map((a) => a.value).filter(Boolean).join(' / ')
+      : undefined
+    const product: CartProduct = {
+      productId: givenProduct.productId ?? givenProduct.databaseId,
+      cartKey: item.key,
+      name: givenProduct.name,
+      qty: item.quantity,
+      price: unitPrice,
+      unitPriceDisplay: formatCartPriceValue(unitPrice),
+      totalPrice: item.total,
+      subtotalDisplay: item.subtotal,
+      totalDisplay: item.total,
+      image: givenProduct.image?.sourceUrl
+        ? {
+            sourceUrl: givenProduct.image.sourceUrl,
+            srcSet: givenProduct.image.srcSet,
+            title: givenProduct.image.title,
+          }
+        : {
+            sourceUrl:
+              process.env.NEXT_PUBLIC_PLACEHOLDER_SMALL_IMAGE_URL ||
+              PLACEHOLDER_IMAGE_DATA_URL,
+            srcSet:
+              process.env.NEXT_PUBLIC_PLACEHOLDER_SMALL_IMAGE_URL ||
+              PLACEHOLDER_IMAGE_DATA_URL,
+            title: givenProduct.name,
+          },
+      slug: givenProduct.slug,
+      variant,
+      configurationId,
+      configurationSummary,
+      hasConfiguration,
+      restoreInput: {
+        productId: item.variation?.node?.databaseId ?? givenProduct.productId ?? givenProduct.databaseId,
+        quantity: item.quantity,
+        extraData: extraEntries.length > 0 ? JSON.stringify(Object.fromEntries(extraEntries.map((entry) => [entry.key, entry.value]))) : undefined,
+      },
+    };
+    totalProductsCount += item.quantity;
+    formattedCart.products.push(product);
+  });
+  formattedCart.totalProductsCount = totalProductsCount;
+  return formattedCart;
+};
+export const createCheckoutData = (order: ICheckoutDataProps) => {
+  const shipToDifferentAddress = Boolean(order.shipToDifferentAddress);
+  return {
+    clientMutationId: uuidv4(),
+    billing: {
+      firstName: order.firstName,
+      lastName: order.lastName,
+      address1: order.address1,
+      address2: order.address2 ?? '',
+      city: order.city,
+      country: order.country,
+      state: order.state ?? '',
+      postcode: order.postcode,
+      email: order.email,
+      phone: order.phone,
+      company: order.company ?? '',
+    },
+    shipping: shipToDifferentAddress
+      ? {
+          firstName: order.shippingFirstName ?? order.firstName,
+          lastName: order.shippingLastName ?? order.lastName,
+          address1: order.shippingAddress1 ?? order.address1,
+          address2: order.shippingAddress2 ?? '',
+          city: order.shippingCity ?? order.city,
+          country: order.shippingCountry ?? order.country,
+          state: order.shippingState ?? '',
+          postcode: order.shippingPostcode ?? order.postcode,
+          email: order.email,
+          phone: order.phone,
+          company: '',
+        }
+      : {
+          firstName: order.firstName,
+          lastName: order.lastName,
+          address1: order.address1,
+          address2: order.address2 ?? '',
+          city: order.city,
+          country: order.country,
+          state: order.state ?? '',
+          postcode: order.postcode,
+          email: order.email,
+          phone: order.phone,
+          company: order.company ?? '',
+        },
+    shipToDifferentAddress,
+    paymentMethod: order.paymentMethod,
+    isPaid: false,
+    transactionId: uuidv4(),
+  };
+};
+/**
+ * Get the updated items in the below format required for mutation input.
+ *
+ * Creates an array in above format with the newQty (updated Qty ).
+ *
+ */
+export const getUpdatedItems = (
+  products: ICartItemNode[],
+  newQty: number,
+  cartKey: string,
+) => {
+  const updatedItems: TUpdatedItems = products.map((cartItem) => ({
+    key: cartItem.key,
+    quantity: cartItem.key === cartKey ? newQty : cartItem.quantity,
+  }));
+  return updatedItems;
+};
+/*
+ * When user changes the quantity, update the cart in localStorage
+ * Also update the cart in the global Context
+ */
+export const handleQuantityChange = (
+  event: ChangeEvent<HTMLInputElement>,
+  cartKey: string,
+  cart: ICartItemNode[],
+  updateCart: (variables: IUpdateCartMutationArgs) => void,
+  updateCartProcessing: boolean,
+) => {
+  if (typeof window !== 'undefined') {
+    event.stopPropagation();
+    // Return if the previous update cart mutation request is still processing
+    if (updateCartProcessing || !cart) {
+      return;
+    }
+    // If the user tries to delete the count of product, set that to 1 by default ( This will not allow him to reduce it less than zero )
+    const newQty = event.target.value ? parseInt(event.target.value, 10) : 1;
+    if (cart.length) {
+      const updatedItems = getUpdatedItems(cart, newQty, cartKey);
+      updateCart({
+        variables: {
+          input: {
+            clientMutationId: uuidv4(),
+            items: updatedItems,
+          },
+        },
+      });
+    }
+  }
+};
+````
+
 ## File: next.config.js
 ````javascript
 const withSerwist = require('@serwist/next').default
@@ -30495,70 +30575,161 @@ const serwistOptions = {
 module.exports = withSerwist(serwistOptions)(nextConfig)
 ````
 
-## File: src/app/(shop)/product/[slug]/components/ProductGallery.tsx
+## File: src/app/(shop)/product/[slug]/page.tsx
 ````typescript
-'use client'
-import { useMemo, useState } from 'react'
-import Image from 'next/image'
-import { cn } from '@/lib/utils'
-import type { ProductImage } from './types'
-interface ProductGalleryProps {
-  mainImage: ProductImage
-  images: ProductImage[]
-  className?: string
+import type { Metadata } from 'next'
+import ProductFeatures from './components/ProductFeatures'
+import ProductGallery from './components/ProductGallery'
+import ProductConfigurator from './components/ProductConfigurator'
+import { ProductViewTracker } from './components/ProductViewTracker'
+import ProductTabs from './components/ProductTabs'
+import ProductRecommendations from './components/ProductRecommendations'
+import { getCachedProductPageData } from './product-page-cache'
+import { ProductBlogFaqBoundary, ProductHeroReviewsBoundary } from './ProductPageStreaming'
+import { TopBar } from '@/shared/components/TopBar/TopBar.component'
+import Stickynav from '@/shared/components/Footer/Stickynav.component'
+import Footer from '@/shared/components/Footer/Footer.component'
+import { SITE_NAME, absoluteUrl } from '@/lib/seo'
+import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
+import { parseCartPriceString } from '@/shared/lib/functions'
+/**
+ * ISR (Sekunden). Muss ein **konstanter** Wert sein (Next.js Segment Config ist statisch zu analysieren).
+ * Feintuning des Daten-Caches: weiterhin `PRODUCT_PAGE_REVALIDATE_SECONDS` in product-data / product-page-cache.
+ */
+export const revalidate = 60
+interface ProductPageProps {
+  params: { slug?: string } | Promise<{ slug?: string }>
 }
-export default function ProductGallery({ mainImage, images, className }: ProductGalleryProps) {
-  const items = useMemo(() => {
-    const all = [mainImage, ...images]
-    const seen = new Map<string, ProductImage>()
-    all.forEach((item) => {
-      if (item.src && !seen.has(item.src)) {
-        seen.set(item.src, item)
-      }
-    })
-    return Array.from(seen.values())
-  }, [images, mainImage])
-  const [activeSrc, setActiveSrc] = useState(items[0]?.src ?? mainImage.src)
-  const activeItem = items.find((item) => item.src === activeSrc) ?? items[0] ?? mainImage
+async function resolveSlug(params: ProductPageProps['params']): Promise<string> {
+  const resolved = await params
+  return typeof resolved?.slug === 'string' && resolved.slug.length > 0
+    ? resolved.slug
+    : 'lkw-plane-individuell'
+}
+export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
+  const slug = await resolveSlug(params)
+  const product = await getCachedProductPageData(slug)
+  const title = `${product.title} | ${SITE_NAME}`
+  const description = (product.subtitle || `${product.title} online konfigurieren und anfragen.`).slice(0, 160)
+  const canonical = absoluteUrl(`/product/${slug}`)
+  const imageUrl = product.image?.src
+    ? absoluteUrl(product.image.src)
+    : absoluteUrl('/Planenadlerlogo.png')
+  return {
+    title,
+    description,
+    alternates: {
+      canonical,
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      type: 'website',
+      images: [
+        {
+          url: imageUrl,
+          alt: product.image?.alt ?? product.title,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [imageUrl],
+    },
+  }
+}
+export default async function ProductPage({ params }: ProductPageProps) {
+  const slug = await resolveSlug(params)
+  const product = await getCachedProductPageData(slug)
+  const breadcrumbSchema = getBreadcrumbJsonLd([
+    { name: 'Startseite', path: '/' },
+    { name: 'Shop', path: '/shop' },
+    { name: product.title, path: `/product/${slug}` },
+  ])
+  const numericPrice = parseCartPriceString(product.price)
+  const productSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.title,
+    description: product.subtitle,
+    image: [product.image.src, ...product.gallery.map((image) => image.src)].map((src) => absoluteUrl(src)),
+    sku: String(product.databaseId || slug),
+    brand: {
+      '@type': 'Brand',
+      name: SITE_NAME,
+    },
+    category: 'PVC-Plane',
+    url: absoluteUrl(`/product/${slug}`),
+    offers: Number.isFinite(numericPrice)
+      ? {
+          '@type': 'Offer',
+          priceCurrency: 'EUR',
+          price: numericPrice.toFixed(2),
+          availability: 'https://schema.org/InStock',
+          url: absoluteUrl(`/product/${slug}`),
+        }
+      : undefined,
+  }
   return (
-    <div className={cn('space-y-4', className)}>
-      <div className="relative aspect-[5/4] w-full overflow-hidden rounded-2xl bg-[#F7FAFE]">
-        <Image
-          src={activeItem.src}
-          alt={activeItem.alt}
-          fill
-          priority
-          sizes="(max-width: 768px) 100vw, 45vw"
-          className="object-contain p-5"
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
+      />
+      <main className="bg-white pb-16 sm:pt-20">
+        <ProductViewTracker
+          productId={product.databaseId}
+          slug={slug}
+          name={product.title}
+          priceValue={Number.isFinite(numericPrice) ? numericPrice : null}
         />
-      </div>
-      <div className="grid grid-cols-5 gap-2 sm:grid-cols-6 lg:grid-cols-5">
-        {items.map((item, index) => {
-          const isActive = item.src === activeItem.src
-          return (
-            <button
-              key={`${item.src}-${index}`}
-              type="button"
-              onClick={() => setActiveSrc(item.src)}
-              className={cn(
-                'relative aspect-square overflow-hidden rounded-xl border bg-white transition',
-                isActive ? 'border-[#1F5CAB] shadow-[0_6px_16px_rgba(15,43,82,0.12)]' : 'border-[#E5ECF8] hover:border-[#BCD3EE]',
-              )}
-              aria-label={`Bild ${index + 1} anzeigen`}
-              aria-current={isActive ? 'true' : 'false'}
-            >
-              <Image
-                src={item.src}
-                alt={item.alt}
-                fill
-                sizes="80px"
-                className="object-contain p-1"
-              />
-            </button>
-          )
-        })}
-      </div>
-    </div>
+        <TopBar />
+        <ProductHeroReviewsBoundary product={product} />
+        <ProductFeatures items={product.features} />
+        <section id="konfigurator" className="py-12 md:py-16" aria-labelledby="configurator-title">
+          <div className="mx-auto grid max-w-7xl gap-8 px-4 lg:grid-cols-[1.1fr_1fr] lg:items-start">
+            <div className="lg:self-stretch">
+              <div className="lg:sticky lg:top-24 lg:flex lg:max-h-[calc(100vh-8rem)] lg:flex-col">
+                <h2 id="configurator-title" className="mb-4 text-2xl font-bold text-[#0F2B52] lg:flex-none">
+                  Individuelle Konfiguration
+                </h2>
+                <ProductGallery
+                  mainImage={product.image}
+                  images={product.gallery}
+                  className="lg:min-h-0 lg:flex-1"
+                />
+              </div>
+            </div>
+            <ProductConfigurator
+              productId={product.databaseId}
+              productSlug={slug}
+              productName={product.title}
+              price={product.price}
+              hints={product.configuratorHints}
+              configuratorOptions={product.configuratorOptions}
+              priceEndpoint={product.priceEndpoint}
+            />
+          </div>
+        </section>
+        <ProductTabs tabs={product.tabs} />
+        <ProductRecommendations items={product.recommendations} />
+        <ProductBlogFaqBoundary />
+        <Footer />
+        <span className="sr-only">Produkt-Slug: {slug}</span>
+      </main>
+      <Stickynav />
+    </>
   )
 }
 ````
@@ -31906,13 +32077,13 @@ export function resolveCheckoutGateways(
 ## File: src/features/checkout/components/PaymentPageContent.tsx
 ````typescript
 'use client'
-import { useEffect, useState, startTransition, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, startTransition, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation } from '@apollo/client'
 import { useCartStore } from '@/shared/lib/cartStore'
 import { getFormattedCart, createCheckoutData } from '@/shared/lib/functions'
 import { GET_CART } from '@/features/cart/api/queries'
-import { APPLY_COUPON, CHECKOUT_MUTATION, REMOVE_COUPONS } from '@/shared/lib/GQL_MUTATIONS'
+import { ADD_TO_CART, APPLY_COUPON, CHECKOUT_MUTATION, REMOVE_COUPONS } from '@/shared/lib/GQL_MUTATIONS'
 import type { IAppliedCoupon } from '@/shared/types/graphql'
 import type { ICheckoutDataProps } from '@/shared/types/checkout'
 import type { CheckoutFormShipping } from '../types/checkout.types'
@@ -32025,6 +32196,8 @@ export function PaymentPageContent() {
   const [couponError, setCouponError] = useState<string | null>(null)
   const [guardPassed, setGuardPassed] = useState(false)
   const [providerLoading, setProviderLoading] = useState<PaymentMethodId | null>(null)
+  const [restoreInFlight, setRestoreInFlight] = useState(false)
+  const [restoreAttempted, setRestoreAttempted] = useState(false)
   useEffect(() => {
     const timer = setTimeout(() => {
       const state = useCheckoutStore.getState()
@@ -32049,6 +32222,7 @@ export function PaymentPageContent() {
   const [checkoutMutation, { loading: checkoutLoading }] = useMutation<CheckoutMutationResponse>(CHECKOUT_MUTATION)
   const [applyCouponMutation, { loading: couponApplying }] = useMutation(APPLY_COUPON)
   const [removeCouponsMutation, { loading: couponRemoving }] = useMutation(REMOVE_COUPONS)
+  const [addToCartMutation] = useMutation(ADD_TO_CART)
   const tryProviderCheckoutMutation = async (
     paymentMethod: 'card' | 'paypal' | 'klarna',
     formData: CheckoutFormShipping,
@@ -32232,7 +32406,7 @@ export function PaymentPageContent() {
     }
     setSelectedPayment(gatewayId)
   }
-  const syncCartFromLatestQuery = async () => {
+  const syncCartFromLatestQuery = useCallback(async () => {
     const result = await refetch()
     const updatedCart = result.data ? getFormattedCart(result.data) : undefined
     if (!updatedCart && !result.data?.cart?.contents?.nodes?.length) {
@@ -32240,7 +32414,57 @@ export function PaymentPageContent() {
       return
     }
     if (updatedCart) syncWithWooCommerce(updatedCart)
-  }
+  }, [clearWooCommerceSession, refetch, syncWithWooCommerce])
+  useEffect(() => {
+    if (!guardPassed) return
+    if (!hasActivePendingExternalPayment(pendingExternalPayment)) return
+    if (restoreInFlight || restoreAttempted) return
+    if ((data?.cart?.contents?.nodes?.length ?? 0) > 0) return
+    const persistedCart = useCartStore.getState().cart
+    const restoreItems = persistedCart?.products
+      ?.map((product) => product.restoreInput)
+      .filter((item) => item && item.productId > 0 && item.quantity > 0) ?? []
+    if (restoreItems.length === 0) {
+      setRestoreAttempted(true)
+      return
+    }
+    setRestoreInFlight(true)
+    setRestoreAttempted(true)
+    setSubmitError(null)
+    ;(async () => {
+      try {
+        for (const item of restoreItems) {
+          await addToCartMutation({
+            variables: {
+              input: {
+                clientMutationId: `restore-cart-${Date.now()}-${item.productId}`,
+                productId: item.productId,
+                quantity: item.quantity,
+                ...(item.extraData ? { extraData: item.extraData } : {}),
+              },
+            },
+          })
+        }
+        await syncCartFromLatestQuery()
+        setCouponFeedback('Dein Warenkorb wurde nach der Rueckkehr von der externen Zahlung wiederhergestellt.')
+      } catch (error) {
+        const message = error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : 'Der Warenkorb konnte nach der Rueckkehr von PayPal nicht automatisch wiederhergestellt werden.'
+        setSubmitError(message)
+      } finally {
+        setRestoreInFlight(false)
+      }
+    })()
+  }, [
+    addToCartMutation,
+    data,
+    guardPassed,
+    pendingExternalPayment,
+    restoreAttempted,
+    restoreInFlight,
+    syncCartFromLatestQuery,
+  ])
   const handleApplyCoupon = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const normalizedCode = couponCode.trim()
@@ -32316,6 +32540,7 @@ export function PaymentPageContent() {
         <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           Eine externe Zahlung wurde gestartet, aber noch nicht abgeschlossen. Deine Artikel bleiben im Checkout,
           bis die Bestellung erfolgreich beendet wurde.
+          {restoreInFlight ? ' Der Warenkorb wird gerade aus deiner Checkout-Session wiederhergestellt.' : ''}
         </div>
       ) : null}
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px] lg:gap-12">
@@ -32459,165 +32684,6 @@ export function PaymentPageContent() {
         </div>
       </div>
     </ContentShell>
-  )
-}
-````
-
-## File: src/app/(shop)/product/[slug]/page.tsx
-````typescript
-import type { Metadata } from 'next'
-import ProductFeatures from './components/ProductFeatures'
-import ProductGallery from './components/ProductGallery'
-import ProductConfigurator from './components/ProductConfigurator'
-import { ProductViewTracker } from './components/ProductViewTracker'
-import ProductTabs from './components/ProductTabs'
-import ProductRecommendations from './components/ProductRecommendations'
-import { getCachedProductPageData } from './product-page-cache'
-import { ProductBlogFaqBoundary, ProductHeroReviewsBoundary } from './ProductPageStreaming'
-import { TopBar } from '@/shared/components/TopBar/TopBar.component'
-import Stickynav from '@/shared/components/Footer/Stickynav.component'
-import Footer from '@/shared/components/Footer/Footer.component'
-import { SITE_NAME, absoluteUrl } from '@/lib/seo'
-import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
-import { parseCartPriceString } from '@/shared/lib/functions'
-/**
- * ISR (Sekunden). Muss ein **konstanter** Wert sein (Next.js Segment Config ist statisch zu analysieren).
- * Feintuning des Daten-Caches: weiterhin `PRODUCT_PAGE_REVALIDATE_SECONDS` in product-data / product-page-cache.
- */
-export const revalidate = 60
-interface ProductPageProps {
-  params: { slug?: string } | Promise<{ slug?: string }>
-}
-async function resolveSlug(params: ProductPageProps['params']): Promise<string> {
-  const resolved = await params
-  return typeof resolved?.slug === 'string' && resolved.slug.length > 0
-    ? resolved.slug
-    : 'lkw-plane-individuell'
-}
-export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
-  const slug = await resolveSlug(params)
-  const product = await getCachedProductPageData(slug)
-  const title = `${product.title} | ${SITE_NAME}`
-  const description = (product.subtitle || `${product.title} online konfigurieren und anfragen.`).slice(0, 160)
-  const canonical = absoluteUrl(`/product/${slug}`)
-  const imageUrl = product.image?.src
-    ? absoluteUrl(product.image.src)
-    : absoluteUrl('/Planenadlerlogo.png')
-  return {
-    title,
-    description,
-    alternates: {
-      canonical,
-    },
-    robots: {
-      index: true,
-      follow: true,
-    },
-    openGraph: {
-      title,
-      description,
-      url: canonical,
-      type: 'website',
-      images: [
-        {
-          url: imageUrl,
-          alt: product.image?.alt ?? product.title,
-        },
-      ],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description,
-      images: [imageUrl],
-    },
-  }
-}
-export default async function ProductPage({ params }: ProductPageProps) {
-  const slug = await resolveSlug(params)
-  const product = await getCachedProductPageData(slug)
-  const breadcrumbSchema = getBreadcrumbJsonLd([
-    { name: 'Startseite', path: '/' },
-    { name: 'Shop', path: '/shop' },
-    { name: product.title, path: `/product/${slug}` },
-  ])
-  const numericPrice = parseCartPriceString(product.price)
-  const productSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: product.title,
-    description: product.subtitle,
-    image: [product.image.src, ...product.gallery.map((image) => image.src)].map((src) => absoluteUrl(src)),
-    sku: String(product.databaseId || slug),
-    brand: {
-      '@type': 'Brand',
-      name: SITE_NAME,
-    },
-    category: 'PVC-Plane',
-    url: absoluteUrl(`/product/${slug}`),
-    offers: Number.isFinite(numericPrice)
-      ? {
-          '@type': 'Offer',
-          priceCurrency: 'EUR',
-          price: numericPrice.toFixed(2),
-          availability: 'https://schema.org/InStock',
-          url: absoluteUrl(`/product/${slug}`),
-        }
-      : undefined,
-  }
-  return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
-      />
-      <main className="bg-white pb-16 sm:pt-20">
-        <ProductViewTracker
-          productId={product.databaseId}
-          slug={slug}
-          name={product.title}
-          priceValue={Number.isFinite(numericPrice) ? numericPrice : null}
-        />
-        <TopBar />
-        <ProductHeroReviewsBoundary product={product} />
-        <ProductFeatures items={product.features} />
-        <section id="konfigurator" className="py-12 md:py-16" aria-labelledby="configurator-title">
-          <div className="mx-auto grid max-w-7xl gap-8 px-4 lg:grid-cols-[1.1fr_1fr] lg:items-start">
-            <div className="lg:self-stretch">
-              <div className="lg:sticky lg:top-24 lg:flex lg:max-h-[calc(100vh-8rem)] lg:flex-col">
-                <h2 id="configurator-title" className="mb-4 text-2xl font-bold text-[#0F2B52] lg:flex-none">
-                  Individuelle Konfiguration
-                </h2>
-                <ProductGallery
-                  mainImage={product.image}
-                  images={product.gallery}
-                  className="lg:min-h-0 lg:flex-1"
-                />
-              </div>
-            </div>
-            <ProductConfigurator
-              productId={product.databaseId}
-              productSlug={slug}
-              productName={product.title}
-              price={product.price}
-              hints={product.configuratorHints}
-              configuratorOptions={product.configuratorOptions}
-              priceEndpoint={product.priceEndpoint}
-            />
-          </div>
-        </section>
-        <ProductTabs tabs={product.tabs} />
-        <ProductRecommendations items={product.recommendations} />
-        <ProductBlogFaqBoundary />
-        <Footer />
-        <span className="sr-only">Produkt-Slug: {slug}</span>
-      </main>
-      <Stickynav />
-    </>
   )
 }
 ````
