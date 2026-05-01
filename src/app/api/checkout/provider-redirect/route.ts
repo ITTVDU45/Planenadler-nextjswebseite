@@ -8,6 +8,7 @@ type Provider = 'card' | 'klarna' | 'paypal'
 interface BodyShape {
   provider?: Provider
   checkoutInput?: unknown
+  checkoutItems?: unknown
   returnUrl?: string
   cancelUrl?: string
 }
@@ -429,6 +430,9 @@ export async function POST(request: NextRequest) {
     const upstreamPayload: Record<string, unknown> = {
       provider,
       checkoutInput: body.checkoutInput ?? null,
+    }
+    if (Array.isArray(body.checkoutItems) && body.checkoutItems.length > 0) {
+      upstreamPayload.checkoutItems = body.checkoutItems
     }
     const checkoutInput = (body.checkoutInput ?? {}) as CheckoutInputShape
     const signedCustomerContext = await resolveSignedCustomerContext(request)
