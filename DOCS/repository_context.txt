@@ -4619,6 +4619,74 @@ export default function ProductFeatures({ items }: ProductFeaturesProps) {
 }
 ````
 
+## File: src/app/(shop)/product/[slug]/components/ProductGallery.tsx
+````typescript
+'use client'
+import { useMemo, useState } from 'react'
+import Image from 'next/image'
+import { cn } from '@/lib/utils'
+import type { ProductImage } from './types'
+interface ProductGalleryProps {
+  mainImage: ProductImage
+  images: ProductImage[]
+  className?: string
+}
+export default function ProductGallery({ mainImage, images, className }: ProductGalleryProps) {
+  const items = useMemo(() => {
+    const all = [mainImage, ...images]
+    const seen = new Map<string, ProductImage>()
+    all.forEach((item) => {
+      if (item.src && !seen.has(item.src)) {
+        seen.set(item.src, item)
+      }
+    })
+    return Array.from(seen.values())
+  }, [images, mainImage])
+  const [activeSrc, setActiveSrc] = useState(items[0]?.src ?? mainImage.src)
+  const activeItem = items.find((item) => item.src === activeSrc) ?? items[0] ?? mainImage
+  return (
+    <div className={cn('space-y-4', className)}>
+      <div className="relative aspect-[5/4] w-full overflow-hidden rounded-2xl bg-[#F7FAFE]">
+        <Image
+          src={activeItem.src}
+          alt={activeItem.alt}
+          fill
+          priority
+          sizes="(max-width: 768px) 100vw, 45vw"
+          className="object-contain p-5"
+        />
+      </div>
+      <div className="grid grid-cols-5 gap-2 sm:grid-cols-6 lg:grid-cols-5">
+        {items.map((item, index) => {
+          const isActive = item.src === activeItem.src
+          return (
+            <button
+              key={`${item.src}-${index}`}
+              type="button"
+              onClick={() => setActiveSrc(item.src)}
+              className={cn(
+                'relative aspect-square overflow-hidden rounded-xl border bg-white transition',
+                isActive ? 'border-[#1F5CAB] shadow-[0_6px_16px_rgba(15,43,82,0.12)]' : 'border-[#E5ECF8] hover:border-[#BCD3EE]',
+              )}
+              aria-label={`Bild ${index + 1} anzeigen`}
+              aria-current={isActive ? 'true' : 'false'}
+            >
+              <Image
+                src={item.src}
+                alt={item.alt}
+                fill
+                sizes="80px"
+                className="object-contain p-1"
+              />
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+````
+
 ## File: src/app/(shop)/product/[slug]/components/ProductRecommendationCard.tsx
 ````typescript
 import Link from 'next/link'
@@ -4945,6 +5013,29 @@ export interface TruckTarpProduct {
   configuratorOptions?: ConfiguratorOptionsFromBackend
   priceEndpoint?: string
 }
+````
+
+## File: src/app/(shop)/product/[slug]/product-page-cache.ts
+````typescript
+import { unstable_cache } from 'next/cache'
+import { getProductPageData } from './product-data'
+import { fetchGoogleReviews } from '@/lib/google-reviews'
+import { getRecentBlogPosts } from '@/features/blog'
+export const getCachedProductPageData = unstable_cache(
+  async (slug: string) => getProductPageData(slug),
+  ['product-page-data'],
+  { revalidate: 60 },
+)
+export const getCachedRecentBlogPosts = unstable_cache(
+  async () => getRecentBlogPosts(4),
+  ['product-page-recent-posts'],
+  { revalidate: 3600 },
+)
+export const getCachedGoogleReviews = unstable_cache(
+  async () => fetchGoogleReviews(),
+  ['product-page-google-reviews'],
+  { revalidate: 3600 },
+)
 ````
 
 ## File: src/app/(shop)/product/[slug]/ProductPageStreaming.tsx
@@ -13256,6 +13347,122 @@ export function HeroTextBlock({ title, subtitle, description }: HeroTextBlockPro
 export { HeroTextBlock } from './HeroTextBlock.component'
 ````
 
+## File: src/features/home/sections/Hero/HeroSlider.component.tsx
+````typescript
+'use client'
+import { useEffect, useMemo, useState } from 'react'
+import { HERO_SLIDES } from './data'
+import type { HeroSlide } from './types'
+import { HeroTextBlock } from './components/HeroTextBlock'
+import { HeroCTA } from './components/HeroCTA'
+import { HeroSlideCard } from './components/HeroSlideCard'
+import { HeroSliderDots } from './components/HeroSliderDots'
+import { HeroBackground } from './components/HeroBackground'
+import { HeroOverlays } from './components/HeroOverlays'
+import { ContentShell } from '@/shared/components/ContentShell.component'
+interface HeroSliderProps {
+  slides?: HeroSlide[]
+  autoPlayMs?: number
+}
+export function HeroSlider({ slides = HERO_SLIDES, autoPlayMs }: HeroSliderProps) {
+  const [activeIndex, setActiveIndex] = useState(0)
+  const safeSlides = slides.length ? slides : HERO_SLIDES
+  const count = safeSlides.length
+  const activeSlide = safeSlides[activeIndex]
+  const nextIndex = useMemo(() => (count ? (activeIndex + 1) % count : 0), [activeIndex, count])
+  const nextSlide = safeSlides[nextIndex]
+  useEffect(() => {
+    if (!autoPlayMs || count < 2) return
+    const id = window.setInterval(
+      () => setActiveIndex((value) => (value + 1) % count),
+      autoPlayMs,
+    )
+    return () => window.clearInterval(id)
+  }, [autoPlayMs, count])
+  if (!count) return null
+  return (
+    <section className="relative w-full py-6">
+      <ContentShell>
+        <div className="relative w-full overflow-hidden rounded-[2.5rem]">
+          <div className="relative h-[75vh] max-h-[900px] min-h-[520px] sm:h-[80vh] sm:min-h-[600px]">
+            <HeroBackground image={activeSlide.background} slideId={activeSlide.id} />
+            <HeroOverlays />
+            <div className="relative z-10 flex h-full flex-col justify-between gap-8 px-8 pb-8 pt-8 sm:px-14 sm:pb-14 sm:pt-12">
+              <div className="grid flex-1 grid-cols-12 items-center gap-6">
+                <div className="col-span-12 sm:col-span-7 lg:col-span-6">
+                  <div key={`text-${activeSlide.id}`}>
+                    <HeroTextBlock
+                      title={activeSlide.title}
+                      subtitle={activeSlide.subtitle}
+                      description={activeSlide.description}
+                    />
+                    <div className="mt-8">
+                      <HeroCTA
+                        label={activeSlide.cta.label}
+                        href={activeSlide.cta.href}
+                        bgColor={activeSlide.cta.bgColor}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="relative col-span-12 hidden h-full sm:col-span-5 sm:block lg:col-span-6">
+                  <div className="absolute -bottom-6 right-2 flex items-end gap-6 pr-6 sm:right-0 sm:pr-8 lg:pr-10">
+                    <div key={`card-main-${activeSlide.id}`}>
+                      <HeroSlideCard
+                        image={activeSlide.thumbMain}
+                        variant="active"
+                        ariaLabel={`Slide: ${activeSlide.title}`}
+                      />
+                    </div>
+                    {nextSlide ? (
+                      <div key={`card-next-${nextSlide.id}`} className="translate-x-0 lg:translate-x-2">
+                        <HeroSlideCard
+                          image={nextSlide.background}
+                          variant="preview"
+                          onClick={() => setActiveIndex(nextIndex)}
+                          ariaLabel={`Zum naechsten Slide: ${nextSlide.title}`}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="col-span-12 sm:hidden">
+                  <div className="mt-6 flex w-full items-end justify-end gap-3 overflow-visible pr-1">
+                    <div className="shrink-0">
+                      <HeroSlideCard
+                        image={activeSlide.thumbMain}
+                        variant="active"
+                        ariaLabel={`Slide: ${activeSlide.title}`}
+                      />
+                    </div>
+                    {nextSlide ? (
+                      <div className="shrink-0">
+                        <HeroSlideCard
+                          image={nextSlide.background}
+                          variant="preview"
+                          onClick={() => setActiveIndex(nextIndex)}
+                          ariaLabel={`Zum naechsten Slide: ${nextSlide.title}`}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <HeroSliderDots
+                count={count}
+                activeIndex={activeIndex}
+                onSelect={setActiveIndex}
+                labels={safeSlides.map((slide) => slide.title)}
+              />
+            </div>
+          </div>
+        </div>
+      </ContentShell>
+    </section>
+  )
+}
+````
+
 ## File: src/features/home/sections/Hero/index.ts
 ````typescript
 export { HeroSlider } from './HeroSlider.component'
@@ -13360,6 +13567,28 @@ export interface InfoWithCountersContent {
 }
 ````
 
+## File: src/features/home/sections/InfoWithImageLeft/data.ts
+````typescript
+import type { InfoWithImageLeftContent } from './types'
+export const INFO_WITH_IMAGE_LEFT: InfoWithImageLeftContent = {
+  title: 'Adler Planen - der Online-Shop für hochwertige PVC-Planen',
+  description:
+    'Wir bieten individuelle Lösungen für Anhänger, Terrassen, Pools, Boote und mehr – passgenau, langlebig und zuverlässig. Dank unserer langjährigen Erfahrung und modernster Technik erhalten Sie Produkte, die höchsten Qualitätsansprüchen gerecht werden. Ob Schutz, Abdeckung oder individuelle Sonderanfertigung – bei uns finden Sie die passende Plane für Ihr Projekt.',
+  points: [
+    'Reißfestes PVC-Material – 680 g/m² Standard',
+    'Professionell verschweißte Nähte',
+    'UV- und witterungsbeständig',
+    'Individuelle Farben und Befestigungen wählbar',
+  ],
+  image: {
+    src: '/images/Planenadler1.jpg',
+    alt: 'Hochwertige PVC-Plane – Detailansicht',
+  },
+  ctaLabel: 'Mehr über uns',
+  ctaHref: '/ueber-uns',
+}
+````
+
 ## File: src/features/home/sections/InfoWithImageLeft/index.ts
 ````typescript
 export { InfoWithImageLeft } from './InfoWithImageLeft'
@@ -13440,9 +13669,159 @@ export interface InfoWithImageLeftContent {
 }
 ````
 
+## File: src/features/home/sections/InfoWithImageRight/data.ts
+````typescript
+import type { InfoWithImageRightContent } from './types'
+export const INFO_WITH_IMAGE_RIGHT: InfoWithImageRightContent = {
+  title: 'Individuelle Planen nach Maß – für jeden Einsatzbereich',
+  description:
+    'Ob Terrasse, Anhänger, Pool oder Lager: Wir fertigen Ihre Plane exakt nach Ihren Maßen und Anforderungen. Hochwertige Materialien, präzise Verarbeitung und persönliche Beratung – alles aus einer Hand.',
+  images: [
+    {
+      src: '/images/Terrassenplane4.png',
+      alt: 'Terrassenplane in Anwendung',
+    },
+    {
+      src: '/images/AnhängerplaneAdlerplanen.png',
+      alt: 'Anhängerplane – maßgefertigt',
+    },
+    {
+      src: '/images/image1%20%281%29.png',
+      alt: 'Planenadler – Produktimpression',
+    },
+    {
+      src: '/images/image1.png',
+      alt: 'Hochwertige Plane im Einsatz',
+    },
+    {
+      src: '/images/image2.png',
+      alt: 'Individuelle Abdecklösung',
+    },
+    {
+      src: '/images/Planenadler%202.jpg',
+      alt: 'PVC-Plane – Detailansicht',
+    },
+    {
+      src: '/images/Planenadler%203.jpg',
+      alt: 'Maßgefertigte Plane',
+    },
+    {
+      src: '/images/Planenadler%204.jpg',
+      alt: 'Plane nach Maß',
+    },
+    {
+      src: '/images/Planenadler%207.png',
+      alt: 'Planenadler Qualität',
+    },
+    {
+      src: '/images/Arbeiter%20terrassenplane.png',
+      alt: 'Montage einer Terrassenplane',
+    },
+  ],
+  buttons: [
+    {
+      label: 'Jetzt konfigurieren',
+      href: '/konfigurator',
+      variant: 'primary',
+    },
+    {
+      label: 'Alle Produkte',
+      href: '/shop',
+      variant: 'secondary',
+    },
+  ],
+}
+````
+
 ## File: src/features/home/sections/InfoWithImageRight/index.ts
 ````typescript
 export { InfoWithImageRight } from './InfoWithImageRight'
+````
+
+## File: src/features/home/sections/InfoWithImageRight/InfoWithImageRight.tsx
+````typescript
+'use client'
+import { useMemo, useState } from 'react'
+import Image from 'next/image'
+import type { InfoWithImageRightContent } from './types'
+import { INFO_WITH_IMAGE_RIGHT } from './data'
+import { ActionButton } from '../InfoWithCounters/ActionButton'
+import { ContentShell } from '@/shared/components/ContentShell.component'
+interface InfoWithImageRightProps {
+  content?: InfoWithImageRightContent
+}
+export function InfoWithImageRight({
+  content = INFO_WITH_IMAGE_RIGHT,
+}: InfoWithImageRightProps) {
+  const images = content.images.length ? content.images : INFO_WITH_IMAGE_RIGHT.images
+  const [activeIndex, setActiveIndex] = useState(0)
+  const total = images.length
+  const activeImage = useMemo(() => images[activeIndex], [images, activeIndex])
+  const goNext = () => setActiveIndex((index) => (index + 1) % total)
+  const goPrev = () => setActiveIndex((index) => (index - 1 + total) % total)
+  const canSlide = total > 1
+  return (
+    <section className="w-full bg-white py-16 lg:py-24">
+      <ContentShell>
+        <div className="mb-8 max-w-4xl sm:mb-10 lg:mb-16">
+          <h2 className="text-3xl font-bold leading-tight tracking-tight text-[#1F5CAB] sm:text-4xl lg:text-6xl">
+            {content.title}
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:items-start lg:gap-14">
+          <div className="flex flex-col justify-center lg:col-span-5 xl:col-span-4 lg:pt-8">
+            <p className="text-sm leading-relaxed text-[#1F5CAB]/80 sm:text-base lg:text-lg">
+              {content.description}
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-3 sm:gap-4">
+              {content.buttons.map((button) => (
+                <ActionButton key={`${button.href}-${button.label}`} button={button} />
+              ))}
+            </div>
+          </div>
+          <div className="lg:col-span-7 xl:col-span-8">
+            <div className="relative overflow-hidden rounded-[2rem] bg-[#DBE9F9] sm:rounded-[2.5rem]">
+              <div className="relative aspect-[4/3] w-full sm:aspect-[16/9]">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    goPrev()
+                  }}
+                  disabled={!canSlide}
+                  className="absolute left-3 top-1/2 z-20 flex h-14 w-14 -translate-y-1/2 touch-manipulation items-center justify-center rounded-full bg-white/95 text-2xl font-light text-[#1F5CAB] shadow-lg transition hover:bg-white disabled:cursor-default disabled:opacity-50 sm:left-4 sm:h-16 sm:w-16"
+                  aria-label="Vorheriges Bild"
+                >
+                  ‹
+                </button>
+                <Image
+                  src={activeImage.src}
+                  alt={activeImage.alt}
+                  fill
+                  draggable={false}
+                  className="object-cover"
+                  sizes="(max-width: 1024px) 100vw, 66vw"
+                />
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    goNext()
+                  }}
+                  disabled={!canSlide}
+                  className="absolute right-3 top-1/2 z-20 flex h-14 w-14 -translate-y-1/2 touch-manipulation items-center justify-center rounded-full bg-white/95 text-2xl font-light text-[#1F5CAB] shadow-lg transition hover:bg-white disabled:cursor-default disabled:opacity-50 sm:right-4 sm:h-16 sm:w-16"
+                  aria-label="Nächstes Bild"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </ContentShell>
+    </section>
+  )
+}
 ````
 
 ## File: src/features/home/sections/InfoWithImageRight/types.ts
@@ -17199,6 +17578,76 @@ export function GoogleReviewSlider({ data }: GoogleReviewSliderProps) {
 }
 ````
 
+## File: src/shared/components/Layout.component.tsx
+````typescript
+// Imports
+import { ReactNode } from 'react';
+import Image from 'next/image';
+// Components
+import Header from '@/shared/components/Header/Header.component';
+import { ContentShell } from '@/shared/components/ContentShell.component';
+import { TopBar } from '@/shared/components/TopBar/TopBar.component';
+import PageTitle from './PageTitle.component';
+import Footer from '@/shared/components/Footer/Footer.component';
+import Stickynav from '@/shared/components/Footer/Stickynav.component';
+const WHATSAPP_NUMBER = '491727436428'
+function WhatsAppFloatButton() {
+  const href = `https://wa.me/${WHATSAPP_NUMBER}`
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="WhatsApp Kontakt"
+      className="fixed bottom-32 right-4 z-[400] flex h-14 w-14 items-center justify-center overflow-hidden rounded-full shadow-lg transition hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 md:bottom-6"
+    >
+      <Image
+        src="/images/whatsapp_4008228.png"
+        alt="WhatsApp Kontakt zu Planenadler"
+        width={56}
+        height={56}
+        className="h-full w-full object-cover"
+        sizes="56px"
+      />
+    </a>
+  )
+}
+interface ILayoutProps {
+  children?: ReactNode;
+  title: string;
+  showPageTitle?: boolean;
+}
+/**
+ * Renders layout for each page. Also passes along the title to the Header component.
+ * @function Layout
+ * @param {ReactNode} children - Children to be rendered by Layout component
+ * @param {TTitle} title - Title for the page. Is set in <title>{title}</title>
+ * @returns {JSX.Element} - Rendered component
+ */
+const Layout = ({ children, title, showPageTitle = true }: ILayoutProps) => {
+  return (
+    <div className="flex min-h-screen w-full min-w-0 flex-col overflow-x-hidden pt-20">
+      <Header title={title} />
+      <TopBar />
+      {!showPageTitle ? (
+        <main className="flex-1">{children}</main>
+      ) : (
+        <ContentShell className="flex-1">
+          <PageTitle title={title} />
+          <main>{children}</main>
+        </ContentShell>
+      )}
+      <div className="mt-auto">
+        <Footer />
+        <Stickynav />
+      </div>
+      <WhatsAppFloatButton />
+    </div>
+  );
+};
+export default Layout;
+````
+
 ## File: src/shared/components/LoadingSpinner.component.tsx
 ````typescript
 /**
@@ -20396,74 +20845,6 @@ export default async function CheckoutProviderCallbackPage({
 }
 ````
 
-## File: src/app/(shop)/product/[slug]/components/ProductGallery.tsx
-````typescript
-'use client'
-import { useMemo, useState } from 'react'
-import Image from 'next/image'
-import { cn } from '@/lib/utils'
-import type { ProductImage } from './types'
-interface ProductGalleryProps {
-  mainImage: ProductImage
-  images: ProductImage[]
-  className?: string
-}
-export default function ProductGallery({ mainImage, images, className }: ProductGalleryProps) {
-  const items = useMemo(() => {
-    const all = [mainImage, ...images]
-    const seen = new Map<string, ProductImage>()
-    all.forEach((item) => {
-      if (item.src && !seen.has(item.src)) {
-        seen.set(item.src, item)
-      }
-    })
-    return Array.from(seen.values())
-  }, [images, mainImage])
-  const [activeSrc, setActiveSrc] = useState(items[0]?.src ?? mainImage.src)
-  const activeItem = items.find((item) => item.src === activeSrc) ?? items[0] ?? mainImage
-  return (
-    <div className={cn('space-y-4', className)}>
-      <div className="relative aspect-[5/4] w-full overflow-hidden rounded-2xl bg-[#F7FAFE]">
-        <Image
-          src={activeItem.src}
-          alt={activeItem.alt}
-          fill
-          priority
-          sizes="(max-width: 768px) 100vw, 45vw"
-          className="object-contain p-5"
-        />
-      </div>
-      <div className="grid grid-cols-5 gap-2 sm:grid-cols-6 lg:grid-cols-5">
-        {items.map((item, index) => {
-          const isActive = item.src === activeItem.src
-          return (
-            <button
-              key={`${item.src}-${index}`}
-              type="button"
-              onClick={() => setActiveSrc(item.src)}
-              className={cn(
-                'relative aspect-square overflow-hidden rounded-xl border bg-white transition',
-                isActive ? 'border-[#1F5CAB] shadow-[0_6px_16px_rgba(15,43,82,0.12)]' : 'border-[#E5ECF8] hover:border-[#BCD3EE]',
-              )}
-              aria-label={`Bild ${index + 1} anzeigen`}
-              aria-current={isActive ? 'true' : 'false'}
-            >
-              <Image
-                src={item.src}
-                alt={item.alt}
-                fill
-                sizes="80px"
-                className="object-contain p-1"
-              />
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-````
-
 ## File: src/app/(shop)/product/[slug]/components/ProductHero.tsx
 ````typescript
 'use client'
@@ -20600,27 +20981,63 @@ export default function ProductHero({ product, googleReviews }: ProductHeroProps
 }
 ````
 
-## File: src/app/(shop)/product/[slug]/product-page-cache.ts
+## File: src/app/(shop)/shop/page.tsx
 ````typescript
-import { unstable_cache } from 'next/cache'
-import { getProductPageData } from './product-data'
-import { fetchGoogleReviews } from '@/lib/google-reviews'
+import type { Metadata } from 'next'
+import { TopBar } from '@/shared/components/TopBar/TopBar.component'
+import Stickynav from '@/shared/components/Footer/Stickynav.component'
+import Footer from '@/shared/components/Footer/Footer.component'
+import {
+  ShopHeroSection,
+  ShopCategoryGridSection,
+  buildFaqSchema,
+  SHOP_FAQ_ITEMS,
+} from '@/features/shop'
+import { fetchShopCategoriesWithProductImages } from '@/features/shop/lib/fetchShopCategoriesWithProductImages'
+import { BlogShowcase } from '@/features/home'
+import { mapBlogPostToArticle, getCategoriesFromBlogPosts } from '@/features/home/sections/BlogShowcase/mapBlogPostToArticle'
+import { FAQSection } from '@/features/about'
 import { getRecentBlogPosts } from '@/features/blog'
-export const getCachedProductPageData = unstable_cache(
-  async (slug: string) => getProductPageData(slug),
-  ['product-page-data'],
-  { revalidate: 60 },
+import { buildCanonicalMetadata } from '@/lib/seo'
+import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
+export const revalidate = 3600
+export const metadata: Metadata = buildCanonicalMetadata(
+  '/shop',
+  'Shop',
+  'Unsere Produkte und Planenloesungen: Terrassenplanen, Anhaengerplanen, Abdeckhauben, Abdeckplanen, Poolplanen und weitere Massanfertigungen.'
 )
-export const getCachedRecentBlogPosts = unstable_cache(
-  async () => getRecentBlogPosts(4),
-  ['product-page-recent-posts'],
-  { revalidate: 3600 },
-)
-export const getCachedGoogleReviews = unstable_cache(
-  async () => fetchGoogleReviews(),
-  ['product-page-google-reviews'],
-  { revalidate: 3600 },
-)
+export default async function ShopPage() {
+  const faqSchema = buildFaqSchema(SHOP_FAQ_ITEMS)
+  const breadcrumbSchema = getBreadcrumbJsonLd([
+    { name: 'Startseite', path: '/' },
+    { name: 'Shop', path: '/shop' },
+  ])
+  const shopCategories = await fetchShopCategoriesWithProductImages()
+  const recentPosts = await getRecentBlogPosts(4)
+  const blogArticles = recentPosts.map(mapBlogPostToArticle)
+  const blogCategories = getCategoriesFromBlogPosts(recentPosts)
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <main className="min-h-screen bg-white pb-16 sm:pt-20">
+        <TopBar />
+        <ShopHeroSection />
+        <ShopCategoryGridSection categories={shopCategories} />
+        <BlogShowcase articles={blogArticles} categories={blogCategories} />
+        <FAQSection items={SHOP_FAQ_ITEMS} />
+        <Footer />
+      </main>
+      <Stickynav />
+    </>
+  )
+}
 ````
 
 ## File: src/app/(shop)/thank-you/page.tsx
@@ -22930,119 +23347,55 @@ export function HeroBackground({ image, slideId }: HeroBackgroundProps) {
 }
 ````
 
-## File: src/features/home/sections/Hero/HeroSlider.component.tsx
+## File: src/features/home/sections/Hero/components/HeroSlideCard/HeroSlideCard.component.tsx
 ````typescript
-'use client'
-import { useEffect, useMemo, useState } from 'react'
-import { HERO_SLIDES } from './data'
-import type { HeroSlide } from './types'
-import { HeroTextBlock } from './components/HeroTextBlock'
-import { HeroCTA } from './components/HeroCTA'
-import { HeroSlideCard } from './components/HeroSlideCard'
-import { HeroSliderDots } from './components/HeroSliderDots'
-import { HeroBackground } from './components/HeroBackground'
-import { HeroOverlays } from './components/HeroOverlays'
-import { ContentShell } from '@/shared/components/ContentShell.component'
-interface HeroSliderProps {
-  slides?: HeroSlide[]
-  autoPlayMs?: number
+import Image from 'next/image'
+import type { HeroImage } from '../../types'
+interface HeroSlideCardProps {
+  image: HeroImage
+  variant: 'active' | 'preview'
+  onClick?: () => void
+  ariaLabel?: string
 }
-export function HeroSlider({ slides = HERO_SLIDES, autoPlayMs }: HeroSliderProps) {
-  const [activeIndex, setActiveIndex] = useState(0)
-  const safeSlides = slides.length ? slides : HERO_SLIDES
-  const count = safeSlides.length
-  const activeSlide = safeSlides[activeIndex]
-  const nextIndex = useMemo(() => (count ? (activeIndex + 1) % count : 0), [activeIndex, count])
-  const nextSlide = safeSlides[nextIndex]
-  useEffect(() => {
-    if (!autoPlayMs || count < 2) return
-    const id = window.setInterval(
-      () => setActiveIndex((value) => (value + 1) % count),
-      autoPlayMs,
-    )
-    return () => window.clearInterval(id)
-  }, [autoPlayMs, count])
-  if (!count) return null
-  return (
-    <section className="relative w-full py-6">
-      <ContentShell>
-        <div className="relative w-full overflow-hidden rounded-[2.5rem]">
-          <div className="relative h-[75vh] max-h-[900px] min-h-[520px] sm:h-[80vh] sm:min-h-[600px]">
-            <HeroBackground image={activeSlide.background} slideId={activeSlide.id} />
-            <HeroOverlays />
-            <div className="relative z-10 flex h-full flex-col justify-between gap-8 px-8 pb-8 pt-8 sm:px-14 sm:pb-14 sm:pt-12">
-              <div className="grid flex-1 grid-cols-12 items-center gap-6">
-                <div className="col-span-12 sm:col-span-7 lg:col-span-6">
-                  <div key={`text-${activeSlide.id}`}>
-                    <HeroTextBlock
-                      title={activeSlide.title}
-                      subtitle={activeSlide.subtitle}
-                      description={activeSlide.description}
-                    />
-                    <div className="mt-8">
-                      <HeroCTA
-                        label={activeSlide.cta.label}
-                        href={activeSlide.cta.href}
-                        bgColor={activeSlide.cta.bgColor}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="relative col-span-12 hidden h-full sm:col-span-5 sm:block lg:col-span-6">
-                  <div className="absolute -bottom-6 right-2 flex items-end gap-6 pr-6 sm:right-0 sm:pr-8 lg:pr-10">
-                    <div key={`card-main-${activeSlide.id}`}>
-                      <HeroSlideCard
-                        image={activeSlide.thumbMain}
-                        variant="active"
-                        ariaLabel={`Slide: ${activeSlide.title}`}
-                      />
-                    </div>
-                    {nextSlide ? (
-                      <div key={`card-next-${nextSlide.id}`} className="translate-x-0 lg:translate-x-2">
-                        <HeroSlideCard
-                          image={nextSlide.background}
-                          variant="preview"
-                          onClick={() => setActiveIndex(nextIndex)}
-                          ariaLabel={`Zum naechsten Slide: ${nextSlide.title}`}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="col-span-12 sm:hidden">
-                  <div className="mt-6 flex w-full items-end justify-end gap-3 overflow-visible pr-1">
-                    <div className="shrink-0">
-                      <HeroSlideCard
-                        image={activeSlide.thumbMain}
-                        variant="active"
-                        ariaLabel={`Slide: ${activeSlide.title}`}
-                      />
-                    </div>
-                    {nextSlide ? (
-                      <div className="shrink-0">
-                        <HeroSlideCard
-                          image={nextSlide.background}
-                          variant="preview"
-                          onClick={() => setActiveIndex(nextIndex)}
-                          ariaLabel={`Zum naechsten Slide: ${nextSlide.title}`}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-              <HeroSliderDots
-                count={count}
-                activeIndex={activeIndex}
-                onSelect={setActiveIndex}
-                labels={safeSlides.map((slide) => slide.title)}
-              />
-            </div>
-          </div>
-        </div>
-      </ContentShell>
-    </section>
+export function HeroSlideCard({ image, variant, onClick, ariaLabel }: HeroSlideCardProps) {
+  const sizeClass =
+    variant === 'active'
+      ? 'h-32 w-28 sm:h-44 sm:w-36 lg:h-52 lg:w-40'
+      : 'h-32 w-[5.5rem] sm:h-36 sm:w-28 lg:h-44 lg:w-32 cursor-pointer opacity-70 hover:opacity-100'
+  const content = (
+    <div
+      className={[
+        'relative shrink-0 overflow-hidden rounded-2xl border-2 transition-all duration-300',
+        variant === 'active'
+          ? 'border-white/80 shadow-xl'
+          : 'border-white/30 hover:border-white/70 shadow-md',
+        sizeClass,
+      ].join(' ')}
+    >
+      <Image
+        src={image.src}
+        alt={image.alt}
+        fill
+        priority={variant === 'active'}
+        loading={variant === 'active' ? 'eager' : 'lazy'}
+        className="object-cover"
+        sizes="160px"
+      />
+    </div>
   )
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={ariaLabel}
+        className="shrink-0 rounded-2xl focus:outline-none focus:ring-2 focus:ring-white/60"
+      >
+        {content}
+      </button>
+    )
+  }
+  return <div aria-label={ariaLabel}>{content}</div>
 }
 ````
 
@@ -23093,178 +23446,6 @@ export function InfoWithCounters({ content = INFO_WITH_COUNTERS }: InfoWithCount
               </div>
             </div>
           ))}
-        </div>
-      </ContentShell>
-    </section>
-  )
-}
-````
-
-## File: src/features/home/sections/InfoWithImageLeft/data.ts
-````typescript
-import type { InfoWithImageLeftContent } from './types'
-export const INFO_WITH_IMAGE_LEFT: InfoWithImageLeftContent = {
-  title: 'Adler Planen - der Online-Shop für hochwertige PVC-Planen',
-  description:
-    'Wir bieten individuelle Lösungen für Anhänger, Terrassen, Pools, Boote und mehr – passgenau, langlebig und zuverlässig. Dank unserer langjährigen Erfahrung und modernster Technik erhalten Sie Produkte, die höchsten Qualitätsansprüchen gerecht werden. Ob Schutz, Abdeckung oder individuelle Sonderanfertigung – bei uns finden Sie die passende Plane für Ihr Projekt.',
-  points: [
-    'Reißfestes PVC-Material – 680 g/m² Standard',
-    'Professionell verschweißte Nähte',
-    'UV- und witterungsbeständig',
-    'Individuelle Farben und Befestigungen wählbar',
-  ],
-  image: {
-    src: '/images/Planenadler1.jpg',
-    alt: 'Hochwertige PVC-Plane – Detailansicht',
-  },
-  ctaLabel: 'Mehr über uns',
-  ctaHref: '/ueber-uns',
-}
-````
-
-## File: src/features/home/sections/InfoWithImageRight/data.ts
-````typescript
-import type { InfoWithImageRightContent } from './types'
-export const INFO_WITH_IMAGE_RIGHT: InfoWithImageRightContent = {
-  title: 'Individuelle Planen nach Maß – für jeden Einsatzbereich',
-  description:
-    'Ob Terrasse, Anhänger, Pool oder Lager: Wir fertigen Ihre Plane exakt nach Ihren Maßen und Anforderungen. Hochwertige Materialien, präzise Verarbeitung und persönliche Beratung – alles aus einer Hand.',
-  images: [
-    {
-      src: '/images/Terrassenplane4.png',
-      alt: 'Terrassenplane in Anwendung',
-    },
-    {
-      src: '/images/AnhängerplaneAdlerplanen.png',
-      alt: 'Anhängerplane – maßgefertigt',
-    },
-    {
-      src: '/images/image1%20%281%29.png',
-      alt: 'Planenadler – Produktimpression',
-    },
-    {
-      src: '/images/image1.png',
-      alt: 'Hochwertige Plane im Einsatz',
-    },
-    {
-      src: '/images/image2.png',
-      alt: 'Individuelle Abdecklösung',
-    },
-    {
-      src: '/images/Planenadler%202.jpg',
-      alt: 'PVC-Plane – Detailansicht',
-    },
-    {
-      src: '/images/Planenadler%203.jpg',
-      alt: 'Maßgefertigte Plane',
-    },
-    {
-      src: '/images/Planenadler%204.jpg',
-      alt: 'Plane nach Maß',
-    },
-    {
-      src: '/images/Planenadler%207.png',
-      alt: 'Planenadler Qualität',
-    },
-    {
-      src: '/images/Arbeiter%20terrassenplane.png',
-      alt: 'Montage einer Terrassenplane',
-    },
-  ],
-  buttons: [
-    {
-      label: 'Jetzt konfigurieren',
-      href: '/konfigurator',
-      variant: 'primary',
-    },
-    {
-      label: 'Alle Produkte',
-      href: '/shop',
-      variant: 'secondary',
-    },
-  ],
-}
-````
-
-## File: src/features/home/sections/InfoWithImageRight/InfoWithImageRight.tsx
-````typescript
-'use client'
-import { useMemo, useState } from 'react'
-import Image from 'next/image'
-import type { InfoWithImageRightContent } from './types'
-import { INFO_WITH_IMAGE_RIGHT } from './data'
-import { ActionButton } from '../InfoWithCounters/ActionButton'
-import { ContentShell } from '@/shared/components/ContentShell.component'
-interface InfoWithImageRightProps {
-  content?: InfoWithImageRightContent
-}
-export function InfoWithImageRight({
-  content = INFO_WITH_IMAGE_RIGHT,
-}: InfoWithImageRightProps) {
-  const images = content.images.length ? content.images : INFO_WITH_IMAGE_RIGHT.images
-  const [activeIndex, setActiveIndex] = useState(0)
-  const total = images.length
-  const activeImage = useMemo(() => images[activeIndex], [images, activeIndex])
-  const goNext = () => setActiveIndex((index) => (index + 1) % total)
-  const goPrev = () => setActiveIndex((index) => (index - 1 + total) % total)
-  const canSlide = total > 1
-  return (
-    <section className="w-full bg-white py-16 lg:py-24">
-      <ContentShell>
-        <div className="mb-8 max-w-4xl sm:mb-10 lg:mb-16">
-          <h2 className="text-3xl font-bold leading-tight tracking-tight text-[#1F5CAB] sm:text-4xl lg:text-6xl">
-            {content.title}
-          </h2>
-        </div>
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:items-start lg:gap-14">
-          <div className="flex flex-col justify-center lg:col-span-5 xl:col-span-4 lg:pt-8">
-            <p className="text-sm leading-relaxed text-[#1F5CAB]/80 sm:text-base lg:text-lg">
-              {content.description}
-            </p>
-            <div className="mt-8 flex flex-wrap items-center gap-3 sm:gap-4">
-              {content.buttons.map((button) => (
-                <ActionButton key={`${button.href}-${button.label}`} button={button} />
-              ))}
-            </div>
-          </div>
-          <div className="lg:col-span-7 xl:col-span-8">
-            <div className="relative overflow-hidden rounded-[2rem] bg-[#DBE9F9] sm:rounded-[2.5rem]">
-              <div className="relative aspect-[4/3] w-full sm:aspect-[16/9]">
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.preventDefault()
-                    goPrev()
-                  }}
-                  disabled={!canSlide}
-                  className="absolute left-3 top-1/2 z-20 flex h-14 w-14 -translate-y-1/2 touch-manipulation items-center justify-center rounded-full bg-white/95 text-2xl font-light text-[#1F5CAB] shadow-lg transition hover:bg-white disabled:cursor-default disabled:opacity-50 sm:left-4 sm:h-16 sm:w-16"
-                  aria-label="Vorheriges Bild"
-                >
-                  ‹
-                </button>
-                <Image
-                  src={activeImage.src}
-                  alt={activeImage.alt}
-                  fill
-                  draggable={false}
-                  className="object-cover"
-                  sizes="(max-width: 1024px) 100vw, 66vw"
-                />
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.preventDefault()
-                    goNext()
-                  }}
-                  disabled={!canSlide}
-                  className="absolute right-3 top-1/2 z-20 flex h-14 w-14 -translate-y-1/2 touch-manipulation items-center justify-center rounded-full bg-white/95 text-2xl font-light text-[#1F5CAB] shadow-lg transition hover:bg-white disabled:cursor-default disabled:opacity-50 sm:right-4 sm:h-16 sm:w-16"
-                  aria-label="Nächstes Bild"
-                >
-                  ›
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       </ContentShell>
     </section>
@@ -23885,6 +24066,247 @@ export const SHOP_FAQ_ITEMS: FaqItem[] = [
 ]
 ````
 
+## File: src/features/shop/lib/fetchShopCategoriesWithProductImages.ts
+````typescript
+import { SHOP_CATEGORIES } from '../data/shopCategories'
+import type { ShopCategory } from '../types'
+import { gqlFetch } from '@/features/home/sections/ProductsShowcase/api/fetcher'
+const DEFAULT_GRAPHQL_ENDPOINT = 'https://wp.planenadler.de/graphql'
+const SHOP_CATEGORY_IMAGES_QUERY = /* GraphQL */ `
+  query ShopCategoryImages {
+    products(first: 100, where: { status: "publish" }) {
+      nodes {
+        slug
+        name
+        ... on Product {
+          modified
+          image {
+            sourceUrl
+            altText
+          }
+          productCategories {
+            nodes {
+              slug
+              name
+            }
+          }
+        }
+        ... on SimpleProduct {
+          modified
+          image {
+            sourceUrl
+            altText
+          }
+          productCategories {
+            nodes {
+              slug
+              name
+            }
+          }
+        }
+        ... on VariableProduct {
+          modified
+          image {
+            sourceUrl
+            altText
+          }
+          productCategories {
+            nodes {
+              slug
+              name
+            }
+          }
+        }
+        ... on ExternalProduct {
+          modified
+          image {
+            sourceUrl
+            altText
+          }
+          productCategories {
+            nodes {
+              slug
+              name
+            }
+          }
+        }
+        ... on GroupProduct {
+          modified
+          image {
+            sourceUrl
+            altText
+          }
+          productCategories {
+            nodes {
+              slug
+              name
+            }
+          }
+        }
+      }
+    }
+  }
+`
+interface ShopImageNode {
+  slug?: string | null
+  name?: string | null
+  modified?: string | null
+  image?: {
+    sourceUrl?: string | null
+    altText?: string | null
+  } | null
+  productCategories?: {
+    nodes?: Array<{
+      slug?: string | null
+      name?: string | null
+    }> | null
+  } | null
+}
+interface ShopCategoryImagesResponse {
+  products?: {
+    nodes?: ShopImageNode[] | null
+  } | null
+}
+function getGraphqlEndpoints(): string[] {
+  const configured =
+    process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim()
+  return Array.from(new Set([configured, DEFAULT_GRAPHQL_ENDPOINT].filter(Boolean))) as string[]
+}
+function appendImageVersion(sourceUrl: string, version?: string | null): string {
+  if (!version) return sourceUrl
+  const safeVersion = version.replace(/[^a-zA-Z0-9]/g, '')
+  try {
+    const url = new URL(sourceUrl)
+    url.searchParams.set('v', safeVersion)
+    return url.toString()
+  } catch {
+    // If it's a relative URL, adding ?v= breaks Next.js Image Optimization
+    return sourceUrl
+  }
+}
+function getHrefSlug(href: string): string {
+  return href.split('/').filter(Boolean).pop()?.toLowerCase() ?? ''
+}
+function normalizeToken(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '')
+}
+function buildTokenVariants(value: string): string[] {
+  const base = normalizeToken(value)
+  const variants = new Set<string>()
+  if (!base) {
+    return []
+  }
+  variants.add(base)
+  if (base.endsWith('en')) {
+    variants.add(base.slice(0, -2))
+    variants.add(`${base.slice(0, -2)}e`)
+  }
+  if (base.endsWith('n')) {
+    variants.add(base.slice(0, -1))
+  }
+  if (base.endsWith('s')) {
+    variants.add(base.slice(0, -1))
+  }
+  return Array.from(variants).filter(Boolean)
+}
+function getCategoryMatchTokens(category: ShopCategory): string[] {
+  const values = [category.id, category.slug, category.name, getHrefSlug(category.href)]
+  return Array.from(new Set(values.flatMap(buildTokenVariants)))
+}
+function getProductMatchTokens(product: ShopImageNode): string[] {
+  const categoryValues = (product.productCategories?.nodes ?? []).flatMap((entry) => [
+    entry.slug ?? '',
+    entry.name ?? '',
+  ])
+  const values = [product.slug ?? '', product.name ?? '', ...categoryValues]
+  return Array.from(new Set(values.flatMap(buildTokenVariants)))
+}
+function scoreProductMatch(category: ShopCategory, product: ShopImageNode): number {
+  const hrefSlug = normalizeToken(getHrefSlug(category.href))
+  const categorySlug = normalizeToken(category.slug)
+  const categoryName = normalizeToken(category.name)
+  const productSlug = normalizeToken(product.slug ?? '')
+  const productName = normalizeToken(product.name ?? '')
+  const productCategoryTokens = (product.productCategories?.nodes ?? []).flatMap((entry) =>
+    [entry.slug ?? '', entry.name ?? ''].map(normalizeToken).filter(Boolean),
+  )
+  const categoryTokens = getCategoryMatchTokens(category)
+  const productTokens = getProductMatchTokens(product)
+  if (hrefSlug && productSlug === hrefSlug) {
+    return 100
+  }
+  if (categorySlug && productSlug === categorySlug) {
+    return 95
+  }
+  if (categoryName && productName === categoryName) {
+    return 90
+  }
+  if (hrefSlug && productCategoryTokens.includes(hrefSlug)) {
+    return 80
+  }
+  if (categorySlug && productCategoryTokens.includes(categorySlug)) {
+    return 75
+  }
+  if (categoryName && productCategoryTokens.includes(categoryName)) {
+    return 70
+  }
+  if (categoryTokens.some((token) => productTokens.includes(token))) {
+    return 50
+  }
+  return 0
+}
+function findMatchingProduct(category: ShopCategory, products: ShopImageNode[]): ShopImageNode | undefined {
+  let bestMatch: ShopImageNode | undefined
+  let bestScore = 0
+  for (const product of products) {
+    const score = scoreProductMatch(category, product)
+    if (score > bestScore) {
+      bestMatch = product
+      bestScore = score
+    }
+  }
+  return bestScore > 0 ? bestMatch : undefined
+}
+export async function fetchShopCategoriesWithProductImages(): Promise<ShopCategory[]> {
+  let products: ShopImageNode[] = []
+  let lastError: unknown = null
+  for (const endpoint of getGraphqlEndpoints()) {
+    try {
+      const data = await gqlFetch<ShopCategoryImagesResponse>(endpoint, {
+        query: SHOP_CATEGORY_IMAGES_QUERY,
+        timeoutMs: 12000,
+      })
+      products = data.products?.nodes ?? []
+      lastError = null
+      break
+    } catch (error) {
+      lastError = error
+    }
+  }
+  if (!products.length && lastError) {
+    return SHOP_CATEGORIES
+  }
+  return SHOP_CATEGORIES.map((category) => {
+    const product = findMatchingProduct(category, products)
+    const sourceUrl = product?.image?.sourceUrl
+    if (!sourceUrl) {
+      return category
+    }
+    return {
+      ...category,
+      image: {
+        src: appendImageVersion(sourceUrl, product?.modified),
+        alt: product?.image?.altText || product?.name || category.name,
+      },
+    }
+  })
+}
+````
+
 ## File: src/lib/analytics.ts
 ````typescript
 const GA_MEASUREMENT_ID_FALLBACK = 'G-WFQGYYGWTR'
@@ -24363,76 +24785,6 @@ const Navbar = () => {
   );
 };
 export default Navbar;
-````
-
-## File: src/shared/components/Layout.component.tsx
-````typescript
-// Imports
-import { ReactNode } from 'react';
-import Image from 'next/image';
-// Components
-import Header from '@/shared/components/Header/Header.component';
-import { ContentShell } from '@/shared/components/ContentShell.component';
-import { TopBar } from '@/shared/components/TopBar/TopBar.component';
-import PageTitle from './PageTitle.component';
-import Footer from '@/shared/components/Footer/Footer.component';
-import Stickynav from '@/shared/components/Footer/Stickynav.component';
-const WHATSAPP_NUMBER = '491727436428'
-function WhatsAppFloatButton() {
-  const href = `https://wa.me/${WHATSAPP_NUMBER}`
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label="WhatsApp Kontakt"
-      className="fixed bottom-32 right-4 z-[400] flex h-14 w-14 items-center justify-center overflow-hidden rounded-full shadow-lg transition hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:ring-offset-2 md:bottom-6"
-    >
-      <Image
-        src="/images/whatsapp_4008228.png"
-        alt="WhatsApp Kontakt zu Planenadler"
-        width={56}
-        height={56}
-        className="h-full w-full object-cover"
-        sizes="56px"
-      />
-    </a>
-  )
-}
-interface ILayoutProps {
-  children?: ReactNode;
-  title: string;
-  showPageTitle?: boolean;
-}
-/**
- * Renders layout for each page. Also passes along the title to the Header component.
- * @function Layout
- * @param {ReactNode} children - Children to be rendered by Layout component
- * @param {TTitle} title - Title for the page. Is set in <title>{title}</title>
- * @returns {JSX.Element} - Rendered component
- */
-const Layout = ({ children, title, showPageTitle = true }: ILayoutProps) => {
-  return (
-    <div className="flex min-h-screen w-full min-w-0 flex-col overflow-x-hidden pt-20">
-      <Header title={title} />
-      <TopBar />
-      {!showPageTitle ? (
-        <main className="flex-1">{children}</main>
-      ) : (
-        <ContentShell className="flex-1">
-          <PageTitle title={title} />
-          <main>{children}</main>
-        </ContentShell>
-      )}
-      <div className="mt-auto">
-        <Footer />
-        <Stickynav />
-      </div>
-      <WhatsAppFloatButton />
-    </div>
-  );
-};
-export default Layout;
 ````
 
 ## File: src/shared/lib/GQL_QUERIES.ts
@@ -25549,65 +25901,6 @@ export function ProductViewTracker({ productId, slug, name, priceValue }: Produc
     pushedRef.current = true
   }, [name, priceValue, productId, slug])
   return null
-}
-````
-
-## File: src/app/(shop)/shop/page.tsx
-````typescript
-import type { Metadata } from 'next'
-import { TopBar } from '@/shared/components/TopBar/TopBar.component'
-import Stickynav from '@/shared/components/Footer/Stickynav.component'
-import Footer from '@/shared/components/Footer/Footer.component'
-import {
-  ShopHeroSection,
-  ShopCategoryGridSection,
-  buildFaqSchema,
-  SHOP_FAQ_ITEMS,
-} from '@/features/shop'
-import { fetchShopCategoriesWithProductImages } from '@/features/shop/lib/fetchShopCategoriesWithProductImages'
-import { BlogShowcase } from '@/features/home'
-import { mapBlogPostToArticle, getCategoriesFromBlogPosts } from '@/features/home/sections/BlogShowcase/mapBlogPostToArticle'
-import { FAQSection } from '@/features/about'
-import { getRecentBlogPosts } from '@/features/blog'
-import { buildCanonicalMetadata } from '@/lib/seo'
-import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
-export const revalidate = 3600
-export const metadata: Metadata = buildCanonicalMetadata(
-  '/shop',
-  'Shop',
-  'Unsere Produkte und Planenloesungen: Terrassenplanen, Anhaengerplanen, Abdeckhauben, Abdeckplanen, Poolplanen und weitere Massanfertigungen.'
-)
-export default async function ShopPage() {
-  const faqSchema = buildFaqSchema(SHOP_FAQ_ITEMS)
-  const breadcrumbSchema = getBreadcrumbJsonLd([
-    { name: 'Startseite', path: '/' },
-    { name: 'Shop', path: '/shop' },
-  ])
-  const shopCategories = await fetchShopCategoriesWithProductImages()
-  const recentPosts = await getRecentBlogPosts(4)
-  const blogArticles = recentPosts.map(mapBlogPostToArticle)
-  const blogCategories = getCategoriesFromBlogPosts(recentPosts)
-  return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
-      />
-      <main className="min-h-screen bg-white pb-16 sm:pt-20">
-        <TopBar />
-        <ShopHeroSection />
-        <ShopCategoryGridSection categories={shopCategories} />
-        <BlogShowcase articles={blogArticles} categories={blogCategories} />
-        <FAQSection items={SHOP_FAQ_ITEMS} />
-        <Footer />
-      </main>
-      <Stickynav />
-    </>
-  )
 }
 ````
 
@@ -26828,56 +27121,91 @@ export const POPULAR_CATEGORIES: Category[] = [
 ]
 ````
 
-## File: src/features/home/sections/Hero/components/HeroSlideCard/HeroSlideCard.component.tsx
+## File: src/features/home/sections/Hero/data.ts
 ````typescript
-import Image from 'next/image'
-import type { HeroImage } from '../../types'
-interface HeroSlideCardProps {
-  image: HeroImage
-  variant: 'active' | 'preview'
-  onClick?: () => void
-  ariaLabel?: string
-}
-export function HeroSlideCard({ image, variant, onClick, ariaLabel }: HeroSlideCardProps) {
-  const sizeClass =
-    variant === 'active'
-      ? 'h-32 w-28 sm:h-44 sm:w-36 lg:h-52 lg:w-40'
-      : 'h-32 w-[5.5rem] sm:h-36 sm:w-28 lg:h-44 lg:w-32 cursor-pointer opacity-70 hover:opacity-100'
-  const content = (
-    <div
-      className={[
-        'relative shrink-0 overflow-hidden rounded-2xl border-2 transition-all duration-300',
-        variant === 'active'
-          ? 'border-white/80 shadow-xl'
-          : 'border-white/30 hover:border-white/70 shadow-md',
-        sizeClass,
-      ].join(' ')}
-    >
-      <Image
-        src={image.src}
-        alt={image.alt}
-        fill
-        priority={variant === 'active'}
-        loading={variant === 'active' ? 'eager' : 'lazy'}
-        className="object-cover"
-        sizes="160px"
-      />
-    </div>
-  )
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        aria-label={ariaLabel}
-        className="shrink-0 rounded-2xl focus:outline-none focus:ring-2 focus:ring-white/60"
-      >
-        {content}
-      </button>
-    )
-  }
-  return <div aria-label={ariaLabel}>{content}</div>
-}
+import type { HeroSlide } from './types'
+export const HERO_SLIDES: HeroSlide[] = [
+  {
+    id: 'cabins',
+    navLabel: 'Terrassenplane konfigurieren',
+    title: 'Terrassenplane konfigurieren',
+    description:
+      'Schaffen Sie einen geschützten Rückzugsort im Freien mit unseren Terrassenplanen. Entdecken Sie eine Vielzahl von Optionen, um Ihre Terrasse stilvoll zu gestalten und vor den Elementen zu schützen. Jetzt entdecken und Ihren Außenbereich aufwerten!',
+    cta: {
+      label: 'Jetzt Konfigurieren',
+      href: '/product/terrassenplanen',
+      bgColor: 'bg-[#205297] hover:bg-[#205297]',
+    },
+    background: {
+      src: '/images/Terrassenplane4.png',
+      alt: 'Terrassenplane',
+    },
+    thumbMain: {
+      src: '/images/Terrassenplane4.png',
+      alt: 'Terrassenplane',
+    },
+  },
+  {
+    id: 'gated',
+    navLabel: 'Anhängerplane konfigurieren',
+    title: 'Anhängerplane konfigurieren',
+    description:
+      'Schützen Sie Ladung und Anhänger mit einer maßgefertigten Anhängerplane aus reißfestem PVC – wasserdicht, UV-beständig und passgenau für PKW-Anhänger sowie Nutzfahrzeuge. Konfigurieren Sie Maße, Farbe, Ösen und Verschluss online und erhalten Sie eine Plane, die Ihrem Einsatz entspricht. Jetzt Anhängerplane konfigurieren und Transport sicher abdecken!',
+    cta: {
+      label: 'Jetzt Konfigurieren',
+      href: '/product/hochplane',
+      bgColor: 'bg-[#205297] hover:bg-[#205297]',
+    },
+    background: {
+      src: '/images/anhängerflachplane.png',
+      alt: 'Anhängerplane',
+    },
+    thumbMain: {
+      src: '/images/anhängerflachplane.png',
+      alt: 'Anhängerplane',
+    },
+  },
+  {
+    id: 'abdeckplane',
+    navLabel: 'Abdeckplane konfigurieren',
+    title: 'Abdeckplane konfigurieren',
+    description:
+      'Schützen Sie Holz, Geräte oder Materialien zuverlässig vor Regen und Witterung mit einer maßgeschneiderten Abdeckplane. Robustes PVC, präzise Verarbeitung und Ihre gewünschten Maße – ideal für Stapel, Maschinen und längere Außenlagerung.',
+    cta: {
+      label: 'Jetzt konfigurieren',
+      href: '/product/abdeckplane',
+      bgColor: 'bg-[#205297] hover:bg-[#205297]',
+    },
+    background: {
+      src: '/images/Abdeckplane_Holz.png',
+      alt: 'Abdeckplane fuer Holz und Material',
+    },
+    thumbMain: {
+      src: '/images/Abdeckplane_Holz.png',
+      alt: 'Abdeckplane fuer Holz und Material',
+    },
+  },
+  {
+    id: 'poolabdeckung',
+    navLabel: 'Poolabdeckungen konfigurieren',
+    title: 'Poolabdeckungen konfigurieren',
+    description:
+      'Schützen Sie Ihr Becken mit einer maßgefertigten Poolabdeckung aus robustem, UV-beständigem PVC: weniger Schmutz, Laub und Verunreinigungen, weniger Reinigungsaufwand und bessere Wasserqualität über die Saison. Geben Sie Ihre Poolmaße und Wünsche im Konfigurator ein – jetzt Poolplane bzw. Poolabdeckung online konfigurieren und die nächste Badesaison sorgenfrei genießen!',
+    cta: {
+      label: 'Jetzt Konfigurieren',
+      href: '/product/poolplane',
+      bgColor: 'bg-[#205297] hover:bg-[#205297]',
+    },
+    background: {
+      src: '/images/Adlerplanen_Poolabdeckung.png',
+      alt: 'Maßgefertigte Poolabdeckung von Planenadler',
+    },
+    thumbMain: {
+      src: '/images/Adlerplanen_Poolabdeckung.png',
+      alt: 'Maßgefertigte Poolabdeckung von Planenadler',
+    },
+  },
+]
 ````
 
 ## File: src/features/product/components/AddToCart.component.tsx
@@ -27065,247 +27393,6 @@ export const SHOP_CATEGORIES: ShopCategory[] = [
     hrefConfig: '/product/abdeckhaube-lounge#konfigurator',
   },
 ]
-````
-
-## File: src/features/shop/lib/fetchShopCategoriesWithProductImages.ts
-````typescript
-import { SHOP_CATEGORIES } from '../data/shopCategories'
-import type { ShopCategory } from '../types'
-import { gqlFetch } from '@/features/home/sections/ProductsShowcase/api/fetcher'
-const DEFAULT_GRAPHQL_ENDPOINT = 'https://wp.planenadler.de/graphql'
-const SHOP_CATEGORY_IMAGES_QUERY = /* GraphQL */ `
-  query ShopCategoryImages {
-    products(first: 100, where: { status: "publish" }) {
-      nodes {
-        slug
-        name
-        ... on Product {
-          modified
-          image {
-            sourceUrl
-            altText
-          }
-          productCategories {
-            nodes {
-              slug
-              name
-            }
-          }
-        }
-        ... on SimpleProduct {
-          modified
-          image {
-            sourceUrl
-            altText
-          }
-          productCategories {
-            nodes {
-              slug
-              name
-            }
-          }
-        }
-        ... on VariableProduct {
-          modified
-          image {
-            sourceUrl
-            altText
-          }
-          productCategories {
-            nodes {
-              slug
-              name
-            }
-          }
-        }
-        ... on ExternalProduct {
-          modified
-          image {
-            sourceUrl
-            altText
-          }
-          productCategories {
-            nodes {
-              slug
-              name
-            }
-          }
-        }
-        ... on GroupProduct {
-          modified
-          image {
-            sourceUrl
-            altText
-          }
-          productCategories {
-            nodes {
-              slug
-              name
-            }
-          }
-        }
-      }
-    }
-  }
-`
-interface ShopImageNode {
-  slug?: string | null
-  name?: string | null
-  modified?: string | null
-  image?: {
-    sourceUrl?: string | null
-    altText?: string | null
-  } | null
-  productCategories?: {
-    nodes?: Array<{
-      slug?: string | null
-      name?: string | null
-    }> | null
-  } | null
-}
-interface ShopCategoryImagesResponse {
-  products?: {
-    nodes?: ShopImageNode[] | null
-  } | null
-}
-function getGraphqlEndpoints(): string[] {
-  const configured =
-    process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim()
-  return Array.from(new Set([configured, DEFAULT_GRAPHQL_ENDPOINT].filter(Boolean))) as string[]
-}
-function appendImageVersion(sourceUrl: string, version?: string | null): string {
-  if (!version) return sourceUrl
-  const safeVersion = version.replace(/[^a-zA-Z0-9]/g, '')
-  try {
-    const url = new URL(sourceUrl)
-    url.searchParams.set('v', safeVersion)
-    return url.toString()
-  } catch {
-    // If it's a relative URL, adding ?v= breaks Next.js Image Optimization
-    return sourceUrl
-  }
-}
-function getHrefSlug(href: string): string {
-  return href.split('/').filter(Boolean).pop()?.toLowerCase() ?? ''
-}
-function normalizeToken(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '')
-}
-function buildTokenVariants(value: string): string[] {
-  const base = normalizeToken(value)
-  const variants = new Set<string>()
-  if (!base) {
-    return []
-  }
-  variants.add(base)
-  if (base.endsWith('en')) {
-    variants.add(base.slice(0, -2))
-    variants.add(`${base.slice(0, -2)}e`)
-  }
-  if (base.endsWith('n')) {
-    variants.add(base.slice(0, -1))
-  }
-  if (base.endsWith('s')) {
-    variants.add(base.slice(0, -1))
-  }
-  return Array.from(variants).filter(Boolean)
-}
-function getCategoryMatchTokens(category: ShopCategory): string[] {
-  const values = [category.id, category.slug, category.name, getHrefSlug(category.href)]
-  return Array.from(new Set(values.flatMap(buildTokenVariants)))
-}
-function getProductMatchTokens(product: ShopImageNode): string[] {
-  const categoryValues = (product.productCategories?.nodes ?? []).flatMap((entry) => [
-    entry.slug ?? '',
-    entry.name ?? '',
-  ])
-  const values = [product.slug ?? '', product.name ?? '', ...categoryValues]
-  return Array.from(new Set(values.flatMap(buildTokenVariants)))
-}
-function scoreProductMatch(category: ShopCategory, product: ShopImageNode): number {
-  const hrefSlug = normalizeToken(getHrefSlug(category.href))
-  const categorySlug = normalizeToken(category.slug)
-  const categoryName = normalizeToken(category.name)
-  const productSlug = normalizeToken(product.slug ?? '')
-  const productName = normalizeToken(product.name ?? '')
-  const productCategoryTokens = (product.productCategories?.nodes ?? []).flatMap((entry) =>
-    [entry.slug ?? '', entry.name ?? ''].map(normalizeToken).filter(Boolean),
-  )
-  const categoryTokens = getCategoryMatchTokens(category)
-  const productTokens = getProductMatchTokens(product)
-  if (hrefSlug && productSlug === hrefSlug) {
-    return 100
-  }
-  if (categorySlug && productSlug === categorySlug) {
-    return 95
-  }
-  if (categoryName && productName === categoryName) {
-    return 90
-  }
-  if (hrefSlug && productCategoryTokens.includes(hrefSlug)) {
-    return 80
-  }
-  if (categorySlug && productCategoryTokens.includes(categorySlug)) {
-    return 75
-  }
-  if (categoryName && productCategoryTokens.includes(categoryName)) {
-    return 70
-  }
-  if (categoryTokens.some((token) => productTokens.includes(token))) {
-    return 50
-  }
-  return 0
-}
-function findMatchingProduct(category: ShopCategory, products: ShopImageNode[]): ShopImageNode | undefined {
-  let bestMatch: ShopImageNode | undefined
-  let bestScore = 0
-  for (const product of products) {
-    const score = scoreProductMatch(category, product)
-    if (score > bestScore) {
-      bestMatch = product
-      bestScore = score
-    }
-  }
-  return bestScore > 0 ? bestMatch : undefined
-}
-export async function fetchShopCategoriesWithProductImages(): Promise<ShopCategory[]> {
-  let products: ShopImageNode[] = []
-  let lastError: unknown = null
-  for (const endpoint of getGraphqlEndpoints()) {
-    try {
-      const data = await gqlFetch<ShopCategoryImagesResponse>(endpoint, {
-        query: SHOP_CATEGORY_IMAGES_QUERY,
-        timeoutMs: 12000,
-      })
-      products = data.products?.nodes ?? []
-      lastError = null
-      break
-    } catch (error) {
-      lastError = error
-    }
-  }
-  if (!products.length && lastError) {
-    return SHOP_CATEGORIES
-  }
-  return SHOP_CATEGORIES.map((category) => {
-    const product = findMatchingProduct(category, products)
-    const sourceUrl = product?.image?.sourceUrl
-    if (!sourceUrl) {
-      return category
-    }
-    return {
-      ...category,
-      image: {
-        src: appendImageVersion(sourceUrl, product?.modified),
-        alt: product?.image?.altText || product?.name || category.name,
-      },
-    }
-  })
-}
 ````
 
 ## File: src/lib/tracking.ts
@@ -27822,6 +27909,104 @@ const Hamburger = ({ isOpen, onOpenChange }: HamburgerProps) => {
 export default Hamburger;
 ````
 
+## File: src/shared/components/Footer/Stickynav.component.tsx
+````typescript
+'use client';
+import { useState } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
+import Cart from '@/shared/components/Header/Cart.component';
+import Hamburger from './Hamburger.component';
+/**
+ * Navigation for the application.
+ * Includes mobile menu.
+ */
+const Stickynav = () => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  return (
+    <nav
+      id="footer"
+      className="fixed inset-x-0 bottom-0 z-[500] w-full overflow-visible bg-transparent lg:hidden"
+    >
+      <div
+        className="relative mt-0 flex w-full items-center justify-between overflow-hidden bg-blue-800 px-6 py-3"
+        style={{ borderTopLeftRadius: '10px', borderTopRightRadius: '10px' }}
+      >
+        <Hamburger isOpen={isMenuOpen} onOpenChange={setIsMenuOpen} />
+        {!isMenuOpen ? (
+          <Link
+            href="/"
+            aria-label="Planenadler Home"
+            className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
+          >
+            <Image
+              src="/Planenadlerlogoweiß.png"
+              alt="Planenadler Logo"
+              width={220}
+              height={58}
+              style={{ width: 'auto', height: 'auto' }}
+              className="h-12 w-auto object-contain sm:h-14"
+              priority
+            />
+          </Link>
+        ) : null}
+      <div
+        className="order-3 hidden w-full md:flex md:items-center md:w-auto md:order-1"
+        id="menu"
+      >
+        <ul className="items-center justify-between pt-4 text-base text-gray-700 md:flex md:pt-0">
+          <li>
+            <Link href="/shop">
+              <span className="inline-block py-2 pr-4 text-xl font-bold no-underline hover:underline">
+                Shop
+              </span>
+            </Link>
+          </li>
+          <li>
+            <Link href="/blog">
+              <span className="inline-block py-2 pr-4 text-xl font-bold no-underline hover:underline">
+                Blog
+              </span>
+            </Link>
+          </li>
+        </ul>
+      </div>
+      <div
+        className="order-2 flex items-center gap-2 transition-opacity md:order-3"
+        id="nav-content"
+      >
+        <Link
+          href="/mein-konto"
+          aria-label="Mein Konto"
+          className="inline-flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:bg-white/10"
+        >
+          <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden>
+            <circle
+              cx="12"
+              cy="8"
+              r="3.2"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+            />
+            <path
+              d="M5 19c1.1-3 3.6-4.6 7-4.6s5.9 1.6 7 4.6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </Link>
+        <Cart stickyNav />
+      </div>
+    </div>
+    </nav>
+  );
+};
+export default Stickynav;
+````
+
 ## File: src/shared/lib/GQL_MUTATIONS.ts
 ````typescript
 import { gql } from '@apollo/client';
@@ -28172,441 +28357,162 @@ export interface Cart {
 }
 ````
 
-## File: src/app/api/checkout/provider-redirect/route.ts
+## File: src/app/(shop)/product/[slug]/page.tsx
 ````typescript
-import { NextRequest, NextResponse } from 'next/server'
-import { createHmac } from 'crypto'
-import { fetchCustomerAccount } from '@/features/auth/api/fetchCustomerAccount'
-import { readWooSessionTokenFromRequest } from '@/lib/woo-session-cookie'
-type Provider = 'card' | 'klarna' | 'paypal'
-interface BodyShape {
-  provider?: Provider
-  checkoutInput?: unknown
-  returnUrl?: string
-  cancelUrl?: string
+import type { Metadata } from 'next'
+import ProductFeatures from './components/ProductFeatures'
+import ProductGallery from './components/ProductGallery'
+import ProductConfigurator from './components/ProductConfigurator'
+import { ProductViewTracker } from './components/ProductViewTracker'
+import ProductTabs from './components/ProductTabs'
+import ProductRecommendations from './components/ProductRecommendations'
+import { getCachedProductPageData } from './product-page-cache'
+import { ProductBlogFaqBoundary, ProductHeroReviewsBoundary } from './ProductPageStreaming'
+import { TopBar } from '@/shared/components/TopBar/TopBar.component'
+import Stickynav from '@/shared/components/Footer/Stickynav.component'
+import Footer from '@/shared/components/Footer/Footer.component'
+import { SITE_NAME, absoluteUrl } from '@/lib/seo'
+import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
+import { parseCartPriceString } from '@/shared/lib/functions'
+/**
+ * ISR (Sekunden). Muss ein **konstanter** Wert sein (Next.js Segment Config ist statisch zu analysieren).
+ * Feintuning des Daten-Caches: weiterhin `PRODUCT_PAGE_REVALIDATE_SECONDS` in product-data / product-page-cache.
+ */
+export const revalidate = 60
+interface ProductPageProps {
+  params: { slug?: string } | Promise<{ slug?: string }>
 }
-interface CheckoutInputShape {
-  billing?: {
-    firstName?: string
-    lastName?: string
-    company?: string
-    country?: string
-    address1?: string
-    address2?: string
-    city?: string
-    state?: string
-    postcode?: string
-    phone?: string
-    email?: string
-  }
-  shipping?: {
-    firstName?: string
-    lastName?: string
-    company?: string
-    country?: string
-    address1?: string
-    address2?: string
-    city?: string
-    state?: string
-    postcode?: string
-    phone?: string
-  }
+async function resolveSlug(params: ProductPageProps['params']): Promise<string> {
+  const resolved = await params
+  return typeof resolved?.slug === 'string' && resolved.slug.length > 0
+    ? resolved.slug
+    : 'lkw-plane-individuell'
 }
-type JsonPayload = Record<string, unknown>
-function resolveGraphqlUrl(): string {
-  return process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim() || ''
-}
-function resolveWordPressOrigin(): string {
-  const candidates = [
-    process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim(),
-    process.env.CUSTOMIZER_API_URL?.trim(),
-    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
-    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim(),
-    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
-    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
-  ].filter((value): value is string => Boolean(value))
-  for (const candidate of candidates) {
-    if (/\/wp-json\/wc\/store\/v1\/checkout\/?$/i.test(candidate)) {
-      return candidate.replace(/\/wp-json\/wc\/store\/v1\/checkout\/?$/i, '')
-    }
-    if (/\/graphql\/?$/i.test(candidate)) {
-      return candidate.replace(/\/graphql\/?$/i, '')
-    }
-    if (/\/wp-json\/.+$/i.test(candidate)) {
-      return candidate.replace(/\/wp-json\/.+$/i, '')
-    }
-  }
-  return ''
-}
-function resolveDefaultStoreApiCheckoutUrl(): string {
-  const origin = resolveWordPressOrigin()
-  return origin ? `${origin}/wp-json/wc/store/v1/checkout` : ''
-}
-function resolveUpstreamUrl(provider: Provider): string {
-  const sharedProviderUrl = process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim()
-  if (sharedProviderUrl) return sharedProviderUrl
-  if (provider === 'card') return process.env.WC_STRIPE_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
-  if (provider === 'klarna') return process.env.WC_KLARNA_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
-  return process.env.WC_PAYPAL_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
-}
-function resolvePaymentMethodId(provider: Provider): string {
-  if (provider === 'card') {
-    return process.env.WC_STRIPE_PAYMENT_METHOD_ID ?? 'stripe'
-  }
-  if (provider === 'klarna') {
-    return process.env.WC_KLARNA_PAYMENT_METHOD_ID ?? 'stripe_klarna'
-  }
-  return process.env.WC_PAYPAL_PAYMENT_METHOD_ID ?? 'ppcp'
-}
-function isStoreApiCheckoutUrl(url: string): boolean {
-  return /\/wp-json\/wc\/store\/v1\/checkout\/?$/.test(url)
-}
-function isPlanenadlerCustomEndpoint(url: string): boolean {
-  return /\/wp-json\/planenadler\/v1\//.test(url)
-}
-function resolveStoreApiFallbackUrl(provider: Provider): string {
-  if (provider === 'card') return process.env.WC_STRIPE_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
-  if (provider === 'klarna') return process.env.WC_KLARNA_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
-  return process.env.WC_PAYPAL_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
-}
-function getProviderPaymentAliases(provider: Provider): string[] {
-  if (provider === 'card') {
-    return ['woocommerce_payments', 'wcpay', 'stripe', 'stripe_cc', 'stripe_credit_card', 'credit_card']
-  }
-  if (provider === 'klarna') {
-    return ['stripe_klarna', 'woocommerce_payments_klarna', 'klarna_payments', 'klarna', 'kco']
-  }
-  return ['ppcp', 'ppcp-gateway', 'paypal', 'paypal_checkout', 'ppec_paypal']
-}
-function pickBestPaymentMethodId(
-  provider: Provider,
-  configuredId: string,
-  availableMethods: string[]
-): string {
-  if (!availableMethods.length) return configuredId
-  const byLower = new Map<string, string>()
-  for (const id of availableMethods) byLower.set(id.toLowerCase(), id)
-  const direct = byLower.get(configuredId.toLowerCase())
-  if (direct) return direct
-  for (const candidate of getProviderPaymentAliases(provider)) {
-    const match = byLower.get(candidate.toLowerCase())
-    if (match) return match
-  }
-  for (const [lower, original] of byLower.entries()) {
-    if (lower.includes(provider)) return original
-  }
-  return configuredId
-}
-function toStoreApiCartUrl(checkoutUrl: string): string {
-  return checkoutUrl.replace(/\/checkout\/?$/i, '/cart')
-}
-function toStoreApiPayload(input: CheckoutInputShape, paymentMethodId: string) {
-  const billing = input.billing ?? {}
-  const shipping = input.shipping ?? billing
+export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
+  const slug = await resolveSlug(params)
+  const product = await getCachedProductPageData(slug)
+  const title = `${product.title} | ${SITE_NAME}`
+  const description = (product.subtitle || `${product.title} online konfigurieren und anfragen.`).slice(0, 160)
+  const canonical = absoluteUrl(`/product/${slug}`)
+  const imageUrl = product.image?.src
+    ? absoluteUrl(product.image.src)
+    : absoluteUrl('/Planenadlerlogo.png')
   return {
-    billing_address: {
-      first_name: billing.firstName ?? '',
-      last_name: billing.lastName ?? '',
-      company: billing.company ?? '',
-      country: billing.country ?? 'DE',
-      address_1: billing.address1 ?? '',
-      address_2: billing.address2 ?? '',
-      city: billing.city ?? '',
-      state: billing.state ?? '',
-      postcode: billing.postcode ?? '',
-      phone: billing.phone ?? '',
-      email: billing.email ?? '',
+    title,
+    description,
+    alternates: {
+      canonical,
     },
-    shipping_address: {
-      first_name: shipping.firstName ?? billing.firstName ?? '',
-      last_name: shipping.lastName ?? billing.lastName ?? '',
-      company: shipping.company ?? '',
-      country: shipping.country ?? billing.country ?? 'DE',
-      address_1: shipping.address1 ?? billing.address1 ?? '',
-      address_2: shipping.address2 ?? '',
-      city: shipping.city ?? billing.city ?? '',
-      state: shipping.state ?? billing.state ?? '',
-      postcode: shipping.postcode ?? billing.postcode ?? '',
-      phone: shipping.phone ?? billing.phone ?? '',
+    robots: {
+      index: true,
+      follow: true,
     },
-    payment_method: paymentMethodId,
-    payment_data: [],
-  }
-}
-function extractRedirectUrl(data: Record<string, unknown>): string {
-  const direct = data.redirectUrl
-  if (typeof direct === 'string') return direct
-  const altDirect = data.redirect
-  if (typeof altDirect === 'string') return altDirect
-  const storeApi = data.redirect_url
-  if (typeof storeApi === 'string') return storeApi
-  const paymentResult = data.payment_result
-  if (paymentResult && typeof paymentResult === 'object') {
-    const resultRedirect = (paymentResult as { redirect_url?: unknown }).redirect_url
-    if (typeof resultRedirect === 'string') return resultRedirect
-  }
-  return ''
-}
-function extractErrorMessage(data: Record<string, unknown>, fallback: string): string {
-  return (
-    (data.error as string | undefined) ??
-    (data.message as string | undefined) ??
-    (data.code as string | undefined) ??
-    fallback
-  )
-}
-async function parseJsonSafe(response: Response): Promise<Record<string, unknown>> {
-  return (await response.json().catch(() => ({}))) as Record<string, unknown>
-}
-async function resolveSignedCustomerContext(request: NextRequest): Promise<{
-  customerEmail?: string
-  customerId?: number
-}> {
-  const graphqlUrl = resolveGraphqlUrl()
-  const cookie = request.headers.get('cookie') ?? ''
-  if (!graphqlUrl || !cookie) return {}
-  const customer = await fetchCustomerAccount(graphqlUrl, cookie)
-  if (!customer?.databaseId || !customer.email) return {}
-  return {
-    customerEmail: customer.email,
-    customerId: customer.databaseId,
-  }
-}
-function isReplayDetected(response: Response, data: Record<string, unknown>): boolean {
-  const code = typeof data.code === 'string' ? data.code : ''
-  return response.status === 409 && code === 'replay_detected'
-}
-async function postCustomEndpoint(
-  upstreamUrl: string,
-  cookie: string,
-  payload: Record<string, unknown>,
-  wooSessionToken?: string | null
-): Promise<{ response: Response; data: Record<string, unknown> }> {
-  let response: Response | null = null
-  let data: Record<string, unknown> = {}
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const requestBody = JSON.stringify({
-      ...payload,
-      requestId: `${Date.now()}-${attempt}`,
-    })
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(cookie ? { cookie } : {}),
-    }
-    if (wooSessionToken) {
-      headers['woocommerce-session'] = `Session ${wooSessionToken}`
-    }
-    if (isPlanenadlerCustomEndpoint(upstreamUrl) && process.env.WC_PROVIDER_API_SECRET) {
-      const timestamp = Math.floor(Date.now() / 1000).toString()
-      const signature = createHmac('sha256', process.env.WC_PROVIDER_API_SECRET)
-        .update(`${timestamp}.${requestBody}`)
-        .digest('hex')
-      headers['X-Planenadler-Timestamp'] = timestamp
-      headers['X-Planenadler-Signature'] = signature
-      headers['X-Planenadler-Client'] = 'nextjs-woocommerce'
-    }
-    response = await fetch(upstreamUrl, {
-      method: 'POST',
-      headers,
-      redirect: 'manual',
-      body: requestBody,
-    })
-    data = await parseJsonSafe(response)
-    if (!isReplayDetected(response, data)) break
-  }
-  if (!response) {
-    throw new Error('Keine Antwort vom Provider-Endpoint erhalten')
-  }
-  return { response, data }
-}
-function shouldFallbackToStoreApi(
-  provider: Provider,
-  upstreamUrl: string,
-  upstreamStatus: number,
-  data: JsonPayload
-): boolean {
-  if (!isPlanenadlerCustomEndpoint(upstreamUrl)) return false
-  const fallback = resolveStoreApiFallbackUrl(provider)
-  if (!fallback || !isStoreApiCheckoutUrl(fallback)) return false
-  const errorText = extractErrorMessage(data, '').toLowerCase()
-  const errorCode = (typeof data.code === 'string' ? data.code : '').toLowerCase()
-  if (errorText.includes('cart is not available')) return true
-  if (errorText.includes('warenkorb')) return true
-  if (errorCode.includes('cart')) return true
-  // Custom endpoint implementations vary; retry against Store API for common 4xx/5xx path.
-  return upstreamStatus >= 400
-}
-async function executeStoreApiCheckout(
-  provider: Provider,
-  upstreamUrl: string,
-  cookie: string,
-  checkoutInput: CheckoutInputShape
-): Promise<{ status: number; payload: JsonPayload }> {
-  const cartEndpoint = toStoreApiCartUrl(upstreamUrl)
-  const cartRes = await fetch(cartEndpoint, {
-    method: 'GET',
-    headers: cookie ? { cookie } : undefined,
-    cache: 'no-store',
-  })
-  const cartData = await parseJsonSafe(cartRes)
-  const bootstrap = await fetch(upstreamUrl, {
-    method: 'GET',
-    headers: cookie ? { cookie } : undefined,
-    cache: 'no-store',
-  })
-  const nonce = bootstrap.headers.get('nonce') ?? ''
-  const cartToken = bootstrap.headers.get('cart-token') ?? cartRes.headers.get('cart-token') ?? ''
-  const cartNonce = cartRes.headers.get('nonce') ?? nonce
-  const availablePaymentMethods = Array.isArray(cartData.payment_methods)
-    ? cartData.payment_methods.filter((method): method is string => typeof method === 'string')
-    : []
-  const selectedPaymentMethodId = pickBestPaymentMethodId(
-    provider,
-    resolvePaymentMethodId(provider),
-    availablePaymentMethods
-  )
-  const payload = toStoreApiPayload(checkoutInput, selectedPaymentMethodId)
-  const checkoutRes = await fetch(upstreamUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(cookie ? { cookie } : {}),
-      ...(cartNonce ? { Nonce: cartNonce } : {}),
-      ...(cartToken ? { 'Cart-Token': cartToken } : {}),
-    },
-    body: JSON.stringify(payload),
-  })
-  const checkoutData = await parseJsonSafe(checkoutRes)
-  const redirectUrl = extractRedirectUrl(checkoutData)
-  if (!checkoutRes.ok) {
-    return {
-      status: checkoutRes.status,
-      payload: {
-        error: extractErrorMessage(checkoutData, 'Store API Checkout Fehler'),
-        paymentMethodId: selectedPaymentMethodId,
-        availablePaymentMethods,
-        upstream: upstreamUrl,
-      },
-    }
-  }
-  if (!redirectUrl) {
-    return {
-      status: 502,
-      payload: {
-        error: 'Store API hat keine redirect_url geliefert',
-        paymentMethodId: selectedPaymentMethodId,
-        availablePaymentMethods,
-      },
-    }
-  }
-  return {
-    status: 200,
-    payload: {
-      redirectUrl,
-      paymentMethodId: selectedPaymentMethodId,
-    },
-  }
-}
-export async function POST(request: NextRequest) {
-  let body: BodyShape
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Ungueltiger JSON-Body' }, { status: 400 })
-  }
-  const provider = body.provider
-  if (provider !== 'card' && provider !== 'klarna' && provider !== 'paypal') {
-    return NextResponse.json({ error: 'provider muss card, klarna oder paypal sein' }, { status: 400 })
-  }
-  const upstreamUrl = resolveUpstreamUrl(provider)
-  if (!upstreamUrl) {
-    const varName =
-      provider === 'card'
-        ? 'WC_STRIPE_CHECKOUT_API_URL'
-        : provider === 'klarna'
-          ? 'WC_KLARNA_CHECKOUT_API_URL'
-          : 'WC_PAYPAL_CHECKOUT_API_URL'
-    return NextResponse.json({ error: `Konfiguration fehlt: ${varName}` }, { status: 501 })
-  }
-  const cookie = request.headers.get('cookie') ?? ''
-  const wooSessionToken = readWooSessionTokenFromRequest(request)
-  try {
-    if (isStoreApiCheckoutUrl(upstreamUrl)) {
-      const result = await executeStoreApiCheckout(
-        provider,
-        upstreamUrl,
-        cookie,
-        (body.checkoutInput ?? {}) as CheckoutInputShape
-      )
-      return NextResponse.json(result.payload, { status: result.status })
-    }
-    const upstreamPayload: Record<string, unknown> = {
-      provider,
-      checkoutInput: body.checkoutInput ?? null,
-    }
-    const checkoutInput = (body.checkoutInput ?? {}) as CheckoutInputShape
-    const signedCustomerContext = await resolveSignedCustomerContext(request)
-    const billingEmail = checkoutInput.billing?.email?.trim()
-    if (billingEmail) {
-      upstreamPayload.customerEmail = billingEmail
-    }
-    if (signedCustomerContext.customerEmail) {
-      upstreamPayload.loggedInCustomerEmail = signedCustomerContext.customerEmail
-    }
-    if (signedCustomerContext.customerId) {
-      upstreamPayload.customerId = signedCustomerContext.customerId
-    }
-    if (typeof body.returnUrl === 'string' && body.returnUrl.trim()) {
-      upstreamPayload.returnUrl = body.returnUrl.trim()
-    }
-    if (typeof body.cancelUrl === 'string' && body.cancelUrl.trim()) {
-      upstreamPayload.cancelUrl = body.cancelUrl.trim()
-    }
-    const { response: upstream, data } = await postCustomEndpoint(
-      upstreamUrl,
-      cookie,
-      upstreamPayload,
-      wooSessionToken
-    )
-    const location = upstream.headers.get('location')
-    if (location && upstream.status >= 300 && upstream.status <= 399) {
-      return NextResponse.json({ redirectUrl: location })
-    }
-    const redirectUrl = extractRedirectUrl(data)
-    if (!upstream.ok) {
-      if (
-        shouldFallbackToStoreApi(provider, upstreamUrl, upstream.status, data)
-      ) {
-        const fallbackUrl = resolveStoreApiFallbackUrl(provider)
-        if (fallbackUrl && isStoreApiCheckoutUrl(fallbackUrl)) {
-          const fallback = await executeStoreApiCheckout(
-            provider,
-            fallbackUrl,
-            cookie,
-            (body.checkoutInput ?? {}) as CheckoutInputShape
-          )
-          return NextResponse.json(fallback.payload, { status: fallback.status })
-        }
-      }
-      return NextResponse.json(
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      type: 'website',
+      images: [
         {
-          error: extractErrorMessage(data, 'Backend-Fehler'),
-          code: typeof data.code === 'string' ? data.code : undefined,
-          upstream: upstreamUrl,
+          url: imageUrl,
+          alt: product.image?.alt ?? product.title,
         },
-        { status: upstream.status }
-      )
-    }
-    if (!redirectUrl) {
-      return NextResponse.json({ error: 'Keine redirectUrl vom Backend erhalten' }, { status: 502 })
-    }
-    return NextResponse.json({ redirectUrl })
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Proxy-Fehler' },
-      { status: 502 }
-    )
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [imageUrl],
+    },
   }
+}
+export default async function ProductPage({ params }: ProductPageProps) {
+  const slug = await resolveSlug(params)
+  const product = await getCachedProductPageData(slug)
+  const breadcrumbSchema = getBreadcrumbJsonLd([
+    { name: 'Startseite', path: '/' },
+    { name: 'Shop', path: '/shop' },
+    { name: product.title, path: `/product/${slug}` },
+  ])
+  const numericPrice = parseCartPriceString(product.price)
+  const productSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.title,
+    description: product.subtitle,
+    image: [product.image.src, ...product.gallery.map((image) => image.src)].map((src) => absoluteUrl(src)),
+    sku: String(product.databaseId || slug),
+    brand: {
+      '@type': 'Brand',
+      name: SITE_NAME,
+    },
+    category: 'PVC-Plane',
+    url: absoluteUrl(`/product/${slug}`),
+    offers: Number.isFinite(numericPrice)
+      ? {
+          '@type': 'Offer',
+          priceCurrency: 'EUR',
+          price: numericPrice.toFixed(2),
+          availability: 'https://schema.org/InStock',
+          url: absoluteUrl(`/product/${slug}`),
+        }
+      : undefined,
+  }
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
+      />
+      <main className="bg-white pb-16 sm:pt-20">
+        <ProductViewTracker
+          productId={product.databaseId}
+          slug={slug}
+          name={product.title}
+          priceValue={Number.isFinite(numericPrice) ? numericPrice : null}
+        />
+        <TopBar />
+        <ProductHeroReviewsBoundary product={product} />
+        <ProductFeatures items={product.features} />
+        <section id="konfigurator" className="py-12 md:py-16" aria-labelledby="configurator-title">
+          <div className="mx-auto grid max-w-7xl gap-8 px-4 lg:grid-cols-[1.1fr_1fr] lg:items-start">
+            <div className="lg:self-stretch">
+              <div className="lg:sticky lg:top-24 lg:flex lg:max-h-[calc(100vh-8rem)] lg:flex-col">
+                <h2 id="configurator-title" className="mb-4 text-2xl font-bold text-[#0F2B52] lg:flex-none">
+                  Individuelle Konfiguration
+                </h2>
+                <ProductGallery
+                  mainImage={product.image}
+                  images={product.gallery}
+                  className="lg:min-h-0 lg:flex-1"
+                />
+              </div>
+            </div>
+            <ProductConfigurator
+              productId={product.databaseId}
+              productSlug={slug}
+              productName={product.title}
+              price={product.price}
+              hints={product.configuratorHints}
+              configuratorOptions={product.configuratorOptions}
+              priceEndpoint={product.priceEndpoint}
+            />
+          </div>
+        </section>
+        <ProductTabs tabs={product.tabs} />
+        <ProductRecommendations items={product.recommendations} />
+        <ProductBlogFaqBoundary />
+        <Footer />
+        <span className="sr-only">Produkt-Slug: {slug}</span>
+      </main>
+      <Stickynav />
+    </>
+  )
 }
 ````
 
@@ -29183,93 +29089,6 @@ export const useCheckoutStore = create<CheckoutState>()(
 )
 ````
 
-## File: src/features/home/sections/Hero/data.ts
-````typescript
-import type { HeroSlide } from './types'
-export const HERO_SLIDES: HeroSlide[] = [
-  {
-    id: 'cabins',
-    navLabel: 'Terrassenplane konfigurieren',
-    title: 'Terrassenplane konfigurieren',
-    description:
-      'Schaffen Sie einen geschützten Rückzugsort im Freien mit unseren Terrassenplanen. Entdecken Sie eine Vielzahl von Optionen, um Ihre Terrasse stilvoll zu gestalten und vor den Elementen zu schützen. Jetzt entdecken und Ihren Außenbereich aufwerten!',
-    cta: {
-      label: 'Jetzt Konfigurieren',
-      href: '/product/terrassenplanen',
-      bgColor: 'bg-[#205297] hover:bg-[#205297]',
-    },
-    background: {
-      src: '/images/Terrassenplane4.png',
-      alt: 'Terrassenplane',
-    },
-    thumbMain: {
-      src: '/images/Terrassenplane4.png',
-      alt: 'Terrassenplane',
-    },
-  },
-  {
-    id: 'gated',
-    navLabel: 'Anhängerplane konfigurieren',
-    title: 'Anhängerplane konfigurieren',
-    description:
-      'Schützen Sie Ladung und Anhänger mit einer maßgefertigten Anhängerplane aus reißfestem PVC – wasserdicht, UV-beständig und passgenau für PKW-Anhänger sowie Nutzfahrzeuge. Konfigurieren Sie Maße, Farbe, Ösen und Verschluss online und erhalten Sie eine Plane, die Ihrem Einsatz entspricht. Jetzt Anhängerplane konfigurieren und Transport sicher abdecken!',
-    cta: {
-      label: 'Jetzt Konfigurieren',
-      href: '/product/hochplane',
-      bgColor: 'bg-[#205297] hover:bg-[#205297]',
-    },
-    background: {
-      src: '/images/anhängerflachplane.png',
-      alt: 'Anhängerplane',
-    },
-    thumbMain: {
-      src: '/images/anhängerflachplane.png',
-      alt: 'Anhängerplane',
-    },
-  },
-  {
-    id: 'abdeckplane',
-    navLabel: 'Abdeckplane konfigurieren',
-    title: 'Abdeckplane konfigurieren',
-    description:
-      'Schützen Sie Holz, Geräte oder Materialien zuverlässig vor Regen und Witterung mit einer maßgeschneiderten Abdeckplane. Robustes PVC, präzise Verarbeitung und Ihre gewünschten Maße – ideal für Stapel, Maschinen und längere Außenlagerung.',
-    cta: {
-      label: 'Jetzt konfigurieren',
-      href: '/product/abdeckplane',
-      bgColor: 'bg-[#205297] hover:bg-[#205297]',
-    },
-    background: {
-      src: '/images/Abdeckplane_Holz.png',
-      alt: 'Abdeckplane fuer Holz und Material',
-    },
-    thumbMain: {
-      src: '/images/Abdeckplane_Holz.png',
-      alt: 'Abdeckplane fuer Holz und Material',
-    },
-  },
-  {
-    id: 'poolabdeckung',
-    navLabel: 'Poolabdeckungen konfigurieren',
-    title: 'Poolabdeckungen konfigurieren',
-    description:
-      'Schützen Sie Ihr Becken mit einer maßgefertigten Poolabdeckung aus robustem, UV-beständigem PVC: weniger Schmutz, Laub und Verunreinigungen, weniger Reinigungsaufwand und bessere Wasserqualität über die Saison. Geben Sie Ihre Poolmaße und Wünsche im Konfigurator ein – jetzt Poolplane bzw. Poolabdeckung online konfigurieren und die nächste Badesaison sorgenfrei genießen!',
-    cta: {
-      label: 'Jetzt Konfigurieren',
-      href: '/product/poolplane',
-      bgColor: 'bg-[#205297] hover:bg-[#205297]',
-    },
-    background: {
-      src: '/images/Adlerplanen_Poolabdeckung.png',
-      alt: 'Maßgefertigte Poolabdeckung von Planenadler',
-    },
-    thumbMain: {
-      src: '/images/Adlerplanen_Poolabdeckung.png',
-      alt: 'Maßgefertigte Poolabdeckung von Planenadler',
-    },
-  },
-]
-````
-
 ## File: src/lib/tracking/purchase.ts
 ````typescript
 import type { OrderReceiptSnapshot } from '@/features/checkout/lib/build-order-receipt-snapshot'
@@ -29770,260 +29589,577 @@ export function getTarpaulinOpeningValidationIssues(
 }
 ````
 
-## File: src/shared/components/Footer/Stickynav.component.tsx
+## File: src/shared/components/TopBar/TopBar.component.tsx
 ````typescript
-'use client';
-import { useState } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import Cart from '@/shared/components/Header/Cart.component';
-import Hamburger from './Hamburger.component';
-/**
- * Navigation for the application.
- * Includes mobile menu.
- */
-const Stickynav = () => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+'use client'
+import Image from 'next/image'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { cn } from '@/lib/utils'
+import { ContentShell } from '@/shared/components/ContentShell.component'
+import { MiniCartDropdown } from '@/features/cart/components/MiniCartDropdown'
+const leftMenu = [
+  { label: 'Home', href: '/' },
+  { label: 'Ueber Uns', href: '/ueber-uns' },
+  { label: 'Shop', href: '/shop' },
+  { label: 'News & Ratgeber', href: '/blog' },
+]
+const rightMenu = [
+  { label: 'FAQ', href: '/faq' },
+  { label: 'Kontakt', href: '/kontakt' },
+  { label: 'Mein Konto', href: '/mein-konto' },
+]
+const configuratorLink = { label: 'ZUM KONFIGURATOR', href: '/shop' }
+function getIsActive(asPath: string, href: string) {
+  if (!href) return false
+  if (href.startsWith('#')) return asPath.includes(href)
+  if (href === '/') return asPath === '/'
+  return asPath.startsWith(href)
+}
+export function TopBar() {
+  const pathname = usePathname()
+  const asPath = pathname ?? ''
   return (
-    <nav
-      id="footer"
-      className="fixed inset-x-0 bottom-0 z-[500] w-full overflow-visible bg-transparent lg:hidden"
-    >
-      <div
-        className="relative mt-0 flex w-full items-center justify-between overflow-hidden bg-blue-800 px-6 py-3"
-        style={{ borderTopLeftRadius: '10px', borderTopRightRadius: '10px' }}
-      >
-        <Hamburger isOpen={isMenuOpen} onOpenChange={setIsMenuOpen} />
-        {!isMenuOpen ? (
-          <Link
-            href="/"
-            aria-label="Planenadler Home"
-            className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
-          >
-            <Image
-              src="/Planenadlerlogoweiß.png"
-              alt="Planenadler Logo"
-              width={220}
-              height={58}
-              style={{ width: 'auto', height: 'auto' }}
-              className="h-12 w-auto object-contain sm:h-14"
-              priority
-            />
-          </Link>
-        ) : null}
-      <div
-        className="order-3 hidden w-full md:flex md:items-center md:w-auto md:order-1"
-        id="menu"
-      >
-        <ul className="items-center justify-between pt-4 text-base text-gray-700 md:flex md:pt-0">
-          <li>
-            <Link href="/shop">
-              <span className="inline-block py-2 pr-4 text-xl font-bold no-underline hover:underline">
-                Shop
-              </span>
-            </Link>
-          </li>
-          <li>
-            <Link href="/blog">
-              <span className="inline-block py-2 pr-4 text-xl font-bold no-underline hover:underline">
-                Blog
-              </span>
-            </Link>
-          </li>
-        </ul>
-      </div>
-      <div
-        className="order-2 flex items-center gap-2 transition-opacity md:order-3"
-        id="nav-content"
-      >
-        <Link
-          href="/mein-konto"
-          aria-label="Mein Konto"
-          className="inline-flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:bg-white/10"
-        >
-          <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden>
-            <circle
-              cx="12"
-              cy="8"
-              r="3.2"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-            />
-            <path
-              d="M5 19c1.1-3 3.6-4.6 7-4.6s5.9 1.6 7 4.6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-            />
-          </svg>
-        </Link>
-        <Cart stickyNav />
-      </div>
+    <div className="fixed left-0 right-0 top-0 z-50 w-full bg-transparent">
+      <ContentShell className="py-3 sm:py-4">
+        <div className="rounded-full border border-[#DBE9F9] bg-white/95 px-3 py-2.5 shadow-[0_16px_40px_rgba(15,43,82,0.12)] backdrop-blur sm:px-4 sm:py-3">
+          <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
+            <div className="hidden items-center justify-start gap-6 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB] lg:flex">
+              {leftMenu.map((item) => {
+                const isActive = getIsActive(asPath, item.href)
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'rounded-full px-3 py-2 text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
+                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                )
+              })}
+            </div>
+            <div className="flex items-center justify-center">
+              <Link
+                href="/"
+                aria-label="Planenadler Home"
+                className="flex items-center"
+              >
+                <Image
+                  src="/Planenadlerlogo.png"
+                  alt="Planenadler Logo"
+                  width={180}
+                  height={48}
+                  style={{ width: 'auto', height: 'auto' }}
+                  className="h-10 w-auto object-contain sm:h-12"
+                  priority
+                />
+              </Link>
+            </div>
+            <div className="hidden items-center justify-end gap-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB] lg:flex">
+              {rightMenu.map((item) => {
+                const isActive = getIsActive(asPath, item.href)
+                if (item.href === '/mein-konto') {
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      aria-label={item.label}
+                      className={cn(
+                        'inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#DBE9F9] text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
+                        isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
+                      )}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
+                        <circle
+                          cx="12"
+                          cy="8"
+                          r="3.2"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                        />
+                        <path
+                          d="M5 19c1.1-3 3.6-4.6 7-4.6s5.9 1.6 7 4.6"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </Link>
+                  )
+                }
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'rounded-full px-3 py-2 text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
+                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                )
+              })}
+              <MiniCartDropdown />
+              <Link
+                href={configuratorLink.href}
+                className="inline-flex items-center whitespace-nowrap rounded-full bg-[#1F5CAB] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white shadow-md transition hover:-translate-y-0.5 hover:bg-[#0F2B52] xl:px-4 xl:text-xs xl:tracking-[0.2em]"
+              >
+                {configuratorLink.label}
+              </Link>
+            </div>
+          </div>
+        </div>
+      </ContentShell>
     </div>
-    </nav>
-  );
-};
-export default Stickynav;
+  )
+}
 ````
 
-## File: src/app/(shop)/product/[slug]/page.tsx
+## File: src/app/api/checkout/provider-redirect/route.ts
 ````typescript
-import type { Metadata } from 'next'
-import ProductFeatures from './components/ProductFeatures'
-import ProductGallery from './components/ProductGallery'
-import ProductConfigurator from './components/ProductConfigurator'
-import { ProductViewTracker } from './components/ProductViewTracker'
-import ProductTabs from './components/ProductTabs'
-import ProductRecommendations from './components/ProductRecommendations'
-import { getCachedProductPageData } from './product-page-cache'
-import { ProductBlogFaqBoundary, ProductHeroReviewsBoundary } from './ProductPageStreaming'
-import { TopBar } from '@/shared/components/TopBar/TopBar.component'
-import Stickynav from '@/shared/components/Footer/Stickynav.component'
-import Footer from '@/shared/components/Footer/Footer.component'
-import { SITE_NAME, absoluteUrl } from '@/lib/seo'
-import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
-import { parseCartPriceString } from '@/shared/lib/functions'
-/**
- * ISR (Sekunden). Muss ein **konstanter** Wert sein (Next.js Segment Config ist statisch zu analysieren).
- * Feintuning des Daten-Caches: weiterhin `PRODUCT_PAGE_REVALIDATE_SECONDS` in product-data / product-page-cache.
- */
-export const revalidate = 60
-interface ProductPageProps {
-  params: { slug?: string } | Promise<{ slug?: string }>
+import { NextRequest, NextResponse } from 'next/server'
+import { createHmac } from 'crypto'
+import { fetchCustomerAccount } from '@/features/auth/api/fetchCustomerAccount'
+import { readWooSessionTokenFromRequest } from '@/lib/woo-session-cookie'
+type Provider = 'card' | 'klarna' | 'paypal'
+interface BodyShape {
+  provider?: Provider
+  checkoutInput?: unknown
+  checkoutItems?: unknown
+  returnUrl?: string
+  cancelUrl?: string
 }
-async function resolveSlug(params: ProductPageProps['params']): Promise<string> {
-  const resolved = await params
-  return typeof resolved?.slug === 'string' && resolved.slug.length > 0
-    ? resolved.slug
-    : 'lkw-plane-individuell'
+interface CheckoutInputShape {
+  billing?: {
+    firstName?: string
+    lastName?: string
+    company?: string
+    country?: string
+    address1?: string
+    address2?: string
+    city?: string
+    state?: string
+    postcode?: string
+    phone?: string
+    email?: string
+  }
+  shipping?: {
+    firstName?: string
+    lastName?: string
+    company?: string
+    country?: string
+    address1?: string
+    address2?: string
+    city?: string
+    state?: string
+    postcode?: string
+    phone?: string
+  }
 }
-export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
-  const slug = await resolveSlug(params)
-  const product = await getCachedProductPageData(slug)
-  const title = `${product.title} | ${SITE_NAME}`
-  const description = (product.subtitle || `${product.title} online konfigurieren und anfragen.`).slice(0, 160)
-  const canonical = absoluteUrl(`/product/${slug}`)
-  const imageUrl = product.image?.src
-    ? absoluteUrl(product.image.src)
-    : absoluteUrl('/Planenadlerlogo.png')
+type JsonPayload = Record<string, unknown>
+function resolveGraphqlUrl(): string {
+  return process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim() || ''
+}
+function resolveWordPressOrigin(): string {
+  const candidates = [
+    process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim(),
+    process.env.CUSTOMIZER_API_URL?.trim(),
+    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
+    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim(),
+    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
+    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
+  ].filter((value): value is string => Boolean(value))
+  for (const candidate of candidates) {
+    if (/\/wp-json\/wc\/store\/v1\/checkout\/?$/i.test(candidate)) {
+      return candidate.replace(/\/wp-json\/wc\/store\/v1\/checkout\/?$/i, '')
+    }
+    if (/\/graphql\/?$/i.test(candidate)) {
+      return candidate.replace(/\/graphql\/?$/i, '')
+    }
+    if (/\/wp-json\/.+$/i.test(candidate)) {
+      return candidate.replace(/\/wp-json\/.+$/i, '')
+    }
+  }
+  return ''
+}
+function resolveDefaultStoreApiCheckoutUrl(): string {
+  const origin = resolveWordPressOrigin()
+  return origin ? `${origin}/wp-json/wc/store/v1/checkout` : ''
+}
+function resolveUpstreamUrl(provider: Provider): string {
+  const sharedProviderUrl = process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim()
+  if (sharedProviderUrl) return sharedProviderUrl
+  if (provider === 'card') return process.env.WC_STRIPE_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
+  if (provider === 'klarna') return process.env.WC_KLARNA_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
+  return process.env.WC_PAYPAL_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
+}
+function resolvePaymentMethodId(provider: Provider): string {
+  if (provider === 'card') {
+    return process.env.WC_STRIPE_PAYMENT_METHOD_ID ?? 'stripe'
+  }
+  if (provider === 'klarna') {
+    return process.env.WC_KLARNA_PAYMENT_METHOD_ID ?? 'stripe_klarna'
+  }
+  return process.env.WC_PAYPAL_PAYMENT_METHOD_ID ?? 'ppcp'
+}
+function isStoreApiCheckoutUrl(url: string): boolean {
+  return /\/wp-json\/wc\/store\/v1\/checkout\/?$/.test(url)
+}
+function isPlanenadlerCustomEndpoint(url: string): boolean {
+  return /\/wp-json\/planenadler\/v1\//.test(url)
+}
+function resolveStoreApiFallbackUrl(provider: Provider): string {
+  if (provider === 'card') return process.env.WC_STRIPE_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
+  if (provider === 'klarna') return process.env.WC_KLARNA_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
+  return process.env.WC_PAYPAL_CHECKOUT_API_URL ?? resolveDefaultStoreApiCheckoutUrl()
+}
+function getProviderPaymentAliases(provider: Provider): string[] {
+  if (provider === 'card') {
+    return ['woocommerce_payments', 'wcpay', 'stripe', 'stripe_cc', 'stripe_credit_card', 'credit_card']
+  }
+  if (provider === 'klarna') {
+    return ['stripe_klarna', 'woocommerce_payments_klarna', 'klarna_payments', 'klarna', 'kco']
+  }
+  return ['ppcp', 'ppcp-gateway', 'paypal', 'paypal_checkout', 'ppec_paypal']
+}
+function pickBestPaymentMethodId(
+  provider: Provider,
+  configuredId: string,
+  availableMethods: string[]
+): string {
+  if (!availableMethods.length) return configuredId
+  const byLower = new Map<string, string>()
+  for (const id of availableMethods) byLower.set(id.toLowerCase(), id)
+  const direct = byLower.get(configuredId.toLowerCase())
+  if (direct) return direct
+  for (const candidate of getProviderPaymentAliases(provider)) {
+    const match = byLower.get(candidate.toLowerCase())
+    if (match) return match
+  }
+  for (const [lower, original] of byLower.entries()) {
+    if (lower.includes(provider)) return original
+  }
+  return configuredId
+}
+function toStoreApiCartUrl(checkoutUrl: string): string {
+  return checkoutUrl.replace(/\/checkout\/?$/i, '/cart')
+}
+function toStoreApiPayload(input: CheckoutInputShape, paymentMethodId: string) {
+  const billing = input.billing ?? {}
+  const shipping = input.shipping ?? billing
   return {
-    title,
-    description,
-    alternates: {
-      canonical,
+    billing_address: {
+      first_name: billing.firstName ?? '',
+      last_name: billing.lastName ?? '',
+      company: billing.company ?? '',
+      country: billing.country ?? 'DE',
+      address_1: billing.address1 ?? '',
+      address_2: billing.address2 ?? '',
+      city: billing.city ?? '',
+      state: billing.state ?? '',
+      postcode: billing.postcode ?? '',
+      phone: billing.phone ?? '',
+      email: billing.email ?? '',
     },
-    robots: {
-      index: true,
-      follow: true,
+    shipping_address: {
+      first_name: shipping.firstName ?? billing.firstName ?? '',
+      last_name: shipping.lastName ?? billing.lastName ?? '',
+      company: shipping.company ?? '',
+      country: shipping.country ?? billing.country ?? 'DE',
+      address_1: shipping.address1 ?? billing.address1 ?? '',
+      address_2: shipping.address2 ?? '',
+      city: shipping.city ?? billing.city ?? '',
+      state: shipping.state ?? billing.state ?? '',
+      postcode: shipping.postcode ?? billing.postcode ?? '',
+      phone: shipping.phone ?? billing.phone ?? '',
     },
-    openGraph: {
-      title,
-      description,
-      url: canonical,
-      type: 'website',
-      images: [
-        {
-          url: imageUrl,
-          alt: product.image?.alt ?? product.title,
-        },
-      ],
+    payment_method: paymentMethodId,
+    payment_data: [],
+  }
+}
+function extractRedirectUrl(data: Record<string, unknown>): string {
+  const direct = data.redirectUrl
+  if (typeof direct === 'string') return direct
+  const altDirect = data.redirect
+  if (typeof altDirect === 'string') return altDirect
+  const storeApi = data.redirect_url
+  if (typeof storeApi === 'string') return storeApi
+  const paymentResult = data.payment_result
+  if (paymentResult && typeof paymentResult === 'object') {
+    const resultRedirect = (paymentResult as { redirect_url?: unknown }).redirect_url
+    if (typeof resultRedirect === 'string') return resultRedirect
+  }
+  return ''
+}
+function extractErrorMessage(data: Record<string, unknown>, fallback: string): string {
+  return (
+    (data.error as string | undefined) ??
+    (data.message as string | undefined) ??
+    (data.code as string | undefined) ??
+    fallback
+  )
+}
+async function parseJsonSafe(response: Response): Promise<Record<string, unknown>> {
+  return (await response.json().catch(() => ({}))) as Record<string, unknown>
+}
+async function resolveSignedCustomerContext(request: NextRequest): Promise<{
+  customerEmail?: string
+  customerId?: number
+}> {
+  const graphqlUrl = resolveGraphqlUrl()
+  const cookie = request.headers.get('cookie') ?? ''
+  if (!graphqlUrl || !cookie) return {}
+  const customer = await fetchCustomerAccount(graphqlUrl, cookie)
+  if (!customer?.databaseId || !customer.email) return {}
+  return {
+    customerEmail: customer.email,
+    customerId: customer.databaseId,
+  }
+}
+function isReplayDetected(response: Response, data: Record<string, unknown>): boolean {
+  const code = typeof data.code === 'string' ? data.code : ''
+  return response.status === 409 && code === 'replay_detected'
+}
+async function postCustomEndpoint(
+  upstreamUrl: string,
+  cookie: string,
+  payload: Record<string, unknown>,
+  wooSessionToken?: string | null
+): Promise<{ response: Response; data: Record<string, unknown> }> {
+  let response: Response | null = null
+  let data: Record<string, unknown> = {}
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const requestBody = JSON.stringify({
+      ...payload,
+      requestId: `${Date.now()}-${attempt}`,
+    })
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(cookie ? { cookie } : {}),
+    }
+    if (wooSessionToken) {
+      headers['woocommerce-session'] = `Session ${wooSessionToken}`
+    }
+    if (isPlanenadlerCustomEndpoint(upstreamUrl) && process.env.WC_PROVIDER_API_SECRET) {
+      const timestamp = Math.floor(Date.now() / 1000).toString()
+      const signature = createHmac('sha256', process.env.WC_PROVIDER_API_SECRET)
+        .update(`${timestamp}.${requestBody}`)
+        .digest('hex')
+      headers['X-Planenadler-Timestamp'] = timestamp
+      headers['X-Planenadler-Signature'] = signature
+      headers['X-Planenadler-Client'] = 'nextjs-woocommerce'
+    }
+    response = await fetch(upstreamUrl, {
+      method: 'POST',
+      headers,
+      redirect: 'manual',
+      body: requestBody,
+    })
+    data = await parseJsonSafe(response)
+    if (!isReplayDetected(response, data)) break
+  }
+  if (!response) {
+    throw new Error('Keine Antwort vom Provider-Endpoint erhalten')
+  }
+  return { response, data }
+}
+function shouldFallbackToStoreApi(
+  provider: Provider,
+  upstreamUrl: string,
+  upstreamStatus: number,
+  data: JsonPayload
+): boolean {
+  if (!isPlanenadlerCustomEndpoint(upstreamUrl)) return false
+  const fallback = resolveStoreApiFallbackUrl(provider)
+  if (!fallback || !isStoreApiCheckoutUrl(fallback)) return false
+  const errorText = extractErrorMessage(data, '').toLowerCase()
+  const errorCode = (typeof data.code === 'string' ? data.code : '').toLowerCase()
+  if (errorText.includes('cart is not available')) return true
+  if (errorText.includes('warenkorb')) return true
+  if (errorCode.includes('cart')) return true
+  // Custom endpoint implementations vary; retry against Store API for common 4xx/5xx path.
+  return upstreamStatus >= 400
+}
+async function executeStoreApiCheckout(
+  provider: Provider,
+  upstreamUrl: string,
+  cookie: string,
+  checkoutInput: CheckoutInputShape
+): Promise<{ status: number; payload: JsonPayload }> {
+  const cartEndpoint = toStoreApiCartUrl(upstreamUrl)
+  const cartRes = await fetch(cartEndpoint, {
+    method: 'GET',
+    headers: cookie ? { cookie } : undefined,
+    cache: 'no-store',
+  })
+  const cartData = await parseJsonSafe(cartRes)
+  const bootstrap = await fetch(upstreamUrl, {
+    method: 'GET',
+    headers: cookie ? { cookie } : undefined,
+    cache: 'no-store',
+  })
+  const nonce = bootstrap.headers.get('nonce') ?? ''
+  const cartToken = bootstrap.headers.get('cart-token') ?? cartRes.headers.get('cart-token') ?? ''
+  const cartNonce = cartRes.headers.get('nonce') ?? nonce
+  const availablePaymentMethods = Array.isArray(cartData.payment_methods)
+    ? cartData.payment_methods.filter((method): method is string => typeof method === 'string')
+    : []
+  const selectedPaymentMethodId = pickBestPaymentMethodId(
+    provider,
+    resolvePaymentMethodId(provider),
+    availablePaymentMethods
+  )
+  const payload = toStoreApiPayload(checkoutInput, selectedPaymentMethodId)
+  const checkoutRes = await fetch(upstreamUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(cookie ? { cookie } : {}),
+      ...(cartNonce ? { Nonce: cartNonce } : {}),
+      ...(cartToken ? { 'Cart-Token': cartToken } : {}),
     },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description,
-      images: [imageUrl],
+    body: JSON.stringify(payload),
+  })
+  const checkoutData = await parseJsonSafe(checkoutRes)
+  const redirectUrl = extractRedirectUrl(checkoutData)
+  if (!checkoutRes.ok) {
+    return {
+      status: checkoutRes.status,
+      payload: {
+        error: extractErrorMessage(checkoutData, 'Store API Checkout Fehler'),
+        paymentMethodId: selectedPaymentMethodId,
+        availablePaymentMethods,
+        upstream: upstreamUrl,
+      },
+    }
+  }
+  if (!redirectUrl) {
+    return {
+      status: 502,
+      payload: {
+        error: 'Store API hat keine redirect_url geliefert',
+        paymentMethodId: selectedPaymentMethodId,
+        availablePaymentMethods,
+      },
+    }
+  }
+  return {
+    status: 200,
+    payload: {
+      redirectUrl,
+      paymentMethodId: selectedPaymentMethodId,
     },
   }
 }
-export default async function ProductPage({ params }: ProductPageProps) {
-  const slug = await resolveSlug(params)
-  const product = await getCachedProductPageData(slug)
-  const breadcrumbSchema = getBreadcrumbJsonLd([
-    { name: 'Startseite', path: '/' },
-    { name: 'Shop', path: '/shop' },
-    { name: product.title, path: `/product/${slug}` },
-  ])
-  const numericPrice = parseCartPriceString(product.price)
-  const productSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: product.title,
-    description: product.subtitle,
-    image: [product.image.src, ...product.gallery.map((image) => image.src)].map((src) => absoluteUrl(src)),
-    sku: String(product.databaseId || slug),
-    brand: {
-      '@type': 'Brand',
-      name: SITE_NAME,
-    },
-    category: 'PVC-Plane',
-    url: absoluteUrl(`/product/${slug}`),
-    offers: Number.isFinite(numericPrice)
-      ? {
-          '@type': 'Offer',
-          priceCurrency: 'EUR',
-          price: numericPrice.toFixed(2),
-          availability: 'https://schema.org/InStock',
-          url: absoluteUrl(`/product/${slug}`),
-        }
-      : undefined,
+export async function POST(request: NextRequest) {
+  let body: BodyShape
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Ungueltiger JSON-Body' }, { status: 400 })
   }
-  return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
-      />
-      <main className="bg-white pb-16 sm:pt-20">
-        <ProductViewTracker
-          productId={product.databaseId}
-          slug={slug}
-          name={product.title}
-          priceValue={Number.isFinite(numericPrice) ? numericPrice : null}
-        />
-        <TopBar />
-        <ProductHeroReviewsBoundary product={product} />
-        <ProductFeatures items={product.features} />
-        <section id="konfigurator" className="py-12 md:py-16" aria-labelledby="configurator-title">
-          <div className="mx-auto grid max-w-7xl gap-8 px-4 lg:grid-cols-[1.1fr_1fr] lg:items-start">
-            <div className="lg:self-stretch">
-              <div className="lg:sticky lg:top-24 lg:flex lg:max-h-[calc(100vh-8rem)] lg:flex-col">
-                <h2 id="configurator-title" className="mb-4 text-2xl font-bold text-[#0F2B52] lg:flex-none">
-                  Individuelle Konfiguration
-                </h2>
-                <ProductGallery
-                  mainImage={product.image}
-                  images={product.gallery}
-                  className="lg:min-h-0 lg:flex-1"
-                />
-              </div>
-            </div>
-            <ProductConfigurator
-              productId={product.databaseId}
-              productSlug={slug}
-              productName={product.title}
-              price={product.price}
-              hints={product.configuratorHints}
-              configuratorOptions={product.configuratorOptions}
-              priceEndpoint={product.priceEndpoint}
-            />
-          </div>
-        </section>
-        <ProductTabs tabs={product.tabs} />
-        <ProductRecommendations items={product.recommendations} />
-        <ProductBlogFaqBoundary />
-        <Footer />
-        <span className="sr-only">Produkt-Slug: {slug}</span>
-      </main>
-      <Stickynav />
-    </>
-  )
+  const provider = body.provider
+  if (provider !== 'card' && provider !== 'klarna' && provider !== 'paypal') {
+    return NextResponse.json({ error: 'provider muss card, klarna oder paypal sein' }, { status: 400 })
+  }
+  const upstreamUrl = resolveUpstreamUrl(provider)
+  if (!upstreamUrl) {
+    const varName =
+      provider === 'card'
+        ? 'WC_STRIPE_CHECKOUT_API_URL'
+        : provider === 'klarna'
+          ? 'WC_KLARNA_CHECKOUT_API_URL'
+          : 'WC_PAYPAL_CHECKOUT_API_URL'
+    return NextResponse.json({ error: `Konfiguration fehlt: ${varName}` }, { status: 501 })
+  }
+  const cookie = request.headers.get('cookie') ?? ''
+  const wooSessionToken = readWooSessionTokenFromRequest(request)
+  try {
+    if (isStoreApiCheckoutUrl(upstreamUrl)) {
+      const result = await executeStoreApiCheckout(
+        provider,
+        upstreamUrl,
+        cookie,
+        (body.checkoutInput ?? {}) as CheckoutInputShape
+      )
+      return NextResponse.json(result.payload, { status: result.status })
+    }
+    const upstreamPayload: Record<string, unknown> = {
+      provider,
+      checkoutInput: body.checkoutInput ?? null,
+    }
+    if (Array.isArray(body.checkoutItems) && body.checkoutItems.length > 0) {
+      upstreamPayload.checkoutItems = body.checkoutItems
+    }
+    const checkoutInput = (body.checkoutInput ?? {}) as CheckoutInputShape
+    const signedCustomerContext = await resolveSignedCustomerContext(request)
+    const billingEmail = checkoutInput.billing?.email?.trim()
+    if (billingEmail) {
+      upstreamPayload.customerEmail = billingEmail
+    }
+    if (signedCustomerContext.customerEmail) {
+      upstreamPayload.loggedInCustomerEmail = signedCustomerContext.customerEmail
+    }
+    if (signedCustomerContext.customerId) {
+      upstreamPayload.customerId = signedCustomerContext.customerId
+    }
+    if (typeof body.returnUrl === 'string' && body.returnUrl.trim()) {
+      upstreamPayload.returnUrl = body.returnUrl.trim()
+    }
+    if (typeof body.cancelUrl === 'string' && body.cancelUrl.trim()) {
+      upstreamPayload.cancelUrl = body.cancelUrl.trim()
+    }
+    const { response: upstream, data } = await postCustomEndpoint(
+      upstreamUrl,
+      cookie,
+      upstreamPayload,
+      wooSessionToken
+    )
+    const location = upstream.headers.get('location')
+    if (location && upstream.status >= 300 && upstream.status <= 399) {
+      return NextResponse.json({ redirectUrl: location })
+    }
+    const redirectUrl = extractRedirectUrl(data)
+    if (!upstream.ok) {
+      if (
+        shouldFallbackToStoreApi(provider, upstreamUrl, upstream.status, data)
+      ) {
+        const fallbackUrl = resolveStoreApiFallbackUrl(provider)
+        if (fallbackUrl && isStoreApiCheckoutUrl(fallbackUrl)) {
+          const fallback = await executeStoreApiCheckout(
+            provider,
+            fallbackUrl,
+            cookie,
+            (body.checkoutInput ?? {}) as CheckoutInputShape
+          )
+          return NextResponse.json(fallback.payload, { status: fallback.status })
+        }
+      }
+      return NextResponse.json(
+        {
+          error: extractErrorMessage(data, 'Backend-Fehler'),
+          code: typeof data.code === 'string' ? data.code : undefined,
+          upstream: upstreamUrl,
+        },
+        { status: upstream.status }
+      )
+    }
+    if (!redirectUrl) {
+      return NextResponse.json({ error: 'Keine redirectUrl vom Backend erhalten' }, { status: 502 })
+    }
+    return NextResponse.json({ redirectUrl })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Proxy-Fehler' },
+      { status: 502 }
+    )
+  }
 }
 ````
 
@@ -30426,138 +30562,6 @@ export function parsePriceCalculationResponse(rawPrice: unknown): PriceCalculati
     formatted,
     price: formatted,
   }
-}
-````
-
-## File: src/shared/components/TopBar/TopBar.component.tsx
-````typescript
-'use client'
-import Image from 'next/image'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { cn } from '@/lib/utils'
-import { ContentShell } from '@/shared/components/ContentShell.component'
-import { MiniCartDropdown } from '@/features/cart/components/MiniCartDropdown'
-const leftMenu = [
-  { label: 'Home', href: '/' },
-  { label: 'Ueber Uns', href: '/ueber-uns' },
-  { label: 'Shop', href: '/shop' },
-  { label: 'News & Ratgeber', href: '/blog' },
-]
-const rightMenu = [
-  { label: 'FAQ', href: '/faq' },
-  { label: 'Kontakt', href: '/kontakt' },
-  { label: 'Mein Konto', href: '/mein-konto' },
-]
-const configuratorLink = { label: 'ZUM KONFIGURATOR', href: '/shop' }
-function getIsActive(asPath: string, href: string) {
-  if (!href) return false
-  if (href.startsWith('#')) return asPath.includes(href)
-  if (href === '/') return asPath === '/'
-  return asPath.startsWith(href)
-}
-export function TopBar() {
-  const pathname = usePathname()
-  const asPath = pathname ?? ''
-  return (
-    <div className="fixed left-0 right-0 top-0 z-50 w-full bg-transparent">
-      <ContentShell className="py-3 sm:py-4">
-        <div className="rounded-full border border-[#DBE9F9] bg-white/95 px-3 py-2.5 shadow-[0_16px_40px_rgba(15,43,82,0.12)] backdrop-blur sm:px-4 sm:py-3">
-          <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
-            <div className="hidden items-center justify-start gap-6 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB] lg:flex">
-              {leftMenu.map((item) => {
-                const isActive = getIsActive(asPath, item.href)
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'rounded-full px-3 py-2 text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
-                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                )
-              })}
-            </div>
-            <div className="flex items-center justify-center">
-              <Link
-                href="/"
-                aria-label="Planenadler Home"
-                className="flex items-center"
-              >
-                <Image
-                  src="/Planenadlerlogo.png"
-                  alt="Planenadler Logo"
-                  width={180}
-                  height={48}
-                  style={{ width: 'auto', height: 'auto' }}
-                  className="h-10 w-auto object-contain sm:h-12"
-                  priority
-                />
-              </Link>
-            </div>
-            <div className="hidden items-center justify-end gap-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB] lg:flex">
-              {rightMenu.map((item) => {
-                const isActive = getIsActive(asPath, item.href)
-                if (item.href === '/mein-konto') {
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      aria-label={item.label}
-                      className={cn(
-                        'inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#DBE9F9] text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
-                        isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
-                      )}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
-                        <circle
-                          cx="12"
-                          cy="8"
-                          r="3.2"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                        />
-                        <path
-                          d="M5 19c1.1-3 3.6-4.6 7-4.6s5.9 1.6 7 4.6"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                    </Link>
-                  )
-                }
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'rounded-full px-3 py-2 text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
-                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                )
-              })}
-              <MiniCartDropdown />
-              <Link
-                href={configuratorLink.href}
-                className="inline-flex items-center whitespace-nowrap rounded-full bg-[#1F5CAB] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white shadow-md transition hover:-translate-y-0.5 hover:bg-[#0F2B52] xl:px-4 xl:text-xs xl:tracking-[0.2em]"
-              >
-                {configuratorLink.label}
-              </Link>
-            </div>
-          </div>
-        </div>
-      </ContentShell>
-    </div>
-  )
 }
 ````
 
@@ -31131,177 +31135,6 @@ const serwistOptions = {
 module.exports = withSerwist(serwistOptions)(nextConfig)
 ````
 
-## File: src/app/api/checkout/payment-options/route.ts
-````typescript
-import { NextRequest, NextResponse } from 'next/server'
-import {
-  resolveCheckoutGateways,
-  type PaymentOptionsResponse,
-} from '@/features/checkout/lib/payment-gateways'
-import {
-  mergeUniquePaymentMethodIds,
-  normalizeStoreApiPaymentMethods,
-} from '@/features/checkout/lib/store-api-payment-methods'
-import { buildWooStoreApiHeaders, readWooSessionTokenFromRequest } from '@/lib/woo-session-cookie'
-function resolveWordPressOrigin(): string {
-  const candidates = [
-    process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim(),
-    process.env.CUSTOMIZER_API_URL?.trim(),
-    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
-    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim(),
-    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
-    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
-  ].filter((value): value is string => Boolean(value))
-  for (const candidate of candidates) {
-    if (/\/wp-json\/wc\/store\/v1\/checkout\/?$/i.test(candidate)) {
-      return candidate.replace(/\/wp-json\/wc\/store\/v1\/checkout\/?$/i, '')
-    }
-    if (/\/graphql\/?$/i.test(candidate)) {
-      return candidate.replace(/\/graphql\/?$/i, '')
-    }
-    if (/\/wp-json\/.+$/i.test(candidate)) {
-      return candidate.replace(/\/wp-json\/.+$/i, '')
-    }
-  }
-  return ''
-}
-function resolveStoreApiCheckoutUrl(): string {
-  const explicit =
-    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim() ??
-    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim() ??
-    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim() ??
-    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim() ??
-    ''
-  if (explicit) return explicit
-  const origin = resolveWordPressOrigin()
-  return origin ? `${origin}/wp-json/wc/store/v1/checkout` : ''
-}
-function isStoreApiCheckoutUrl(url: string): boolean {
-  return /\/wp-json\/wc\/store\/v1\/checkout\/?$/.test(url)
-}
-function hasCustomProviderCheckoutEndpoint(): boolean {
-  const candidates = [
-    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
-    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
-    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
-  ].filter((value): value is string => Boolean(value))
-  return candidates.some((value) => !isStoreApiCheckoutUrl(value))
-}
-function toStoreApiCartUrl(checkoutUrl: string): string {
-  return checkoutUrl.replace(/\/checkout\/?$/i, '/cart')
-}
-async function parseJsonSafe(response: Response): Promise<Record<string, unknown>> {
-  return (await response.json().catch(() => ({}))) as Record<string, unknown>
-}
-export async function GET(request: NextRequest) {
-  const upstreamUrl = resolveStoreApiCheckoutUrl()
-  if (!upstreamUrl) {
-    return NextResponse.json(
-      {
-        error: 'WooCommerce Store API URL konnte nicht aufgeloest werden.',
-      },
-      { status: 501 }
-    )
-  }
-  const cartUrl = toStoreApiCartUrl(upstreamUrl)
-  const cookie = request.headers.get('cookie') ?? ''
-  const storeHeaders = buildWooStoreApiHeaders(request)
-  const sessionToken = readWooSessionTokenFromRequest(request)
-  const errors: string[] = []
-  try {
-    const cartResponse = await fetch(cartUrl, {
-      method: 'GET',
-      headers: Object.keys(storeHeaders).length > 0 ? storeHeaders : undefined,
-      cache: 'no-store',
-    })
-    const cartData = await parseJsonSafe(cartResponse)
-    const checkoutResponse = await fetch(upstreamUrl, {
-      method: 'GET',
-      headers: Object.keys(storeHeaders).length > 0 ? storeHeaders : undefined,
-      cache: 'no-store',
-    })
-    const checkoutBootstrapOk = checkoutResponse.ok || checkoutResponse.status === 401
-    if (!cartResponse.ok) {
-      errors.push(
-        (typeof cartData.message === 'string' && cartData.message) || 'Store API Cart konnte nicht geladen werden.'
-      )
-    }
-    if (!checkoutBootstrapOk) {
-      errors.push('Store API Checkout-Bootstrap konnte nicht geladen werden.')
-    }
-    const checkoutData = checkoutBootstrapOk ? await parseJsonSafe(checkoutResponse) : {}
-    const experimentalCart =
-      checkoutData && typeof checkoutData === 'object' && '__experimentalCart' in checkoutData
-        ? (checkoutData as { __experimentalCart?: Record<string, unknown> }).__experimentalCart
-        : undefined
-    let availablePaymentMethods = mergeUniquePaymentMethodIds(
-      normalizeStoreApiPaymentMethods(cartData.payment_methods),
-      normalizeStoreApiPaymentMethods(
-        checkoutData && typeof checkoutData === 'object' && 'payment_methods' in checkoutData
-          ? (checkoutData as { payment_methods?: unknown }).payment_methods
-          : undefined
-      ),
-      normalizeStoreApiPaymentMethods(experimentalCart?.payment_methods)
-    )
-    // Headless: Store API listet „bacs“ oft nicht, WooGraphQL-Checkout unterstützt ihn trotzdem.
-    // Opt-out (z. B. wenn Banküberweisung in Woo wirklich deaktiviert): CHECKOUT_SUPPLEMENT_BACS=0
-    const supplementBacs = process.env.CHECKOUT_SUPPLEMENT_BACS?.trim() !== '0'
-    if (supplementBacs) {
-      availablePaymentMethods = mergeUniquePaymentMethodIds(availablePaymentMethods, ['bacs'])
-    }
-    const paymentRequirements = Array.isArray(cartData.payment_requirements)
-      ? cartData.payment_requirements.filter((entry): entry is string => typeof entry === 'string')
-      : []
-    const cartItems = Array.isArray(cartData.items) ? cartData.items : []
-    const hasStripeKey = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim())
-    const hasCustomProviderCheckout = hasCustomProviderCheckoutEndpoint()
-    let gateways = resolveCheckoutGateways(availablePaymentMethods, hasStripeKey, hasCustomProviderCheckout)
-    const explicitBankId = process.env.WC_CHECKOUT_BANK_PAYMENT_METHOD_ID?.trim()
-    if (explicitBankId) {
-      gateways = gateways.map((g) =>
-        g.id === 'bacs'
-          ? {
-              ...g,
-              wcPaymentMethodId: explicitBankId,
-              available: true,
-              frontendReady: true,
-              expressEligible: false,
-            }
-          : g,
-      )
-    }
-    const payload: PaymentOptionsResponse = {
-      gateways,
-      diagnostics: {
-        upstreamUrl,
-        cartUrl,
-        cartFetchOk: cartResponse.ok,
-        checkoutBootstrapOk,
-        cookiePresent: cookie.length > 0,
-        wooSessionHeaderSent: Boolean(sessionToken),
-        cartItemCount: cartItems.length,
-        availablePaymentMethods,
-        paymentRequirements,
-        errors,
-      },
-    }
-    return NextResponse.json(payload, {
-      status: cartResponse.ok || checkoutResponse.ok ? 200 : 502,
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate',
-      },
-    })
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : 'WooCommerce Payment Discovery fehlgeschlagen.',
-      },
-      { status: 502 }
-    )
-  }
-}
-````
-
 ## File: src/lib/customizer-runtime.ts
 ````typescript
 export type ToggleState = '' | 'yes' | 'no'
@@ -31565,510 +31398,6 @@ export interface ConfiguratorState {
   status: ConfiguratorStatus
   message?: string
   warnings?: string[]
-}
-````
-
-## File: src/features/checkout/components/OrderThankYouContent.tsx
-````typescript
-'use client'
-import Image from 'next/image'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
-import { useCheckoutStore, type LastCompletedOrderSnapshot } from '../store/checkout.store'
-import { CheckoutSteps } from './CheckoutSteps'
-import { ContentShell } from '@/shared/components/ContentShell.component'
-import { PAYMENT_METHOD_IDS } from '../types/checkout.types'
-import {
-  decodePriceDisplay,
-  getEffectiveShippingTotal,
-  getAbsoluteImageUrl,
-  parseCartPriceString,
-} from '@/shared/lib/functions'
-import { GoogleAdsPurchaseTracker } from '@/components/analytics/google-ads-purchase-tracker'
-import { pushPurchaseEvent } from '@/lib/tracking/purchase'
-const CART_PATH = '/cart'
-const THANK_YOU_MAX_AGE_MS = 48 * 60 * 60 * 1000
-function isThankYouEligible(
-  orderCompleted: boolean,
-  lastCompletedOrder: LastCompletedOrderSnapshot | null,
-): boolean {
-  if (orderCompleted) return true
-  if (!lastCompletedOrder) return false
-  return Date.now() - lastCompletedOrder.completedAt < THANK_YOU_MAX_AGE_MS
-}
-function formatOrderDate(iso: string | null | undefined): string | null {
-  if (!iso) return null
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  return new Intl.DateTimeFormat('de-DE', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(d)
-}
-export function OrderThankYouContent() {
-  const router = useRouter()
-  const orderCompleted = useCheckoutStore((s) => s.orderCompleted)
-  const lastCompletedOrder = useCheckoutStore((s) => s.lastCompletedOrder)
-  const selectedPayment = useCheckoutStore((s) => s.selectedPayment)
-  const reset = useCheckoutStore((s) => s.reset)
-  const [hydrated, setHydrated] = useState(() => {
-    const api = useCheckoutStore.persist
-    return api ? api.hasHydrated() : true
-  })
-  const purchasePushAttempted = useRef(false)
-  useEffect(() => {
-    const api = useCheckoutStore.persist
-    if (!api || hydrated || api.hasHydrated()) {
-      return
-    }
-    const unsub = api.onFinishHydration(() => setHydrated(true))
-    return unsub
-  }, [hydrated])
-  useEffect(() => {
-    if (!hydrated) return
-    if (!isThankYouEligible(orderCompleted, lastCompletedOrder)) {
-      router.replace(CART_PATH)
-    }
-  }, [hydrated, orderCompleted, lastCompletedOrder, router])
-  const showBankHint = selectedPayment === PAYMENT_METHOD_IDS.BANK
-  const orderLabel =
-    lastCompletedOrder?.orderNumber != null && lastCompletedOrder.orderNumber !== ''
-      ? String(lastCompletedOrder.orderNumber)
-      : lastCompletedOrder?.databaseId != null && lastCompletedOrder.databaseId !== ''
-        ? String(lastCompletedOrder.databaseId)
-        : null
-  const receipt = lastCompletedOrder?.receipt
-  const formattedDate = formatOrderDate(lastCompletedOrder?.date)
-  const adsTransactionId =
-    lastCompletedOrder?.databaseId ??
-    (lastCompletedOrder?.orderNumber != null ? String(lastCompletedOrder.orderNumber) : null) ??
-    `session-${lastCompletedOrder?.completedAt ?? 0}`
-  const adsValueEuro =
-    receipt?.totals?.total != null
-      ? (() => {
-          const v = parseCartPriceString(receipt.totals.total)
-          return Number.isFinite(v) && v >= 0 ? v : undefined
-        })()
-      : undefined
-  const shippingValue =
-    receipt != null
-      ? parseCartPriceString(receipt.totals.shippingTotal) + parseCartPriceString(receipt.totals.feeTotal)
-      : 0
-  const showFreeShippingAmount =
-    receipt != null &&
-    shippingValue === 0 &&
-    parseCartPriceString(receipt.totals.discountTotal) > 0
-  useEffect(() => {
-    if (!hydrated) return
-    if (!isThankYouEligible(orderCompleted, lastCompletedOrder)) return
-    if (purchasePushAttempted.current) return
-    if (!receipt || receipt.lines.length === 0) return
-    if (!adsTransactionId || adsValueEuro == null) return
-    purchasePushAttempted.current = true
-    const taxValue = receipt.totals.totalTax != null
-      ? parseCartPriceString(receipt.totals.totalTax)
-      : undefined
-    const shippingValue = receipt.totals.shippingTotal != null
-      ? parseCartPriceString(receipt.totals.shippingTotal)
-      : undefined
-    // Pushes the GTM/GA4 purchase event once per order on the real thank-you page.
-    pushPurchaseEvent({
-      transactionId: adsTransactionId,
-      value: adsValueEuro,
-      currency: 'EUR',
-      tax: Number.isFinite(taxValue) && (taxValue as number) >= 0 ? taxValue : undefined,
-      shipping: Number.isFinite(shippingValue) && (shippingValue as number) >= 0 ? shippingValue : undefined,
-      receipt,
-    })
-  }, [adsTransactionId, adsValueEuro, hydrated, lastCompletedOrder, orderCompleted, receipt])
-  if (!hydrated) {
-    return (
-      <ContentShell className="py-12">
-        <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
-          <p className="text-[#1F5CAB]/90">Lade...</p>
-        </div>
-      </ContentShell>
-    )
-  }
-  if (!isThankYouEligible(orderCompleted, lastCompletedOrder)) {
-    return (
-      <ContentShell className="py-12">
-        <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
-          <p className="text-[#1F5CAB]/90">Weiterleitung zum Warenkorb...</p>
-        </div>
-      </ContentShell>
-    )
-  }
-  return (
-    <ContentShell className="py-8 lg:py-12">
-      <GoogleAdsPurchaseTracker transactionId={adsTransactionId} valueEuro={adsValueEuro} />
-      <CheckoutSteps currentStep="order" />
-      <div className="mx-auto mt-8 max-w-3xl space-y-8">
-        <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center shadow-sm">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#E7F0FB] text-[#1F5CAB]">
-            <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-[#1F5CAB]">Bestellung erhalten</h1>
-          <p className="mt-3 text-sm leading-relaxed text-[#1F5CAB]/85">
-            Vielen Dank. Deine Bestellung ist bei uns eingegangen. Eine Bestätigung senden wir an deine
-            E-Mail-Adresse.
-          </p>
-          <ul className="mx-auto mt-6 max-w-md space-y-2 text-left text-sm text-[#1F5CAB]">
-            {orderLabel ? (
-              <li className="flex justify-between gap-4 border-b border-[#DBE9F9] py-2">
-                <span className="text-[#1F5CAB]/75">Bestellnr.</span>
-                <span className="font-semibold tabular-nums">{orderLabel}</span>
-              </li>
-            ) : null}
-            {formattedDate ? (
-              <li className="flex justify-between gap-4 border-b border-[#DBE9F9] py-2">
-                <span className="text-[#1F5CAB]/75">Datum</span>
-                <span className="font-medium">{formattedDate}</span>
-              </li>
-            ) : null}
-            {receipt ? (
-              <li className="flex justify-between gap-4 border-b border-[#DBE9F9] py-2">
-                <span className="text-[#1F5CAB]/75">Gesamt</span>
-                <span className="font-semibold">{decodePriceDisplay(receipt.totals.total)}</span>
-              </li>
-            ) : null}
-            {receipt?.email ? (
-              <li className="flex justify-between gap-4 border-b border-[#DBE9F9] py-2">
-                <span className="text-[#1F5CAB]/75">E-Mail</span>
-                <span className="min-w-0 break-all font-medium">{receipt.email}</span>
-              </li>
-            ) : null}
-            {receipt?.paymentMethodLabel ? (
-              <li className="flex justify-between gap-4 py-2">
-                <span className="text-[#1F5CAB]/75">Zahlung</span>
-                <span className="text-right font-medium">{receipt.paymentMethodLabel}</span>
-              </li>
-            ) : null}
-          </ul>
-          {lastCompletedOrder?.status ? (
-            <p className="mt-4 text-xs text-[#1F5CAB]/65">Status: {lastCompletedOrder.status}</p>
-          ) : null}
-        </div>
-        {receipt && receipt.lines.length > 0 ? (
-          <section
-            className="rounded-2xl border border-[#DBE9F9] bg-white p-6 shadow-sm"
-            aria-labelledby="thankyou-order-details"
-          >
-            <h2 id="thankyou-order-details" className="text-lg font-bold text-[#1F5CAB]">
-              Bestelldetails
-            </h2>
-            <ul className="mt-4 space-y-4">
-              {receipt.lines.map((item) => (
-                <li
-                  key={item.cartKey}
-                  className="rounded-xl border border-[#DBE9F9] bg-[#F7FAFF]/60 p-4"
-                >
-                  <div className="flex gap-3">
-                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-[#DBE9F9]">
-                      <Image
-                        src={
-                          item.imageSourceUrl
-                            ? getAbsoluteImageUrl(item.imageSourceUrl)
-                            : '/placeholder.png'
-                        }
-                        alt={item.imageTitle ?? item.name}
-                        fill
-                        className="object-cover"
-                        sizes="64px"
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-[#1F5CAB]">{item.name}</p>
-                      <p className="text-sm text-[#1F5CAB]/75">
-                        × {item.qty} · {decodePriceDisplay(item.unitPriceDisplay)}
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-[#1F5CAB]">
-                        {decodePriceDisplay(item.totalDisplay)}
-                      </p>
-                    </div>
-                  </div>
-                  {item.configurationSummary.length > 0 ? (
-                    <dl className="mt-3 grid gap-1 rounded-lg bg-white/80 p-3 text-xs text-[#1F5CAB]/85">
-                      {item.configurationSummary.map((entry) => (
-                        <div key={`${item.cartKey}-${entry.label}`} className="flex justify-between gap-3">
-                          <dt className="font-semibold text-[#1F5CAB]">{entry.label}</dt>
-                          <dd className="text-right">{entry.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-            <dl className="mt-6 space-y-2 border-t border-[#DBE9F9] pt-4 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-[#1F5CAB]/80">Zwischensumme</dt>
-                <dd className="font-medium text-[#1F5CAB]">
-                  {decodePriceDisplay(receipt.totals.subtotal)}
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-[#1F5CAB]/80">Versand</dt>
-                <dd className="font-medium text-[#1F5CAB]">
-                  {showFreeShippingAmount
-                    ? '0,00 €'
-                    : shippingValue === 0
-                    ? 'Preis auf Anfrage'
-                    : decodePriceDisplay(getEffectiveShippingTotal(receipt.totals))}
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-[#1F5CAB]/80">MwSt.</dt>
-                <dd className="font-medium text-[#1F5CAB]">
-                  {decodePriceDisplay(receipt.totals.totalTax)}
-                </dd>
-              </div>
-              <div className="flex justify-between border-t border-[#DBE9F9] pt-3 text-base font-bold text-[#1F5CAB]">
-                <dt>Gesamt</dt>
-                <dd>{decodePriceDisplay(receipt.totals.total)}</dd>
-              </div>
-            </dl>
-          </section>
-        ) : null}
-        {(receipt?.billingLines?.length ?? 0) > 0 ? (
-          <section className="rounded-2xl border border-[#DBE9F9] bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-[#1F5CAB]">Rechnungsadresse</h2>
-            <address className="mt-3 not-italic text-sm leading-relaxed text-[#1F5CAB]/90">
-              {receipt!.billingLines.map((line, i) => (
-                <span key={`bill-${i}`} className="block">
-                  {line}
-                </span>
-              ))}
-            </address>
-          </section>
-        ) : null}
-        {(receipt?.shippingLines?.length ?? 0) > 0 ? (
-          <section className="rounded-2xl border border-[#DBE9F9] bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-[#1F5CAB]">Lieferadresse</h2>
-            <address className="mt-3 not-italic text-sm leading-relaxed text-[#1F5CAB]/90">
-              {receipt!.shippingLines!.map((line, i) => (
-                <span key={`ship-${i}`} className="block">
-                  {line}
-                </span>
-              ))}
-            </address>
-          </section>
-        ) : null}
-        {showBankHint ? (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50/90 p-6 text-left text-sm text-amber-950">
-            <h2 className="font-semibold text-amber-950">Direkte Banküberweisung</h2>
-            <p className="mt-2 leading-relaxed text-amber-900/90">
-              Bitte überweise den Betrag unter Angabe der Bestellnummer. Die Bankverbindung findest du in der
-              E-Mail-Bestätigung. Nach Zahlungseingang beginnen wir mit der Bearbeitung.
-            </p>
-          </div>
-        ) : null}
-        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:justify-center">
-          <button
-            type="button"
-            onClick={() => {
-              reset()
-              router.push('/shop')
-            }}
-            className="inline-flex items-center justify-center rounded-full bg-[#1F5CAB] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#0F2B52]"
-          >
-            Weiter einkaufen
-          </button>
-          <Link
-            href="/"
-            className="inline-flex items-center justify-center rounded-full border-2 border-[#1F5CAB] bg-white px-6 py-3 text-sm font-semibold text-[#1F5CAB] transition hover:bg-[#F7FAFF]"
-          >
-            Zur Startseite
-          </Link>
-          <Link
-            href="/kontakt"
-            className="inline-flex items-center justify-center rounded-full border-2 border-[#DBE9F9] bg-white px-6 py-3 text-sm font-semibold text-[#1F5CAB] transition hover:border-[#B9D4F3]"
-          >
-            Kontakt
-          </Link>
-        </div>
-        <p className="text-center text-xs text-[#1F5CAB]/60">
-          Bei Fragen zu deiner Bestellung:{' '}
-          <Link href="/kontakt" className="font-medium text-[#1F5CAB] underline hover:no-underline">
-            Kontakt
-          </Link>
-          {' · '}
-          <Link href="/mein-konto" className="font-medium text-[#1F5CAB] underline hover:no-underline">
-            Mein Konto
-          </Link>
-        </p>
-      </div>
-    </ContentShell>
-  )
-}
-````
-
-## File: src/features/checkout/components/PaymentMethods.tsx
-````typescript
-'use client'
-import { useEffect } from 'react'
-import { useCheckoutStore } from '../store/checkout.store'
-import { PAYMENT_METHOD_IDS } from '../types/checkout.types'
-import type { CheckoutGatewayOption } from '../lib/payment-gateways'
-import { useCartStore } from '@/shared/lib/cartStore'
-import {
-  buildCartSignature,
-  mapCartToTrackingItems,
-  pushToDataLayerOnce,
-  type DataLayerEcommerceEvent,
-} from '@/lib/tracking'
-import { parseCartPriceString } from '@/shared/lib/functions'
-const ALL_PAYMENT_OPTIONS: CheckoutGatewayOption[] = [
-  {
-    id: PAYMENT_METHOD_IDS.CARD,
-    label: 'Karte',
-    description: 'VISA, Mastercard, AMEX',
-    available: true,
-    frontendReady: true,
-    expressEligible: false,
-    action: 'select',
-    wcPaymentMethodAliases: [],
-    helperText: 'Kartenzahlung wird sicher ueber Stripe weitergeleitet.',
-  },
-  {
-    id: PAYMENT_METHOD_IDS.PAYPAL,
-    label: 'PayPal',
-    available: true,
-    frontendReady: true,
-    expressEligible: true,
-    action: 'redirect',
-    wcPaymentMethodAliases: [],
-  },
-  {
-    id: PAYMENT_METHOD_IDS.KLARNA,
-    label: 'Klarna',
-    available: true,
-    frontendReady: true,
-    expressEligible: true,
-    action: 'redirect',
-    wcPaymentMethodAliases: [],
-  },
-  {
-    id: PAYMENT_METHOD_IDS.BANK,
-    label: 'Direkte Bankueberweisung',
-    available: true,
-    frontendReady: true,
-    expressEligible: false,
-    action: 'select',
-    wcPaymentMethodAliases: [],
-  },
-  {
-    id: PAYMENT_METHOD_IDS.WALLET,
-    label: 'Apple Pay / Google Pay',
-    description: 'Nur mit echtem Wallet-Flow im Frontend',
-    available: true,
-    frontendReady: true,
-    expressEligible: false,
-    action: 'select',
-    wcPaymentMethodAliases: [],
-    helperText:
-      'Apple Pay und Google Pay werden ueber Stripe bereitgestellt, wenn Browser und Geraet sie unterstuetzen.',
-  },
-]
-interface PaymentMethodsProps {
-  hideWallet?: boolean
-  options?: CheckoutGatewayOption[]
-  loading?: boolean
-}
-export function PaymentMethods({ hideWallet = false, options, loading = false }: PaymentMethodsProps = {}) {
-  const selectedPayment = useCheckoutStore((state) => state.selectedPayment)
-  const setSelectedPayment = useCheckoutStore((state) => state.setSelectedPayment)
-  const cart = useCartStore((state) => state.cart)
-  const resolvedOptions = (options ?? ALL_PAYMENT_OPTIONS).filter(
-    (option) => option.available && (!hideWallet || option.id !== PAYMENT_METHOD_IDS.WALLET)
-  )
-  useEffect(() => {
-    if (!resolvedOptions.length) return
-    const selectedOption = resolvedOptions.find((option) => option.id === selectedPayment)
-    if (selectedOption) return
-    const fallbackOption = resolvedOptions.find((option) => option.frontendReady)
-    if (fallbackOption && fallbackOption.id !== selectedPayment) {
-      setSelectedPayment(fallbackOption.id)
-    }
-  }, [resolvedOptions, selectedPayment, setSelectedPayment])
-  const isOptionSelectable = (option: CheckoutGatewayOption) => option.available && option.frontendReady
-  return (
-    <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6">
-      <h2 className="mb-4 text-lg font-bold text-[#1F5CAB]">Zahlungsart</h2>
-      {loading ? (
-        <div className="rounded-xl border border-[#DBE9F9] bg-white p-4 text-sm text-[#1F5CAB]/75">
-          Verfuegbare Zahlungsarten werden geladen...
-        </div>
-      ) : null}
-      <ul className="space-y-2" role="radiogroup" aria-label="Zahlungsart waehlen">
-        {resolvedOptions.map((option) => (
-          <li key={option.id}>
-            <label
-              className={`flex items-start gap-3 rounded-xl border-2 p-4 transition ${
-                isOptionSelectable(option) ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'
-              } ${
-                selectedPayment === option.id
-                  ? 'border-[#1F5CAB] bg-white shadow-sm'
-                  : 'border-[#DBE9F9] bg-white hover:border-[#B9D4F3]'
-              }`}
-            >
-              <input
-                type="radio"
-                name="paymentMethod"
-                value={option.id}
-                checked={selectedPayment === option.id}
-                disabled={!isOptionSelectable(option)}
-                onChange={() => {
-                  if (!isOptionSelectable(option)) return
-                  setSelectedPayment(option.id)
-                  const items = mapCartToTrackingItems(cart)
-                  const cartSignature = buildCartSignature(cart)
-                  const totalValue = parseCartPriceString(cart?.totals?.total)
-                  if (items.length === 0 || !cartSignature) return
-                  const paymentEvent: DataLayerEcommerceEvent = {
-                    event: 'add_payment_info',
-                    ecommerce: {
-                      value: totalValue,
-                      currency: 'EUR',
-                      payment_type: option.id,
-                      items,
-                    },
-                  }
-                  pushToDataLayerOnce(`add_payment_info_${option.id}_${cartSignature}`, paymentEvent)
-                }}
-                className="mt-1 h-4 w-4 border-[#DBE9F9] text-[#1F5CAB] focus:ring-[#1F5CAB]"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-[#1F5CAB]">{option.label}</span>
-                  {option.expressEligible ? (
-                    <span className="rounded-full bg-[#E7F0FB] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1F5CAB]">
-                      Express
-                    </span>
-                  ) : null}
-                </div>
-                {option.description ? (
-                  <p className="mt-0.5 text-xs text-[#1F5CAB]/70">{option.description}</p>
-                ) : null}
-                {option.helperText ? (
-                  <p className="mt-1 text-xs text-amber-700">{option.helperText}</p>
-                ) : null}
-              </div>
-            </label>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
 }
 ````
 
@@ -32738,6 +32067,682 @@ function fallbackProduct(slug: string, dataErrorMessage?: string): TruckTarpProd
 }
 ````
 
+## File: src/app/api/checkout/payment-options/route.ts
+````typescript
+import { NextRequest, NextResponse } from 'next/server'
+import {
+  resolveCheckoutGateways,
+  type PaymentOptionsResponse,
+} from '@/features/checkout/lib/payment-gateways'
+import {
+  mergeUniquePaymentMethodIds,
+  normalizeStoreApiPaymentMethods,
+} from '@/features/checkout/lib/store-api-payment-methods'
+import { buildWooStoreApiHeaders, readWooSessionTokenFromRequest } from '@/lib/woo-session-cookie'
+function resolveWordPressOrigin(): string {
+  const candidates = [
+    process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim(),
+    process.env.CUSTOMIZER_API_URL?.trim(),
+    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
+    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim(),
+    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
+    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
+  ].filter((value): value is string => Boolean(value))
+  for (const candidate of candidates) {
+    if (/\/wp-json\/wc\/store\/v1\/checkout\/?$/i.test(candidate)) {
+      return candidate.replace(/\/wp-json\/wc\/store\/v1\/checkout\/?$/i, '')
+    }
+    if (/\/graphql\/?$/i.test(candidate)) {
+      return candidate.replace(/\/graphql\/?$/i, '')
+    }
+    if (/\/wp-json\/.+$/i.test(candidate)) {
+      return candidate.replace(/\/wp-json\/.+$/i, '')
+    }
+  }
+  return ''
+}
+function resolveStoreApiCheckoutUrl(): string {
+  const candidates = [
+    process.env.WC_STRIPE_CHECKOUT_API_URL?.trim(),
+    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
+    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
+  ].filter((value): value is string => Boolean(value))
+  for (const candidate of candidates) {
+    if (isStoreApiCheckoutUrl(candidate)) return candidate
+  }
+  const origin = resolveWordPressOrigin()
+  return origin ? `${origin}/wp-json/wc/store/v1/checkout` : ''
+}
+function isStoreApiCheckoutUrl(url: string): boolean {
+  return /\/wp-json\/wc\/store\/v1\/checkout\/?$/.test(url)
+}
+function hasCustomProviderCheckoutEndpoint(): boolean {
+  const candidates = [
+    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
+    process.env.WC_PAYPAL_CHECKOUT_API_URL?.trim(),
+    process.env.WC_KLARNA_CHECKOUT_API_URL?.trim(),
+  ].filter((value): value is string => Boolean(value))
+  return candidates.some((value) => !isStoreApiCheckoutUrl(value))
+}
+function toStoreApiCartUrl(checkoutUrl: string): string {
+  return checkoutUrl.replace(/\/checkout\/?$/i, '/cart')
+}
+async function parseJsonSafe(response: Response): Promise<Record<string, unknown>> {
+  return (await response.json().catch(() => ({}))) as Record<string, unknown>
+}
+export async function GET(request: NextRequest) {
+  const upstreamUrl = resolveStoreApiCheckoutUrl()
+  if (!upstreamUrl) {
+    return NextResponse.json(
+      {
+        error: 'WooCommerce Store API URL konnte nicht aufgeloest werden.',
+      },
+      { status: 501 }
+    )
+  }
+  const cartUrl = toStoreApiCartUrl(upstreamUrl)
+  const cookie = request.headers.get('cookie') ?? ''
+  const storeHeaders = buildWooStoreApiHeaders(request)
+  const sessionToken = readWooSessionTokenFromRequest(request)
+  const errors: string[] = []
+  try {
+    const cartResponse = await fetch(cartUrl, {
+      method: 'GET',
+      headers: Object.keys(storeHeaders).length > 0 ? storeHeaders : undefined,
+      cache: 'no-store',
+    })
+    const cartData = await parseJsonSafe(cartResponse)
+    const checkoutResponse = await fetch(upstreamUrl, {
+      method: 'GET',
+      headers: Object.keys(storeHeaders).length > 0 ? storeHeaders : undefined,
+      cache: 'no-store',
+    })
+    const checkoutBootstrapOk = checkoutResponse.ok || checkoutResponse.status === 401
+    if (!cartResponse.ok) {
+      errors.push(
+        (typeof cartData.message === 'string' && cartData.message) || 'Store API Cart konnte nicht geladen werden.'
+      )
+    }
+    if (!checkoutBootstrapOk) {
+      errors.push('Store API Checkout-Bootstrap konnte nicht geladen werden.')
+    }
+    const checkoutData = checkoutBootstrapOk ? await parseJsonSafe(checkoutResponse) : {}
+    const experimentalCart =
+      checkoutData && typeof checkoutData === 'object' && '__experimentalCart' in checkoutData
+        ? (checkoutData as { __experimentalCart?: Record<string, unknown> }).__experimentalCart
+        : undefined
+    let availablePaymentMethods = mergeUniquePaymentMethodIds(
+      normalizeStoreApiPaymentMethods(cartData.payment_methods),
+      normalizeStoreApiPaymentMethods(
+        checkoutData && typeof checkoutData === 'object' && 'payment_methods' in checkoutData
+          ? (checkoutData as { payment_methods?: unknown }).payment_methods
+          : undefined
+      ),
+      normalizeStoreApiPaymentMethods(experimentalCart?.payment_methods)
+    )
+    // Headless: Store API listet „bacs“ oft nicht, WooGraphQL-Checkout unterstützt ihn trotzdem.
+    // Opt-out (z. B. wenn Banküberweisung in Woo wirklich deaktiviert): CHECKOUT_SUPPLEMENT_BACS=0
+    const supplementBacs = process.env.CHECKOUT_SUPPLEMENT_BACS?.trim() !== '0'
+    if (supplementBacs) {
+      availablePaymentMethods = mergeUniquePaymentMethodIds(availablePaymentMethods, ['bacs'])
+    }
+    const paymentRequirements = Array.isArray(cartData.payment_requirements)
+      ? cartData.payment_requirements.filter((entry): entry is string => typeof entry === 'string')
+      : []
+    const cartItems = Array.isArray(cartData.items) ? cartData.items : []
+    const hasStripeKey = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim())
+    const hasCustomProviderCheckout = hasCustomProviderCheckoutEndpoint()
+    let gateways = resolveCheckoutGateways(availablePaymentMethods, hasStripeKey, hasCustomProviderCheckout)
+    const explicitBankId = process.env.WC_CHECKOUT_BANK_PAYMENT_METHOD_ID?.trim()
+    if (explicitBankId) {
+      gateways = gateways.map((g) =>
+        g.id === 'bacs'
+          ? {
+              ...g,
+              wcPaymentMethodId: explicitBankId,
+              available: true,
+              frontendReady: true,
+              expressEligible: false,
+            }
+          : g,
+      )
+    }
+    const payload: PaymentOptionsResponse = {
+      gateways,
+      diagnostics: {
+        upstreamUrl,
+        cartUrl,
+        cartFetchOk: cartResponse.ok,
+        checkoutBootstrapOk,
+        cookiePresent: cookie.length > 0,
+        wooSessionHeaderSent: Boolean(sessionToken),
+        cartItemCount: cartItems.length,
+        availablePaymentMethods,
+        paymentRequirements,
+        errors,
+      },
+    }
+    return NextResponse.json(payload, {
+      status: cartResponse.ok || checkoutResponse.ok ? 200 : 502,
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    })
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : 'WooCommerce Payment Discovery fehlgeschlagen.',
+      },
+      { status: 502 }
+    )
+  }
+}
+````
+
+## File: src/features/checkout/components/OrderThankYouContent.tsx
+````typescript
+'use client'
+import Image from 'next/image'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
+import { useCheckoutStore, type LastCompletedOrderSnapshot } from '../store/checkout.store'
+import { CheckoutSteps } from './CheckoutSteps'
+import { ContentShell } from '@/shared/components/ContentShell.component'
+import { PAYMENT_METHOD_IDS } from '../types/checkout.types'
+import {
+  decodePriceDisplay,
+  getEffectiveShippingTotal,
+  getAbsoluteImageUrl,
+  parseCartPriceString,
+} from '@/shared/lib/functions'
+import { GoogleAdsPurchaseTracker } from '@/components/analytics/google-ads-purchase-tracker'
+import { pushPurchaseEvent } from '@/lib/tracking/purchase'
+const CART_PATH = '/cart'
+const THANK_YOU_MAX_AGE_MS = 48 * 60 * 60 * 1000
+function isThankYouEligible(
+  orderCompleted: boolean,
+  lastCompletedOrder: LastCompletedOrderSnapshot | null,
+): boolean {
+  if (orderCompleted) return true
+  if (!lastCompletedOrder) return false
+  return Date.now() - lastCompletedOrder.completedAt < THANK_YOU_MAX_AGE_MS
+}
+function formatOrderDate(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return new Intl.DateTimeFormat('de-DE', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(d)
+}
+export function OrderThankYouContent() {
+  const router = useRouter()
+  const orderCompleted = useCheckoutStore((s) => s.orderCompleted)
+  const lastCompletedOrder = useCheckoutStore((s) => s.lastCompletedOrder)
+  const selectedPayment = useCheckoutStore((s) => s.selectedPayment)
+  const reset = useCheckoutStore((s) => s.reset)
+  const [hydrated, setHydrated] = useState(() => {
+    const api = useCheckoutStore.persist
+    return api ? api.hasHydrated() : true
+  })
+  const purchasePushAttempted = useRef(false)
+  useEffect(() => {
+    const api = useCheckoutStore.persist
+    if (!api || hydrated || api.hasHydrated()) {
+      return
+    }
+    const unsub = api.onFinishHydration(() => setHydrated(true))
+    return unsub
+  }, [hydrated])
+  useEffect(() => {
+    if (!hydrated) return
+    if (!isThankYouEligible(orderCompleted, lastCompletedOrder)) {
+      router.replace(CART_PATH)
+    }
+  }, [hydrated, orderCompleted, lastCompletedOrder, router])
+  const showBankHint = selectedPayment === PAYMENT_METHOD_IDS.BANK
+  const orderLabel =
+    lastCompletedOrder?.orderNumber != null && lastCompletedOrder.orderNumber !== ''
+      ? String(lastCompletedOrder.orderNumber)
+      : lastCompletedOrder?.databaseId != null && lastCompletedOrder.databaseId !== ''
+        ? String(lastCompletedOrder.databaseId)
+        : null
+  const receipt = lastCompletedOrder?.receipt
+  const formattedDate = formatOrderDate(lastCompletedOrder?.date)
+  const adsTransactionId =
+    lastCompletedOrder?.databaseId ??
+    (lastCompletedOrder?.orderNumber != null ? String(lastCompletedOrder.orderNumber) : null) ??
+    `session-${lastCompletedOrder?.completedAt ?? 0}`
+  const adsValueEuro =
+    receipt?.totals?.total != null
+      ? (() => {
+          const v = parseCartPriceString(receipt.totals.total)
+          return Number.isFinite(v) && v >= 0 ? v : undefined
+        })()
+      : undefined
+  const shippingValue =
+    receipt != null
+      ? parseCartPriceString(receipt.totals.shippingTotal) + parseCartPriceString(receipt.totals.feeTotal)
+      : 0
+  const showFreeShippingAmount =
+    receipt != null &&
+    shippingValue === 0 &&
+    parseCartPriceString(receipt.totals.discountTotal) > 0
+  useEffect(() => {
+    if (!hydrated) return
+    if (!isThankYouEligible(orderCompleted, lastCompletedOrder)) return
+    if (purchasePushAttempted.current) return
+    if (!receipt || receipt.lines.length === 0) return
+    if (!adsTransactionId || adsValueEuro == null) return
+    purchasePushAttempted.current = true
+    const taxValue = receipt.totals.totalTax != null
+      ? parseCartPriceString(receipt.totals.totalTax)
+      : undefined
+    const shippingValue = receipt.totals.shippingTotal != null
+      ? parseCartPriceString(receipt.totals.shippingTotal)
+      : undefined
+    // Pushes the GTM/GA4 purchase event once per order on the real thank-you page.
+    pushPurchaseEvent({
+      transactionId: adsTransactionId,
+      value: adsValueEuro,
+      currency: 'EUR',
+      tax: Number.isFinite(taxValue) && (taxValue as number) >= 0 ? taxValue : undefined,
+      shipping: Number.isFinite(shippingValue) && (shippingValue as number) >= 0 ? shippingValue : undefined,
+      receipt,
+    })
+  }, [adsTransactionId, adsValueEuro, hydrated, lastCompletedOrder, orderCompleted, receipt])
+  if (!hydrated) {
+    return (
+      <ContentShell className="py-12">
+        <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
+          <p className="text-[#1F5CAB]/90">Lade...</p>
+        </div>
+      </ContentShell>
+    )
+  }
+  if (!isThankYouEligible(orderCompleted, lastCompletedOrder)) {
+    return (
+      <ContentShell className="py-12">
+        <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center">
+          <p className="text-[#1F5CAB]/90">Weiterleitung zum Warenkorb...</p>
+        </div>
+      </ContentShell>
+    )
+  }
+  return (
+    <ContentShell className="py-8 lg:py-12">
+      <GoogleAdsPurchaseTracker transactionId={adsTransactionId} valueEuro={adsValueEuro} />
+      <CheckoutSteps currentStep="order" />
+      <div className="mx-auto mt-8 max-w-3xl space-y-8">
+        <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-8 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#E7F0FB] text-[#1F5CAB]">
+            <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-[#1F5CAB]">Bestellung erhalten</h1>
+          <p className="mt-3 text-sm leading-relaxed text-[#1F5CAB]/85">
+            Vielen Dank. Deine Bestellung ist bei uns eingegangen. Eine Bestätigung senden wir an deine
+            E-Mail-Adresse.
+          </p>
+          <ul className="mx-auto mt-6 max-w-md space-y-2 text-left text-sm text-[#1F5CAB]">
+            {orderLabel ? (
+              <li className="flex justify-between gap-4 border-b border-[#DBE9F9] py-2">
+                <span className="text-[#1F5CAB]/75">Bestellnr.</span>
+                <span className="font-semibold tabular-nums">{orderLabel}</span>
+              </li>
+            ) : null}
+            {formattedDate ? (
+              <li className="flex justify-between gap-4 border-b border-[#DBE9F9] py-2">
+                <span className="text-[#1F5CAB]/75">Datum</span>
+                <span className="font-medium">{formattedDate}</span>
+              </li>
+            ) : null}
+            {receipt ? (
+              <li className="flex justify-between gap-4 border-b border-[#DBE9F9] py-2">
+                <span className="text-[#1F5CAB]/75">Gesamt</span>
+                <span className="font-semibold">{decodePriceDisplay(receipt.totals.total)}</span>
+              </li>
+            ) : null}
+            {receipt?.email ? (
+              <li className="flex justify-between gap-4 border-b border-[#DBE9F9] py-2">
+                <span className="text-[#1F5CAB]/75">E-Mail</span>
+                <span className="min-w-0 break-all font-medium">{receipt.email}</span>
+              </li>
+            ) : null}
+            {receipt?.paymentMethodLabel ? (
+              <li className="flex justify-between gap-4 py-2">
+                <span className="text-[#1F5CAB]/75">Zahlung</span>
+                <span className="text-right font-medium">{receipt.paymentMethodLabel}</span>
+              </li>
+            ) : null}
+          </ul>
+          {lastCompletedOrder?.status ? (
+            <p className="mt-4 text-xs text-[#1F5CAB]/65">Status: {lastCompletedOrder.status}</p>
+          ) : null}
+        </div>
+        {receipt && receipt.lines.length > 0 ? (
+          <section
+            className="rounded-2xl border border-[#DBE9F9] bg-white p-6 shadow-sm"
+            aria-labelledby="thankyou-order-details"
+          >
+            <h2 id="thankyou-order-details" className="text-lg font-bold text-[#1F5CAB]">
+              Bestelldetails
+            </h2>
+            <ul className="mt-4 space-y-4">
+              {receipt.lines.map((item) => (
+                <li
+                  key={item.cartKey}
+                  className="rounded-xl border border-[#DBE9F9] bg-[#F7FAFF]/60 p-4"
+                >
+                  <div className="flex gap-3">
+                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-[#DBE9F9]">
+                      <Image
+                        src={
+                          item.imageSourceUrl
+                            ? getAbsoluteImageUrl(item.imageSourceUrl)
+                            : '/placeholder.png'
+                        }
+                        alt={item.imageTitle ?? item.name}
+                        fill
+                        className="object-cover"
+                        sizes="64px"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-[#1F5CAB]">{item.name}</p>
+                      <p className="text-sm text-[#1F5CAB]/75">
+                        × {item.qty} · {decodePriceDisplay(item.unitPriceDisplay)}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-[#1F5CAB]">
+                        {decodePriceDisplay(item.totalDisplay)}
+                      </p>
+                    </div>
+                  </div>
+                  {item.configurationSummary.length > 0 ? (
+                    <dl className="mt-3 grid gap-1 rounded-lg bg-white/80 p-3 text-xs text-[#1F5CAB]/85">
+                      {item.configurationSummary.map((entry) => (
+                        <div key={`${item.cartKey}-${entry.label}`} className="flex justify-between gap-3">
+                          <dt className="font-semibold text-[#1F5CAB]">{entry.label}</dt>
+                          <dd className="text-right">{entry.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            <dl className="mt-6 space-y-2 border-t border-[#DBE9F9] pt-4 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-[#1F5CAB]/80">Zwischensumme</dt>
+                <dd className="font-medium text-[#1F5CAB]">
+                  {decodePriceDisplay(receipt.totals.subtotal)}
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-[#1F5CAB]/80">Versand</dt>
+                <dd className="font-medium text-[#1F5CAB]">
+                  {showFreeShippingAmount
+                    ? '0,00 €'
+                    : shippingValue === 0
+                    ? 'Preis auf Anfrage'
+                    : decodePriceDisplay(getEffectiveShippingTotal(receipt.totals))}
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-[#1F5CAB]/80">MwSt.</dt>
+                <dd className="font-medium text-[#1F5CAB]">
+                  {decodePriceDisplay(receipt.totals.totalTax)}
+                </dd>
+              </div>
+              <div className="flex justify-between border-t border-[#DBE9F9] pt-3 text-base font-bold text-[#1F5CAB]">
+                <dt>Gesamt</dt>
+                <dd>{decodePriceDisplay(receipt.totals.total)}</dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
+        {(receipt?.billingLines?.length ?? 0) > 0 ? (
+          <section className="rounded-2xl border border-[#DBE9F9] bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-[#1F5CAB]">Rechnungsadresse</h2>
+            <address className="mt-3 not-italic text-sm leading-relaxed text-[#1F5CAB]/90">
+              {receipt!.billingLines.map((line, i) => (
+                <span key={`bill-${i}`} className="block">
+                  {line}
+                </span>
+              ))}
+            </address>
+          </section>
+        ) : null}
+        {(receipt?.shippingLines?.length ?? 0) > 0 ? (
+          <section className="rounded-2xl border border-[#DBE9F9] bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-[#1F5CAB]">Lieferadresse</h2>
+            <address className="mt-3 not-italic text-sm leading-relaxed text-[#1F5CAB]/90">
+              {receipt!.shippingLines!.map((line, i) => (
+                <span key={`ship-${i}`} className="block">
+                  {line}
+                </span>
+              ))}
+            </address>
+          </section>
+        ) : null}
+        {showBankHint ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/90 p-6 text-left text-sm text-amber-950">
+            <h2 className="font-semibold text-amber-950">Direkte Banküberweisung</h2>
+            <p className="mt-2 leading-relaxed text-amber-900/90">
+              Bitte überweise den Betrag unter Angabe der Bestellnummer. Die Bankverbindung findest du in der
+              E-Mail-Bestätigung. Nach Zahlungseingang beginnen wir mit der Bearbeitung.
+            </p>
+          </div>
+        ) : null}
+        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:justify-center">
+          <button
+            type="button"
+            onClick={() => {
+              reset()
+              router.push('/shop')
+            }}
+            className="inline-flex items-center justify-center rounded-full bg-[#1F5CAB] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#0F2B52]"
+          >
+            Weiter einkaufen
+          </button>
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center rounded-full border-2 border-[#1F5CAB] bg-white px-6 py-3 text-sm font-semibold text-[#1F5CAB] transition hover:bg-[#F7FAFF]"
+          >
+            Zur Startseite
+          </Link>
+          <Link
+            href="/kontakt"
+            className="inline-flex items-center justify-center rounded-full border-2 border-[#DBE9F9] bg-white px-6 py-3 text-sm font-semibold text-[#1F5CAB] transition hover:border-[#B9D4F3]"
+          >
+            Kontakt
+          </Link>
+        </div>
+        <p className="text-center text-xs text-[#1F5CAB]/60">
+          Bei Fragen zu deiner Bestellung:{' '}
+          <Link href="/kontakt" className="font-medium text-[#1F5CAB] underline hover:no-underline">
+            Kontakt
+          </Link>
+          {' · '}
+          <Link href="/mein-konto" className="font-medium text-[#1F5CAB] underline hover:no-underline">
+            Mein Konto
+          </Link>
+        </p>
+      </div>
+    </ContentShell>
+  )
+}
+````
+
+## File: src/features/checkout/components/PaymentMethods.tsx
+````typescript
+'use client'
+import { useEffect } from 'react'
+import { useCheckoutStore } from '../store/checkout.store'
+import { PAYMENT_METHOD_IDS } from '../types/checkout.types'
+import type { CheckoutGatewayOption } from '../lib/payment-gateways'
+import { useCartStore } from '@/shared/lib/cartStore'
+import {
+  buildCartSignature,
+  mapCartToTrackingItems,
+  pushToDataLayerOnce,
+  type DataLayerEcommerceEvent,
+} from '@/lib/tracking'
+import { parseCartPriceString } from '@/shared/lib/functions'
+const ALL_PAYMENT_OPTIONS: CheckoutGatewayOption[] = [
+  {
+    id: PAYMENT_METHOD_IDS.CARD,
+    label: 'Karte',
+    description: 'VISA, Mastercard, AMEX',
+    available: true,
+    frontendReady: true,
+    expressEligible: false,
+    action: 'select',
+    wcPaymentMethodAliases: [],
+    helperText: 'Kartenzahlung wird sicher ueber Stripe weitergeleitet.',
+  },
+  {
+    id: PAYMENT_METHOD_IDS.PAYPAL,
+    label: 'PayPal',
+    available: true,
+    frontendReady: true,
+    expressEligible: true,
+    action: 'redirect',
+    wcPaymentMethodAliases: [],
+  },
+  {
+    id: PAYMENT_METHOD_IDS.KLARNA,
+    label: 'Klarna',
+    available: true,
+    frontendReady: true,
+    expressEligible: true,
+    action: 'redirect',
+    wcPaymentMethodAliases: [],
+  },
+  {
+    id: PAYMENT_METHOD_IDS.BANK,
+    label: 'Direkte Bankueberweisung',
+    available: true,
+    frontendReady: true,
+    expressEligible: false,
+    action: 'select',
+    wcPaymentMethodAliases: [],
+  },
+  {
+    id: PAYMENT_METHOD_IDS.WALLET,
+    label: 'Apple Pay / Google Pay',
+    description: 'Nur mit echtem Wallet-Flow im Frontend',
+    available: true,
+    frontendReady: true,
+    expressEligible: false,
+    action: 'select',
+    wcPaymentMethodAliases: [],
+    helperText:
+      'Apple Pay und Google Pay werden ueber Stripe bereitgestellt, wenn Browser und Geraet sie unterstuetzen.',
+  },
+]
+interface PaymentMethodsProps {
+  hideWallet?: boolean
+  options?: CheckoutGatewayOption[]
+  loading?: boolean
+}
+export function PaymentMethods({ hideWallet = false, options, loading = false }: PaymentMethodsProps = {}) {
+  const selectedPayment = useCheckoutStore((state) => state.selectedPayment)
+  const setSelectedPayment = useCheckoutStore((state) => state.setSelectedPayment)
+  const cart = useCartStore((state) => state.cart)
+  const resolvedOptions = (options ?? ALL_PAYMENT_OPTIONS).filter(
+    (option) => option.available && (!hideWallet || option.id !== PAYMENT_METHOD_IDS.WALLET)
+  )
+  useEffect(() => {
+    if (!resolvedOptions.length) return
+    const selectedOption = resolvedOptions.find((option) => option.id === selectedPayment)
+    if (selectedOption) return
+    const fallbackOption = resolvedOptions.find((option) => option.frontendReady)
+    if (fallbackOption && fallbackOption.id !== selectedPayment) {
+      setSelectedPayment(fallbackOption.id)
+    }
+  }, [resolvedOptions, selectedPayment, setSelectedPayment])
+  const isOptionSelectable = (option: CheckoutGatewayOption) => option.available && option.frontendReady
+  return (
+    <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6">
+      <h2 className="mb-4 text-lg font-bold text-[#1F5CAB]">Zahlungsart</h2>
+      {loading ? (
+        <div className="rounded-xl border border-[#DBE9F9] bg-white p-4 text-sm text-[#1F5CAB]/75">
+          Verfuegbare Zahlungsarten werden geladen...
+        </div>
+      ) : null}
+      <ul className="space-y-2" role="radiogroup" aria-label="Zahlungsart waehlen">
+        {resolvedOptions.map((option) => (
+          <li key={option.id}>
+            <label
+              className={`flex items-start gap-3 rounded-xl border-2 p-4 transition ${
+                isOptionSelectable(option) ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'
+              } ${
+                selectedPayment === option.id
+                  ? 'border-[#1F5CAB] bg-white shadow-sm'
+                  : 'border-[#DBE9F9] bg-white hover:border-[#B9D4F3]'
+              }`}
+            >
+              <input
+                type="radio"
+                name="paymentMethod"
+                value={option.id}
+                checked={selectedPayment === option.id}
+                disabled={!isOptionSelectable(option)}
+                onChange={() => {
+                  if (!isOptionSelectable(option)) return
+                  setSelectedPayment(option.id)
+                  const items = mapCartToTrackingItems(cart)
+                  const cartSignature = buildCartSignature(cart)
+                  const totalValue = parseCartPriceString(cart?.totals?.total)
+                  if (items.length === 0 || !cartSignature) return
+                  const paymentEvent: DataLayerEcommerceEvent = {
+                    event: 'add_payment_info',
+                    ecommerce: {
+                      value: totalValue,
+                      currency: 'EUR',
+                      payment_type: option.id,
+                      items,
+                    },
+                  }
+                  pushToDataLayerOnce(`add_payment_info_${option.id}_${cartSignature}`, paymentEvent)
+                }}
+                className="mt-1 h-4 w-4 border-[#DBE9F9] text-[#1F5CAB] focus:ring-[#1F5CAB]"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-[#1F5CAB]">{option.label}</span>
+                  {option.expressEligible ? (
+                    <span className="rounded-full bg-[#E7F0FB] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1F5CAB]">
+                      Express
+                    </span>
+                  ) : null}
+                </div>
+                {option.description ? (
+                  <p className="mt-0.5 text-xs text-[#1F5CAB]/70">{option.description}</p>
+                ) : null}
+                {option.helperText ? (
+                  <p className="mt-1 text-xs text-amber-700">{option.helperText}</p>
+                ) : null}
+              </div>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+````
+
 ## File: src/features/checkout/lib/payment-gateways.ts
 ````typescript
 import type { PaymentMethodId } from '../types/checkout.types'
@@ -33240,12 +33245,18 @@ export function PaymentPageContent() {
         paymentMethod === 'paypal' || paymentMethod === 'klarna'
           ? `${baseUrl}${CHECKOUT_PROVIDER_CALLBACK_PATH}?provider=${paymentMethod}&status=cancel`
           : undefined
+      const checkoutItems =
+        useCartStore
+          .getState()
+          .cart?.products.map((product) => product.restoreInput)
+          .filter((item) => item.productId > 0 && item.quantity > 0) ?? []
       const response = await fetch('/api/checkout/provider-redirect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: paymentMethod,
           checkoutInput,
+          checkoutItems,
           returnUrl,
           cancelUrl,
         }),
