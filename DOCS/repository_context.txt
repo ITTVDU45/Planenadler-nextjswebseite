@@ -4057,6 +4057,66 @@ export function FaqPageContent({ sections }: FaqPageContentProps) {
 }
 ````
 
+## File: src/app/(shop)/faq/page.tsx
+````typescript
+import type { Metadata } from 'next'
+import { TopBar } from '@/shared/components/TopBar/TopBar.component'
+import Stickynav from '@/shared/components/Footer/Stickynav.component'
+import Footer from '@/shared/components/Footer/Footer.component'
+import { ContentShell } from '@/shared/components/ContentShell.component'
+import { ABOUT_FAQ_SECTIONS } from '@/features/about/data/faq'
+import { buildFaqSchema } from '@/features/about/faqSchema'
+import { FaqPageContent } from './FaqPageContent'
+import { buildCanonicalMetadata } from '@/lib/seo'
+import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
+export const metadata: Metadata = buildCanonicalMetadata(
+  '/faq',
+  'FAQ',
+  'Antworten auf haeufige Fragen zu Terrassenplanen, Poolabdeckungen, Versand, Zahlungen und Materialien bei Planenadler.'
+)
+export default function FaqPage() {
+  const faqSchema = buildFaqSchema(ABOUT_FAQ_SECTIONS)
+  const breadcrumbSchema = getBreadcrumbJsonLd([
+    { name: 'Startseite', path: '/' },
+    { name: 'FAQ', path: '/faq' },
+  ])
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <main className="min-h-screen bg-white pb-16 sm:pt-20">
+        <TopBar />
+        <section className="bg-[#F7FAFF] py-16 lg:py-24">
+          <ContentShell>
+            <div className="mx-auto max-w-3xl text-center">
+              <p className="text-xs font-semibold uppercase tracking-widest text-[#3982DC]">
+                FAQ
+              </p>
+              <h1 className="mt-2 text-3xl font-bold text-[#1F5CAB] sm:text-4xl">
+                Antworten auf die haeufigsten Fragen
+              </h1>
+              <p className="mt-4 text-sm leading-relaxed text-[#1F5CAB]/75 sm:text-base">
+                Hier finden Sie gebuendelte Antworten rund um Produkte, Material,
+                Versand, Zahlungen und Massanfertigungen bei Planenadler.
+              </p>
+            </div>
+          </ContentShell>
+        </section>
+        <FaqPageContent sections={ABOUT_FAQ_SECTIONS} />
+        <Footer />
+      </main>
+      <Stickynav />
+    </>
+  )
+}
+````
+
 ## File: src/app/(shop)/impressum/page.tsx
 ````typescript
 import type { Metadata } from 'next'
@@ -6704,6 +6764,69 @@ export function TabsContent({ value, className, ...props }: TabsContentProps) {
 }
 ````
 
+## File: src/config/apollo/ApolloClient.ts
+````typescript
+import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client'
+const DEFAULT_GRAPHQL_SERVER_URL = 'https://wp.planenadler.de/graphql'
+function resolveServerUri(): string {
+  const configuredUrl =
+    process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim()
+  if (!configuredUrl) {
+    return DEFAULT_GRAPHQL_SERVER_URL
+  }
+  try {
+    return new URL(configuredUrl).toString()
+  } catch {
+    return DEFAULT_GRAPHQL_SERVER_URL
+  }
+}
+const serverUri = resolveServerUri()
+const httpLink =
+  typeof window === 'undefined'
+    ? createHttpLink({
+        uri: serverUri,
+        fetch,
+        credentials: 'omit',
+      })
+    : createHttpLink({
+        uri: '/api/graphql',
+        fetch,
+        credentials: 'include',
+      })
+if (typeof window !== 'undefined') {
+  try {
+    const raw = localStorage.getItem('woo-session')
+    if (raw) {
+      const data = JSON.parse(raw) as { token?: string }
+      const token = typeof data?.token === 'string' ? data.token.trim() : ''
+      if (token) {
+        void fetch('/api/woo-session', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        }).then(() => {
+          try {
+            localStorage.removeItem('woo-session')
+          } catch {
+            /* ignore */
+          }
+        })
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+const isServerSide = typeof window === 'undefined'
+const client = new ApolloClient({
+  ssrMode: isServerSide,
+  link: httpLink,
+  cache: new InMemoryCache(),
+})
+export default client
+````
+
 ## File: src/features/about/data/aboutContent.ts
 ````typescript
 import type { HeroContent, AboutStoryContent, MissionContent } from '../types'
@@ -7457,6 +7580,71 @@ export { FAQSection } from './sections/FAQSection'
 export { buildFaqSchema } from './faqSchema'
 export type { FaqItem } from './types'
 export { ABOUT_FAQ_ITEMS } from './data/faq'
+````
+
+## File: src/features/about/types.ts
+````typescript
+export interface HeroContent {
+  headline: string
+  subline: string
+  ctaPrimary: { label: string; href: string }
+  ctaSecondary: { label: string; href: string }
+  trustBadges: { id: string; label: string }[]
+}
+export interface AboutStoryContent {
+  title: string
+  paragraphs: string[]
+  storyTitle?: string
+  storyParagraph?: string
+  highlights?: { label: string; value: string }[]
+}
+export interface MissionContent {
+  title: string
+  text: string
+  points?: string[]
+}
+export interface ConfiguratorStep {
+  step: number
+  title: string
+  description: string
+}
+export interface ConfiguratorContent {
+  title: string
+  steps: ConfiguratorStep[]
+  ctaLabel: string
+  ctaHref: string
+  image?: { src: string; alt: string }
+}
+export interface Benefit {
+  id: string
+  icon: 'measure' | 'shield' | 'palette' | 'support'
+  title: string
+  description: string
+}
+export interface ProductGroupCard {
+  id: string
+  name: string
+  description: string
+  image: { src: string; alt: string }
+  hrefMore: string
+  hrefConfig: string
+}
+export interface BlogPreviewItem {
+  id: string
+  title: string
+  excerpt: string
+  href: string
+}
+export interface FaqItem {
+  id: string
+  question: string
+  answer: string
+}
+export interface FaqSection {
+  id: string
+  title: string
+  items: FaqItem[]
+}
 ````
 
 ## File: src/features/auth/api/fetchCustomerAccount.ts
@@ -13999,6 +14187,114 @@ export async function gqlFetch<T>(
 }
 ````
 
+## File: src/features/home/sections/ProductsShowcase/api/queries.ts
+````typescript
+export const GET_PRODUCTS_BY_CATEGORY = /* GraphQL */ `
+  query ProductsByCategory($slug: [String]) {
+    products(where: { categoryIn: $slug }, first: 50) {
+      nodes {
+        id
+        slug
+        name
+        averageRating
+        description
+        ... on Product {
+          modified
+        }
+        ... on SimpleProduct {
+          price
+          shortDescription
+          attributes {
+            nodes {
+              name
+              options
+            }
+          }
+          galleryImages {
+            nodes {
+              sourceUrl
+              altText
+            }
+          }
+        }
+        ... on VariableProduct {
+          price
+          shortDescription
+          attributes {
+            nodes {
+              name
+              options
+            }
+          }
+          galleryImages {
+            nodes {
+              sourceUrl
+              altText
+            }
+          }
+        }
+        image {
+          sourceUrl
+          altText
+        }
+      }
+    }
+  }
+`
+export const GET_PRODUCTS_ALL = /* GraphQL */ `
+  query ProductsAll {
+    products(first: 50) {
+      nodes {
+        id
+        slug
+        name
+        averageRating
+        description
+        ... on Product {
+          modified
+        }
+        ... on SimpleProduct {
+          price
+          shortDescription
+          attributes {
+            nodes {
+              name
+              options
+            }
+          }
+          galleryImages {
+            nodes {
+              sourceUrl
+              altText
+            }
+          }
+        }
+        ... on VariableProduct {
+          price
+          shortDescription
+          attributes {
+            nodes {
+              name
+              options
+            }
+          }
+          galleryImages {
+            nodes {
+              sourceUrl
+              altText
+            }
+          }
+        }
+        image {
+          sourceUrl
+          altText
+        }
+      }
+    }
+  }
+`
+````
+
 ## File: src/features/home/sections/ProductsShowcase/api/useProductsByCategory.ts
 ````typescript
 'use client'
@@ -19532,66 +19828,6 @@ export default function AnmeldenPage() {
 }
 ````
 
-## File: src/app/(shop)/faq/page.tsx
-````typescript
-import type { Metadata } from 'next'
-import { TopBar } from '@/shared/components/TopBar/TopBar.component'
-import Stickynav from '@/shared/components/Footer/Stickynav.component'
-import Footer from '@/shared/components/Footer/Footer.component'
-import { ContentShell } from '@/shared/components/ContentShell.component'
-import { ABOUT_FAQ_SECTIONS } from '@/features/about/data/faq'
-import { buildFaqSchema } from '@/features/about/faqSchema'
-import { FaqPageContent } from './FaqPageContent'
-import { buildCanonicalMetadata } from '@/lib/seo'
-import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
-export const metadata: Metadata = buildCanonicalMetadata(
-  '/faq',
-  'FAQ',
-  'Antworten auf haeufige Fragen zu Terrassenplanen, Poolabdeckungen, Versand, Zahlungen und Materialien bei Planenadler.'
-)
-export default function FaqPage() {
-  const faqSchema = buildFaqSchema(ABOUT_FAQ_SECTIONS)
-  const breadcrumbSchema = getBreadcrumbJsonLd([
-    { name: 'Startseite', path: '/' },
-    { name: 'FAQ', path: '/faq' },
-  ])
-  return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
-      />
-      <main className="min-h-screen bg-white pb-16 sm:pt-20">
-        <TopBar />
-        <section className="bg-[#F7FAFF] py-16 lg:py-24">
-          <ContentShell>
-            <div className="mx-auto max-w-3xl text-center">
-              <p className="text-xs font-semibold uppercase tracking-widest text-[#3982DC]">
-                FAQ
-              </p>
-              <h1 className="mt-2 text-3xl font-bold text-[#1F5CAB] sm:text-4xl">
-                Antworten auf die haeufigsten Fragen
-              </h1>
-              <p className="mt-4 text-sm leading-relaxed text-[#1F5CAB]/75 sm:text-base">
-                Hier finden Sie gebuendelte Antworten rund um Produkte, Material,
-                Versand, Zahlungen und Massanfertigungen bei Planenadler.
-              </p>
-            </div>
-          </ContentShell>
-        </section>
-        <FaqPageContent sections={ABOUT_FAQ_SECTIONS} />
-        <Footer />
-      </main>
-      <Stickynav />
-    </>
-  )
-}
-````
-
 ## File: src/app/(shop)/product/[slug]/components/ProductViewTracker.tsx
 ````typescript
 'use client'
@@ -20580,69 +20816,6 @@ export function PwaManager() {
 }
 ````
 
-## File: src/config/apollo/ApolloClient.ts
-````typescript
-import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client'
-const DEFAULT_GRAPHQL_SERVER_URL = 'https://wp.planenadler.de/graphql'
-function resolveServerUri(): string {
-  const configuredUrl =
-    process.env.GRAPHQL_SERVER_URL?.trim() || process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim()
-  if (!configuredUrl) {
-    return DEFAULT_GRAPHQL_SERVER_URL
-  }
-  try {
-    return new URL(configuredUrl).toString()
-  } catch {
-    return DEFAULT_GRAPHQL_SERVER_URL
-  }
-}
-const serverUri = resolveServerUri()
-const httpLink =
-  typeof window === 'undefined'
-    ? createHttpLink({
-        uri: serverUri,
-        fetch,
-        credentials: 'omit',
-      })
-    : createHttpLink({
-        uri: '/api/graphql',
-        fetch,
-        credentials: 'include',
-      })
-if (typeof window !== 'undefined') {
-  try {
-    const raw = localStorage.getItem('woo-session')
-    if (raw) {
-      const data = JSON.parse(raw) as { token?: string }
-      const token = typeof data?.token === 'string' ? data.token.trim() : ''
-      if (token) {
-        void fetch('/api/woo-session', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
-        }).then(() => {
-          try {
-            localStorage.removeItem('woo-session')
-          } catch {
-            /* ignore */
-          }
-        })
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-}
-const isServerSide = typeof window === 'undefined'
-const client = new ApolloClient({
-  ssrMode: isServerSide,
-  link: httpLink,
-  cache: new InMemoryCache(),
-})
-export default client
-````
-
 ## File: src/features/about/data/productGroups.ts
 ````typescript
 import type { ProductGroupCard } from '../types'
@@ -20696,71 +20869,6 @@ export const PRODUCT_GROUPS: ProductGroupCard[] = [
     hrefConfig: '/konfigurator',
   },
 ]
-````
-
-## File: src/features/about/types.ts
-````typescript
-export interface HeroContent {
-  headline: string
-  subline: string
-  ctaPrimary: { label: string; href: string }
-  ctaSecondary: { label: string; href: string }
-  trustBadges: { id: string; label: string }[]
-}
-export interface AboutStoryContent {
-  title: string
-  paragraphs: string[]
-  storyTitle?: string
-  storyParagraph?: string
-  highlights?: { label: string; value: string }[]
-}
-export interface MissionContent {
-  title: string
-  text: string
-  points?: string[]
-}
-export interface ConfiguratorStep {
-  step: number
-  title: string
-  description: string
-}
-export interface ConfiguratorContent {
-  title: string
-  steps: ConfiguratorStep[]
-  ctaLabel: string
-  ctaHref: string
-  image?: { src: string; alt: string }
-}
-export interface Benefit {
-  id: string
-  icon: 'measure' | 'shield' | 'palette' | 'support'
-  title: string
-  description: string
-}
-export interface ProductGroupCard {
-  id: string
-  name: string
-  description: string
-  image: { src: string; alt: string }
-  hrefMore: string
-  hrefConfig: string
-}
-export interface BlogPreviewItem {
-  id: string
-  title: string
-  excerpt: string
-  href: string
-}
-export interface FaqItem {
-  id: string
-  question: string
-  answer: string
-}
-export interface FaqSection {
-  id: string
-  title: string
-  items: FaqItem[]
-}
 ````
 
 ## File: src/features/cart/components/CartPageContent/CartPageContent.tsx
@@ -21008,39 +21116,6 @@ export function formatPrice(value: number): string {
     style: 'currency',
     currency: 'EUR',
   }).format(value)
-}
-````
-
-## File: src/features/checkout/components/CardPaymentForm.tsx
-````typescript
-'use client'
-interface CardPaymentFormProps {
-  onContinue: () => void
-  isSubmitting: boolean
-  helperText?: string
-}
-export function CardPaymentForm({ onContinue, isSubmitting, helperText }: CardPaymentFormProps) {
-  return (
-    <div className="mt-4 rounded-xl border border-[#DBE9F9] bg-white p-6">
-      <h3 className="mb-3 text-base font-semibold text-[#1F5CAB]">Kartenzahlung</h3>
-      <p className="mb-4 text-sm text-[#1F5CAB]/90">
-        Deine Bestellung wird an den sicheren Stripe-/WooCommerce-Zahlungsdialog weitergeleitet.
-      </p>
-      {helperText ? (
-        <div className="mb-4 rounded-lg border border-[#DBE9F9] bg-[#F7FAFF] p-4 text-sm text-[#1F5CAB]/85">
-          {helperText}
-        </div>
-      ) : null}
-      <button
-        type="button"
-        onClick={onContinue}
-        disabled={isSubmitting}
-        className="w-full rounded-full border-2 border-[#DBE9F9] bg-[#F7FAFF] px-6 py-3 text-sm font-semibold text-[#1F5CAB] transition hover:border-[#B9D4F3] hover:bg-white disabled:cursor-not-allowed disabled:opacity-70 lg:w-auto lg:min-w-[240px]"
-      >
-        {isSubmitting ? 'Weiterleitung…' : 'Mit Karte fortfahren'}
-      </button>
-    </div>
-  )
 }
 ````
 
@@ -21928,6 +22003,99 @@ export function BlogShowcase({ articles: articlesProp, categories: categoriesPro
 }
 ````
 
+## File: src/features/home/sections/BlogShowcase/mapBlogPostToArticle.ts
+````typescript
+import type { BlogPost } from '@/features/blog/types'
+import type { Article, ArticleCategory } from './types'
+const BLOG_AUTHOR_NAME = 'Adler Planen'
+const BLOG_AUTHOR_AVATAR_SRC = '/images/Planenadler%20bild%20von%20Mitarbeiter.png'
+export interface WordPressBlogPost {
+  id: number
+  slug: string
+  title: { rendered: string }
+  excerpt: { rendered: string }
+  date: string
+  categories: number[]
+  featured_media_url?: string
+  _embedded?: {
+    author?: Array<{ name: string; avatar_urls?: Record<string, string> }>
+    'wp:term'?: Array<Array<{ id: number; slug: string; name: string }>>
+  }
+}
+type BlogShowcaseSourcePost = WordPressBlogPost | BlogPost
+function stripHtml(value: unknown): string {
+  if (typeof value === 'string') return value.replace(/<[^>]+>/g, '').trim()
+  if (value && typeof value === 'object' && 'rendered' in value)
+    return String((value as { rendered: string }).rendered ?? '').replace(/<[^>]+>/g, '').trim()
+  return ''
+}
+function isWordPressBlogPost(post: BlogShowcaseSourcePost): post is WordPressBlogPost {
+  return typeof post.title !== 'string'
+}
+function getPostCategory(post: BlogShowcaseSourcePost): string {
+  if (isWordPressBlogPost(post)) {
+    return post._embedded?.['wp:term']?.[0]?.[0]?.slug ?? 'allgemein'
+  }
+  return post.category ?? post.categories?.[0]?.slug ?? 'allgemein'
+}
+function getPostCategoryLabel(post: BlogShowcaseSourcePost): string | null {
+  if (isWordPressBlogPost(post)) {
+    return post._embedded?.['wp:term']?.[0]?.[0]?.name ?? null
+  }
+  return post.categories?.[0]?.name ?? (post.category ? post.category.replace(/-/g, ' ') : null)
+}
+function formatDate(date: string): string {
+  if (!date) return ''
+  return new Intl.DateTimeFormat('de-DE', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(date))
+}
+export function mapBlogPostToArticle(post: BlogShowcaseSourcePost): Article {
+  const title = stripHtml(post.title)
+  const excerpt = stripHtml(post.excerpt)
+  const publishedAt = isWordPressBlogPost(post) ? post.date : post.publishedAt
+  return {
+    id: String(post.id),
+    title: title || 'Ohne Titel',
+    excerpt: excerpt || '',
+    category: getPostCategory(post),
+    date: formatDate(publishedAt),
+    readTime: isWordPressBlogPost(post)
+      ? '5 Min. Lesezeit'
+      : `${post.readingTimeMin ?? 5} Min. Lesezeit`,
+    slug: post.slug,
+    image: {
+      src: isWordPressBlogPost(post)
+        ? post.featured_media_url ?? 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&q=80'
+        : post.coverImage.src,
+      alt: title || 'Blog-Artikel',
+    },
+    author: {
+      name: BLOG_AUTHOR_NAME,
+      avatar: {
+        src: BLOG_AUTHOR_AVATAR_SRC,
+        alt: BLOG_AUTHOR_NAME,
+      },
+    },
+  }
+}
+export function getCategoriesFromBlogPosts(posts: BlogShowcaseSourcePost[]): ArticleCategory[] {
+  const seen = new Set<string>()
+  const categories: ArticleCategory[] = [{ slug: 'all', label: 'Alle' }]
+  for (const post of posts) {
+    const slug = getPostCategory(post)
+    const label = getPostCategoryLabel(post)
+    if (slug && label && !seen.has(slug)) {
+      seen.add(slug)
+      categories.push({ slug, label })
+    }
+  }
+  return categories
+}
+````
+
 ## File: src/features/home/sections/CategoriesStrip/CategoriesStrip.tsx
 ````typescript
 'use client'
@@ -22551,114 +22719,6 @@ export function InfoWithImageRight({
     </section>
   )
 }
-````
-
-## File: src/features/home/sections/ProductsShowcase/api/queries.ts
-````typescript
-export const GET_PRODUCTS_BY_CATEGORY = /* GraphQL */ `
-  query ProductsByCategory($slug: [String]) {
-    products(where: { categoryIn: $slug }, first: 50) {
-      nodes {
-        id
-        slug
-        name
-        averageRating
-        description
-        ... on Product {
-          modified
-        }
-        ... on SimpleProduct {
-          price
-          shortDescription
-          attributes {
-            nodes {
-              name
-              options
-            }
-          }
-          galleryImages {
-            nodes {
-              sourceUrl
-              altText
-            }
-          }
-        }
-        ... on VariableProduct {
-          price
-          shortDescription
-          attributes {
-            nodes {
-              name
-              options
-            }
-          }
-          galleryImages {
-            nodes {
-              sourceUrl
-              altText
-            }
-          }
-        }
-        image {
-          sourceUrl
-          altText
-        }
-      }
-    }
-  }
-`
-export const GET_PRODUCTS_ALL = /* GraphQL */ `
-  query ProductsAll {
-    products(first: 50) {
-      nodes {
-        id
-        slug
-        name
-        averageRating
-        description
-        ... on Product {
-          modified
-        }
-        ... on SimpleProduct {
-          price
-          shortDescription
-          attributes {
-            nodes {
-              name
-              options
-            }
-          }
-          galleryImages {
-            nodes {
-              sourceUrl
-              altText
-            }
-          }
-        }
-        ... on VariableProduct {
-          price
-          shortDescription
-          attributes {
-            nodes {
-              name
-              options
-            }
-          }
-          galleryImages {
-            nodes {
-              sourceUrl
-              altText
-            }
-          }
-        }
-        image {
-          sourceUrl
-          altText
-        }
-      }
-    }
-  }
-`
 ````
 
 ## File: src/features/home/sections/ProductsShowcase/ProductsShowcase.tsx
@@ -27254,6 +27314,140 @@ function pickHomePageFaqItems(sections: FaqSection[]): FaqItem[] {
 export const HOME_PAGE_FAQ_ITEMS: FaqItem[] = pickHomePageFaqItems(ABOUT_FAQ_SECTIONS)
 ````
 
+## File: src/features/blog/api/fetchPosts.ts
+````typescript
+import type { BlogPost, BlogPostCategory, BlogPostTag } from '../types'
+import type { WPGraphQLPostNode, WPGraphQLPostsResponse, WPGraphQLPostResponse } from './types'
+import { blogGraphQLFetch } from './fetcher'
+import { POSTS_LIST_QUERY, POST_BY_SLUG_QUERY } from './queries'
+import { PLACEHOLDER_IMAGE_DATA_URL } from '@/shared/lib/functions'
+const DEFAULT_COVER_ALT = 'Blog-Bild'
+const BLOG_AUTHOR_NAME = 'Adler Planen'
+function stripHtml(html: string | null | undefined): string {
+  if (!html || typeof html !== 'string') return ''
+  return html
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+function toCategories(nodes: WPGraphQLPostNode['categories']): BlogPostCategory[] | undefined {
+  const list = nodes?.nodes?.filter((n) => n?.name && n?.slug) ?? []
+  if (list.length === 0) return undefined
+  return list.map((n) => ({ name: n.name!, slug: n.slug! }))
+}
+function toTags(nodes: WPGraphQLPostNode['tags']): BlogPostTag[] | undefined {
+  const list = nodes?.nodes?.filter((n) => n?.name && n?.slug) ?? []
+  if (list.length === 0) return undefined
+  return list.map((n) => ({ name: n.name!, slug: n.slug! }))
+}
+export function mapWpPostToBlogPost(node: WPGraphQLPostNode): BlogPost {
+  const src =
+    node.featuredImage?.node?.sourceUrl ?? PLACEHOLDER_IMAGE_DATA_URL
+  const alt =
+    node.featuredImage?.node?.altText ?? node.title ?? DEFAULT_COVER_ALT
+  const category = node.categories?.nodes?.[0]?.name ?? undefined
+  const base: BlogPost = {
+    id: String(node.databaseId ?? node.id),
+    slug: node.slug,
+    title: node.title ?? '',
+    excerpt: stripHtml(node.excerpt),
+    coverImage: { src, alt },
+    publishedAt: node.date ?? '',
+    category,
+    author: BLOG_AUTHOR_NAME,
+  }
+  if (node.content != null || (node.categories?.nodes?.length ?? 0) > 0 || (node.tags?.nodes?.length ?? 0) > 0) {
+    const categories = toCategories(node.categories)
+    const tags = toTags(node.tags)
+    return {
+      ...base,
+      content: node.content ?? undefined,
+      categories,
+      tags,
+    }
+  }
+  return base
+}
+const BATCH_SIZE = 50
+/**
+ * Fetches all published posts from WordPress (paginates through cursor until done).
+ */
+export async function fetchAllBlogPostsFromAPI(): Promise<BlogPost[]> {
+  const results: BlogPost[] = []
+  let after: string | null = null
+  for (;;) {
+    const data: WPGraphQLPostsResponse = await blogGraphQLFetch<WPGraphQLPostsResponse>({
+      query: POSTS_LIST_QUERY,
+      variables: { first: BATCH_SIZE, after },
+    })
+    const nodes = data.posts?.nodes ?? []
+    for (const node of nodes) {
+      results.push(mapWpPostToBlogPost(node))
+    }
+    const hasNext = data.posts?.pageInfo?.hasNextPage ?? false
+    const endCursor: string | null = data.posts?.pageInfo?.endCursor ?? null
+    if (!hasNext || !endCursor) break
+    after = endCursor
+  }
+  return results
+}
+/**
+ * Fetches a single post by slug from WordPress.
+ */
+export async function fetchPostBySlugFromAPI(slug: string): Promise<BlogPost | null> {
+  const data = await blogGraphQLFetch<WPGraphQLPostResponse>({
+    query: POST_BY_SLUG_QUERY,
+    variables: { slug },
+  })
+  const node = data.post
+  if (!node) return null
+  return mapWpPostToBlogPost(node)
+}
+````
+
+## File: src/features/checkout/components/CardPaymentForm.tsx
+````typescript
+'use client'
+interface CardPaymentFormProps {
+  title?: string
+  introText?: string
+  buttonLabel?: string
+  onContinue: () => void
+  isSubmitting: boolean
+  helperText?: string
+}
+export function CardPaymentForm({
+  title = 'Kartenzahlung',
+  introText = 'Deine Bestellung wird an den sicheren Stripe-Zahlungsdialog weitergeleitet.',
+  buttonLabel = 'Mit Karte fortfahren',
+  onContinue,
+  isSubmitting,
+  helperText,
+}: CardPaymentFormProps) {
+  return (
+    <div className="mt-4 rounded-xl border border-[#DBE9F9] bg-white p-6">
+      <h3 className="mb-3 text-base font-semibold text-[#1F5CAB]">{title}</h3>
+      <p className="mb-4 text-sm text-[#1F5CAB]/90">
+        {introText}
+      </p>
+      {helperText ? (
+        <div className="mb-4 rounded-lg border border-[#DBE9F9] bg-[#F7FAFF] p-4 text-sm text-[#1F5CAB]/85">
+          {helperText}
+        </div>
+      ) : null}
+      <button
+        type="button"
+        onClick={onContinue}
+        disabled={isSubmitting}
+        className="w-full rounded-full border-2 border-[#DBE9F9] bg-[#F7FAFF] px-6 py-3 text-sm font-semibold text-[#1F5CAB] transition hover:border-[#B9D4F3] hover:bg-white disabled:cursor-not-allowed disabled:opacity-70 lg:w-auto lg:min-w-[240px]"
+      >
+        {isSubmitting ? 'Weiterleitung…' : buttonLabel}
+      </button>
+    </div>
+  )
+}
+````
+
 ## File: src/features/checkout/lib/build-order-receipt-snapshot.ts
 ````typescript
 import type { Cart, CartTotals } from '@/shared/types/cart'
@@ -27481,99 +27675,6 @@ export const CONTACT_INFO_ITEMS: ContactInfoItem[] = [
     subTextColor: 'text-white/80',
   },
 ]
-````
-
-## File: src/features/home/sections/BlogShowcase/mapBlogPostToArticle.ts
-````typescript
-import type { BlogPost } from '@/features/blog/types'
-import type { Article, ArticleCategory } from './types'
-const BLOG_AUTHOR_NAME = 'Adler Planen'
-const BLOG_AUTHOR_AVATAR_SRC = '/images/Planenadler%20bild%20von%20Mitarbeiter.png'
-export interface WordPressBlogPost {
-  id: number
-  slug: string
-  title: { rendered: string }
-  excerpt: { rendered: string }
-  date: string
-  categories: number[]
-  featured_media_url?: string
-  _embedded?: {
-    author?: Array<{ name: string; avatar_urls?: Record<string, string> }>
-    'wp:term'?: Array<Array<{ id: number; slug: string; name: string }>>
-  }
-}
-type BlogShowcaseSourcePost = WordPressBlogPost | BlogPost
-function stripHtml(value: unknown): string {
-  if (typeof value === 'string') return value.replace(/<[^>]+>/g, '').trim()
-  if (value && typeof value === 'object' && 'rendered' in value)
-    return String((value as { rendered: string }).rendered ?? '').replace(/<[^>]+>/g, '').trim()
-  return ''
-}
-function isWordPressBlogPost(post: BlogShowcaseSourcePost): post is WordPressBlogPost {
-  return typeof post.title !== 'string'
-}
-function getPostCategory(post: BlogShowcaseSourcePost): string {
-  if (isWordPressBlogPost(post)) {
-    return post._embedded?.['wp:term']?.[0]?.[0]?.slug ?? 'allgemein'
-  }
-  return post.category ?? post.categories?.[0]?.slug ?? 'allgemein'
-}
-function getPostCategoryLabel(post: BlogShowcaseSourcePost): string | null {
-  if (isWordPressBlogPost(post)) {
-    return post._embedded?.['wp:term']?.[0]?.[0]?.name ?? null
-  }
-  return post.categories?.[0]?.name ?? (post.category ? post.category.replace(/-/g, ' ') : null)
-}
-function formatDate(date: string): string {
-  if (!date) return ''
-  return new Intl.DateTimeFormat('de-DE', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date(date))
-}
-export function mapBlogPostToArticle(post: BlogShowcaseSourcePost): Article {
-  const title = stripHtml(post.title)
-  const excerpt = stripHtml(post.excerpt)
-  const publishedAt = isWordPressBlogPost(post) ? post.date : post.publishedAt
-  return {
-    id: String(post.id),
-    title: title || 'Ohne Titel',
-    excerpt: excerpt || '',
-    category: getPostCategory(post),
-    date: formatDate(publishedAt),
-    readTime: isWordPressBlogPost(post)
-      ? '5 Min. Lesezeit'
-      : `${post.readingTimeMin ?? 5} Min. Lesezeit`,
-    slug: post.slug,
-    image: {
-      src: isWordPressBlogPost(post)
-        ? post.featured_media_url ?? 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&q=80'
-        : post.coverImage.src,
-      alt: title || 'Blog-Artikel',
-    },
-    author: {
-      name: BLOG_AUTHOR_NAME,
-      avatar: {
-        src: BLOG_AUTHOR_AVATAR_SRC,
-        alt: BLOG_AUTHOR_NAME,
-      },
-    },
-  }
-}
-export function getCategoriesFromBlogPosts(posts: BlogShowcaseSourcePost[]): ArticleCategory[] {
-  const seen = new Set<string>()
-  const categories: ArticleCategory[] = [{ slug: 'all', label: 'Alle' }]
-  for (const post of posts) {
-    const slug = getPostCategory(post)
-    const label = getPostCategoryLabel(post)
-    if (slug && label && !seen.has(slug)) {
-      seen.add(slug)
-      categories.push({ slug, label })
-    }
-  }
-  return categories
-}
 ````
 
 ## File: src/features/home/sections/CategoriesStrip/data.ts
@@ -28633,254 +28734,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </a>
       </body>
     </html>
-  )
-}
-````
-
-## File: src/features/blog/api/fetchPosts.ts
-````typescript
-import type { BlogPost, BlogPostCategory, BlogPostTag } from '../types'
-import type { WPGraphQLPostNode, WPGraphQLPostsResponse, WPGraphQLPostResponse } from './types'
-import { blogGraphQLFetch } from './fetcher'
-import { POSTS_LIST_QUERY, POST_BY_SLUG_QUERY } from './queries'
-import { PLACEHOLDER_IMAGE_DATA_URL } from '@/shared/lib/functions'
-const DEFAULT_COVER_ALT = 'Blog-Bild'
-const BLOG_AUTHOR_NAME = 'Adler Planen'
-function stripHtml(html: string | null | undefined): string {
-  if (!html || typeof html !== 'string') return ''
-  return html
-    .replace(/<[^>]+>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-function toCategories(nodes: WPGraphQLPostNode['categories']): BlogPostCategory[] | undefined {
-  const list = nodes?.nodes?.filter((n) => n?.name && n?.slug) ?? []
-  if (list.length === 0) return undefined
-  return list.map((n) => ({ name: n.name!, slug: n.slug! }))
-}
-function toTags(nodes: WPGraphQLPostNode['tags']): BlogPostTag[] | undefined {
-  const list = nodes?.nodes?.filter((n) => n?.name && n?.slug) ?? []
-  if (list.length === 0) return undefined
-  return list.map((n) => ({ name: n.name!, slug: n.slug! }))
-}
-export function mapWpPostToBlogPost(node: WPGraphQLPostNode): BlogPost {
-  const src =
-    node.featuredImage?.node?.sourceUrl ?? PLACEHOLDER_IMAGE_DATA_URL
-  const alt =
-    node.featuredImage?.node?.altText ?? node.title ?? DEFAULT_COVER_ALT
-  const category = node.categories?.nodes?.[0]?.name ?? undefined
-  const base: BlogPost = {
-    id: String(node.databaseId ?? node.id),
-    slug: node.slug,
-    title: node.title ?? '',
-    excerpt: stripHtml(node.excerpt),
-    coverImage: { src, alt },
-    publishedAt: node.date ?? '',
-    category,
-    author: BLOG_AUTHOR_NAME,
-  }
-  if (node.content != null || (node.categories?.nodes?.length ?? 0) > 0 || (node.tags?.nodes?.length ?? 0) > 0) {
-    const categories = toCategories(node.categories)
-    const tags = toTags(node.tags)
-    return {
-      ...base,
-      content: node.content ?? undefined,
-      categories,
-      tags,
-    }
-  }
-  return base
-}
-const BATCH_SIZE = 50
-/**
- * Fetches all published posts from WordPress (paginates through cursor until done).
- */
-export async function fetchAllBlogPostsFromAPI(): Promise<BlogPost[]> {
-  const results: BlogPost[] = []
-  let after: string | null = null
-  for (;;) {
-    const data: WPGraphQLPostsResponse = await blogGraphQLFetch<WPGraphQLPostsResponse>({
-      query: POSTS_LIST_QUERY,
-      variables: { first: BATCH_SIZE, after },
-    })
-    const nodes = data.posts?.nodes ?? []
-    for (const node of nodes) {
-      results.push(mapWpPostToBlogPost(node))
-    }
-    const hasNext = data.posts?.pageInfo?.hasNextPage ?? false
-    const endCursor: string | null = data.posts?.pageInfo?.endCursor ?? null
-    if (!hasNext || !endCursor) break
-    after = endCursor
-  }
-  return results
-}
-/**
- * Fetches a single post by slug from WordPress.
- */
-export async function fetchPostBySlugFromAPI(slug: string): Promise<BlogPost | null> {
-  const data = await blogGraphQLFetch<WPGraphQLPostResponse>({
-    query: POST_BY_SLUG_QUERY,
-    variables: { slug },
-  })
-  const node = data.post
-  if (!node) return null
-  return mapWpPostToBlogPost(node)
-}
-````
-
-## File: src/features/checkout/components/PaymentMethods.tsx
-````typescript
-'use client'
-import { useEffect } from 'react'
-import { useCheckoutStore } from '../store/checkout.store'
-import { PAYMENT_METHOD_IDS } from '../types/checkout.types'
-import type { CheckoutGatewayOption } from '../lib/payment-gateways'
-import { useCartStore } from '@/shared/lib/cartStore'
-import {
-  buildCartSignature,
-  mapCartToTrackingItems,
-  pushToDataLayerOnce,
-  type DataLayerEcommerceEvent,
-} from '@/lib/tracking'
-import { parseCartPriceString } from '@/shared/lib/functions'
-const ALL_PAYMENT_OPTIONS: CheckoutGatewayOption[] = [
-  {
-    id: PAYMENT_METHOD_IDS.CARD,
-    label: 'Karte',
-    description: 'VISA, Mastercard, AMEX',
-    available: true,
-    frontendReady: true,
-    expressEligible: false,
-    action: 'select',
-    wcPaymentMethodAliases: [],
-    helperText: 'Kartenzahlung wird sicher ueber Stripe weitergeleitet.',
-  },
-  {
-    id: PAYMENT_METHOD_IDS.PAYPAL,
-    label: 'PayPal',
-    available: true,
-    frontendReady: true,
-    expressEligible: true,
-    action: 'redirect',
-    wcPaymentMethodAliases: [],
-  },
-  {
-    id: PAYMENT_METHOD_IDS.KLARNA,
-    label: 'Klarna',
-    available: true,
-    frontendReady: true,
-    expressEligible: true,
-    action: 'redirect',
-    wcPaymentMethodAliases: [],
-  },
-  {
-    id: PAYMENT_METHOD_IDS.BANK,
-    label: 'Direkte Bankueberweisung',
-    available: true,
-    frontendReady: true,
-    expressEligible: false,
-    action: 'select',
-    wcPaymentMethodAliases: [],
-  },
-  {
-    id: PAYMENT_METHOD_IDS.WALLET,
-    label: 'Apple Pay / Google Pay',
-    description: 'Nur mit echtem Wallet-Flow im Frontend',
-    available: true,
-    frontendReady: false,
-    expressEligible: false,
-    action: 'select',
-    wcPaymentMethodAliases: [],
-    helperText: 'Wallet wird erst aktiv, wenn der direkte Stripe/WooPayments-Flow angebunden ist.',
-  },
-]
-interface PaymentMethodsProps {
-  hideWallet?: boolean
-  options?: CheckoutGatewayOption[]
-  loading?: boolean
-}
-export function PaymentMethods({ hideWallet = false, options, loading = false }: PaymentMethodsProps = {}) {
-  const selectedPayment = useCheckoutStore((state) => state.selectedPayment)
-  const setSelectedPayment = useCheckoutStore((state) => state.setSelectedPayment)
-  const cart = useCartStore((state) => state.cart)
-  const resolvedOptions = (options ?? ALL_PAYMENT_OPTIONS).filter(
-    (option) => option.available && (!hideWallet || option.id !== PAYMENT_METHOD_IDS.WALLET)
-  )
-  useEffect(() => {
-    if (!resolvedOptions.length) return
-    const selectedOption = resolvedOptions.find((option) => option.id === selectedPayment)
-    if (selectedOption) return
-    const fallbackOption = resolvedOptions.find((option) => option.frontendReady)
-    if (fallbackOption && fallbackOption.id !== selectedPayment) {
-      setSelectedPayment(fallbackOption.id)
-    }
-  }, [resolvedOptions, selectedPayment, setSelectedPayment])
-  return (
-    <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6">
-      <h2 className="mb-4 text-lg font-bold text-[#1F5CAB]">Zahlungsart</h2>
-      {loading ? (
-        <div className="rounded-xl border border-[#DBE9F9] bg-white p-4 text-sm text-[#1F5CAB]/75">
-          Verfuegbare Zahlungsarten werden geladen...
-        </div>
-      ) : null}
-      <ul className="space-y-2" role="radiogroup" aria-label="Zahlungsart waehlen">
-        {resolvedOptions.map((option) => (
-          <li key={option.id}>
-            <label
-              className={`flex items-start gap-3 rounded-xl border-2 p-4 transition ${
-                option.available ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'
-              } ${
-                selectedPayment === option.id
-                  ? 'border-[#1F5CAB] bg-white shadow-sm'
-                  : 'border-[#DBE9F9] bg-white hover:border-[#B9D4F3]'
-              }`}
-            >
-              <input
-                type="radio"
-                name="paymentMethod"
-                value={option.id}
-                checked={selectedPayment === option.id}
-                disabled={!option.available}
-                onChange={() => {
-                  setSelectedPayment(option.id)
-                  const items = mapCartToTrackingItems(cart)
-                  const cartSignature = buildCartSignature(cart)
-                  const totalValue = parseCartPriceString(cart?.totals?.total)
-                  if (items.length === 0 || !cartSignature) return
-                  const paymentEvent: DataLayerEcommerceEvent = {
-                    event: 'add_payment_info',
-                    ecommerce: {
-                      value: totalValue,
-                      currency: 'EUR',
-                      payment_type: option.id,
-                      items,
-                    },
-                  }
-                  pushToDataLayerOnce(`add_payment_info_${option.id}_${cartSignature}`, paymentEvent)
-                }}
-                className="mt-1 h-4 w-4 border-[#DBE9F9] text-[#1F5CAB] focus:ring-[#1F5CAB]"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-[#1F5CAB]">{option.label}</span>
-                  {option.expressEligible ? (
-                    <span className="rounded-full bg-[#E7F0FB] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1F5CAB]">
-                      Express
-                    </span>
-                  ) : null}
-                </div>
-                {option.description ? (
-                  <p className="mt-0.5 text-xs text-[#1F5CAB]/70">{option.description}</p>
-                ) : null}
-                {option.helperText ? (
-                  <p className="mt-1 text-xs text-amber-700">{option.helperText}</p>
-                ) : null}
-              </div>
-            </label>
-          </li>
-        ))}
-      </ul>
-    </div>
   )
 }
 ````
@@ -30018,6 +29871,363 @@ export function OrderThankYouContent() {
 }
 ````
 
+## File: src/features/checkout/components/PaymentMethods.tsx
+````typescript
+'use client'
+import { useEffect } from 'react'
+import { useCheckoutStore } from '../store/checkout.store'
+import { PAYMENT_METHOD_IDS } from '../types/checkout.types'
+import type { CheckoutGatewayOption } from '../lib/payment-gateways'
+import { useCartStore } from '@/shared/lib/cartStore'
+import {
+  buildCartSignature,
+  mapCartToTrackingItems,
+  pushToDataLayerOnce,
+  type DataLayerEcommerceEvent,
+} from '@/lib/tracking'
+import { parseCartPriceString } from '@/shared/lib/functions'
+const ALL_PAYMENT_OPTIONS: CheckoutGatewayOption[] = [
+  {
+    id: PAYMENT_METHOD_IDS.CARD,
+    label: 'Karte',
+    description: 'VISA, Mastercard, AMEX',
+    available: true,
+    frontendReady: true,
+    expressEligible: false,
+    action: 'select',
+    wcPaymentMethodAliases: [],
+    helperText: 'Kartenzahlung wird sicher ueber Stripe weitergeleitet.',
+  },
+  {
+    id: PAYMENT_METHOD_IDS.PAYPAL,
+    label: 'PayPal',
+    available: true,
+    frontendReady: true,
+    expressEligible: true,
+    action: 'redirect',
+    wcPaymentMethodAliases: [],
+  },
+  {
+    id: PAYMENT_METHOD_IDS.KLARNA,
+    label: 'Klarna',
+    available: true,
+    frontendReady: true,
+    expressEligible: true,
+    action: 'redirect',
+    wcPaymentMethodAliases: [],
+  },
+  {
+    id: PAYMENT_METHOD_IDS.BANK,
+    label: 'Direkte Bankueberweisung',
+    available: true,
+    frontendReady: true,
+    expressEligible: false,
+    action: 'select',
+    wcPaymentMethodAliases: [],
+  },
+  {
+    id: PAYMENT_METHOD_IDS.WALLET,
+    label: 'Apple Pay / Google Pay',
+    description: 'Nur mit echtem Wallet-Flow im Frontend',
+    available: true,
+    frontendReady: true,
+    expressEligible: false,
+    action: 'select',
+    wcPaymentMethodAliases: [],
+    helperText:
+      'Apple Pay und Google Pay werden ueber Stripe bereitgestellt, wenn Browser und Geraet sie unterstuetzen.',
+  },
+]
+interface PaymentMethodsProps {
+  hideWallet?: boolean
+  options?: CheckoutGatewayOption[]
+  loading?: boolean
+}
+export function PaymentMethods({ hideWallet = false, options, loading = false }: PaymentMethodsProps = {}) {
+  const selectedPayment = useCheckoutStore((state) => state.selectedPayment)
+  const setSelectedPayment = useCheckoutStore((state) => state.setSelectedPayment)
+  const cart = useCartStore((state) => state.cart)
+  const resolvedOptions = (options ?? ALL_PAYMENT_OPTIONS).filter(
+    (option) => option.available && (!hideWallet || option.id !== PAYMENT_METHOD_IDS.WALLET)
+  )
+  useEffect(() => {
+    if (!resolvedOptions.length) return
+    const selectedOption = resolvedOptions.find((option) => option.id === selectedPayment)
+    if (selectedOption) return
+    const fallbackOption = resolvedOptions.find((option) => option.frontendReady)
+    if (fallbackOption && fallbackOption.id !== selectedPayment) {
+      setSelectedPayment(fallbackOption.id)
+    }
+  }, [resolvedOptions, selectedPayment, setSelectedPayment])
+  return (
+    <div className="rounded-2xl border border-[#DBE9F9] bg-[#F7FAFF] p-6">
+      <h2 className="mb-4 text-lg font-bold text-[#1F5CAB]">Zahlungsart</h2>
+      {loading ? (
+        <div className="rounded-xl border border-[#DBE9F9] bg-white p-4 text-sm text-[#1F5CAB]/75">
+          Verfuegbare Zahlungsarten werden geladen...
+        </div>
+      ) : null}
+      <ul className="space-y-2" role="radiogroup" aria-label="Zahlungsart waehlen">
+        {resolvedOptions.map((option) => (
+          <li key={option.id}>
+            <label
+              className={`flex items-start gap-3 rounded-xl border-2 p-4 transition ${
+                option.available ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'
+              } ${
+                selectedPayment === option.id
+                  ? 'border-[#1F5CAB] bg-white shadow-sm'
+                  : 'border-[#DBE9F9] bg-white hover:border-[#B9D4F3]'
+              }`}
+            >
+              <input
+                type="radio"
+                name="paymentMethod"
+                value={option.id}
+                checked={selectedPayment === option.id}
+                disabled={!option.available}
+                onChange={() => {
+                  setSelectedPayment(option.id)
+                  const items = mapCartToTrackingItems(cart)
+                  const cartSignature = buildCartSignature(cart)
+                  const totalValue = parseCartPriceString(cart?.totals?.total)
+                  if (items.length === 0 || !cartSignature) return
+                  const paymentEvent: DataLayerEcommerceEvent = {
+                    event: 'add_payment_info',
+                    ecommerce: {
+                      value: totalValue,
+                      currency: 'EUR',
+                      payment_type: option.id,
+                      items,
+                    },
+                  }
+                  pushToDataLayerOnce(`add_payment_info_${option.id}_${cartSignature}`, paymentEvent)
+                }}
+                className="mt-1 h-4 w-4 border-[#DBE9F9] text-[#1F5CAB] focus:ring-[#1F5CAB]"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-[#1F5CAB]">{option.label}</span>
+                  {option.expressEligible ? (
+                    <span className="rounded-full bg-[#E7F0FB] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1F5CAB]">
+                      Express
+                    </span>
+                  ) : null}
+                </div>
+                {option.description ? (
+                  <p className="mt-0.5 text-xs text-[#1F5CAB]/70">{option.description}</p>
+                ) : null}
+                {option.helperText ? (
+                  <p className="mt-1 text-xs text-amber-700">{option.helperText}</p>
+                ) : null}
+              </div>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+````
+
+## File: src/shared/components/TopBar/TopBar.component.tsx
+````typescript
+'use client'
+import Image from 'next/image'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { cn } from '@/lib/utils'
+import { ContentShell } from '@/shared/components/ContentShell.component'
+import { MiniCartDropdown } from '@/features/cart/components/MiniCartDropdown'
+const leftMenu = [
+  { label: 'Home', href: '/' },
+  { label: 'Ueber Uns', href: '/ueber-uns' },
+  { label: 'Shop', href: '/shop' },
+  { label: 'News & Ratgeber', href: '/blog' },
+]
+const rightMenu = [
+  { label: 'FAQ', href: '/faq' },
+  { label: 'Kontakt', href: '/kontakt' },
+  { label: 'Mein Konto', href: '/mein-konto' },
+]
+const configuratorLink = { label: 'ZUM KONFIGURATOR', href: '/shop' }
+function getIsActive(asPath: string, href: string) {
+  if (!href) return false
+  if (href.startsWith('#')) return asPath.includes(href)
+  if (href === '/') return asPath === '/'
+  return asPath.startsWith(href)
+}
+export function TopBar() {
+  const pathname = usePathname()
+  const asPath = pathname ?? ''
+  return (
+    <div className="fixed left-0 right-0 top-0 z-50 w-full bg-transparent">
+      <ContentShell className="py-3 sm:py-4">
+        <div className="rounded-full border border-[#DBE9F9] bg-white/95 px-3 py-2.5 shadow-[0_16px_40px_rgba(15,43,82,0.12)] backdrop-blur sm:px-4 sm:py-3">
+          <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
+            <div className="hidden items-center justify-start gap-6 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB] lg:flex">
+              {leftMenu.map((item) => {
+                const isActive = getIsActive(asPath, item.href)
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'rounded-full px-3 py-2 text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
+                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                )
+              })}
+            </div>
+            <div className="flex items-center justify-center">
+              <Link
+                href="/"
+                aria-label="Planenadler Home"
+                className="flex items-center"
+              >
+                <Image
+                  src="/Planenadlerlogo.png"
+                  alt="Planenadler Logo"
+                  width={180}
+                  height={48}
+                  className="h-10 w-auto object-contain sm:h-12"
+                  priority
+                />
+              </Link>
+            </div>
+            <div className="hidden items-center justify-end gap-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB] lg:flex">
+              {rightMenu.map((item) => {
+                const isActive = getIsActive(asPath, item.href)
+                if (item.href === '/mein-konto') {
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      aria-label={item.label}
+                      className={cn(
+                        'inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#DBE9F9] text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
+                        isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
+                      )}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
+                        <circle
+                          cx="12"
+                          cy="8"
+                          r="3.2"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                        />
+                        <path
+                          d="M5 19c1.1-3 3.6-4.6 7-4.6s5.9 1.6 7 4.6"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </Link>
+                  )
+                }
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'rounded-full px-3 py-2 text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
+                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                )
+              })}
+              <MiniCartDropdown />
+              <Link
+                href={configuratorLink.href}
+                className="inline-flex items-center whitespace-nowrap rounded-full bg-[#1F5CAB] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white shadow-md transition hover:-translate-y-0.5 hover:bg-[#0F2B52] xl:px-4 xl:text-xs xl:tracking-[0.2em]"
+              >
+                {configuratorLink.label}
+              </Link>
+            </div>
+          </div>
+        </div>
+      </ContentShell>
+    </div>
+  )
+}
+````
+
+## File: src/app/(shop)/product/[slug]/components/ProductGallery.tsx
+````typescript
+'use client'
+import { useMemo, useState } from 'react'
+import Image from 'next/image'
+import { cn } from '@/lib/utils'
+import type { ProductImage } from './types'
+interface ProductGalleryProps {
+  mainImage: ProductImage
+  images: ProductImage[]
+  className?: string
+}
+export default function ProductGallery({ mainImage, images, className }: ProductGalleryProps) {
+  const items = useMemo(() => {
+    const all = [mainImage, ...images]
+    const seen = new Map<string, ProductImage>()
+    all.forEach((item) => {
+      if (item.src && !seen.has(item.src)) {
+        seen.set(item.src, item)
+      }
+    })
+    return Array.from(seen.values())
+  }, [images, mainImage])
+  const [activeSrc, setActiveSrc] = useState(items[0]?.src ?? mainImage.src)
+  const activeItem = items.find((item) => item.src === activeSrc) ?? items[0] ?? mainImage
+  return (
+    <div className={cn('space-y-4', className)}>
+      <div className="relative aspect-[5/4] w-full overflow-hidden rounded-2xl bg-[#F7FAFE]">
+        <Image
+          src={activeItem.src}
+          alt={activeItem.alt}
+          fill
+          priority
+          sizes="(max-width: 768px) 100vw, 45vw"
+          className="object-contain p-5"
+        />
+      </div>
+      <div className="grid grid-cols-5 gap-2 sm:grid-cols-6 lg:grid-cols-5">
+        {items.map((item, index) => {
+          const isActive = item.src === activeItem.src
+          return (
+            <button
+              key={`${item.src}-${index}`}
+              type="button"
+              onClick={() => setActiveSrc(item.src)}
+              className={cn(
+                'relative aspect-square overflow-hidden rounded-xl border bg-white transition',
+                isActive ? 'border-[#1F5CAB] shadow-[0_6px_16px_rgba(15,43,82,0.12)]' : 'border-[#E5ECF8] hover:border-[#BCD3EE]',
+              )}
+              aria-label={`Bild ${index + 1} anzeigen`}
+              aria-current={isActive ? 'true' : 'false'}
+            >
+              <Image
+                src={item.src}
+                alt={item.alt}
+                fill
+                sizes="80px"
+                className="object-contain p-1"
+              />
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+````
+
 ## File: src/features/checkout/components/PaymentPageContent.tsx
 ````typescript
 'use client'
@@ -30288,6 +30498,10 @@ export function PaymentPageContent() {
       void handleProviderRedirect('card')
       return
     }
+    if (gatewayId === PAYMENT_METHOD_IDS.WALLET) {
+      void handleProviderRedirect('card')
+      return
+    }
     if (gatewayId === PAYMENT_METHOD_IDS.PAYPAL) {
       void handleProviderRedirect('paypal')
       return
@@ -30365,10 +30579,16 @@ export function PaymentPageContent() {
             />
           ) : null}
           {selectedPayment === PAYMENT_METHOD_IDS.WALLET ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              {selectedGateway?.helperText ??
-                'Wallet wird vom Backend erkannt, ist in dieser Next.js-Checkout-Stufe aber noch nicht direkt ansprechbar.'}
-            </div>
+            <CardPaymentForm
+              title="Apple Pay / Google Pay"
+              introText="Wenn dein Browser oder Geraet Apple Pay oder Google Pay unterstuetzt, zeigt Stripe die passende Wallet-Option an."
+              buttonLabel="Mit Wallet fortfahren"
+              onContinue={() => {
+                void handleProviderRedirect('card')
+              }}
+              isSubmitting={providerLoading === PAYMENT_METHOD_IDS.CARD}
+              helperText={selectedGateway?.helperText}
+            />
           ) : null}
         </div>
         <div className="lg:sticky lg:top-24 lg:self-start">
@@ -30491,13 +30711,16 @@ export function getGatewayDefinitions(hasStripePublishableKey: boolean): Gateway
       description: 'Nur wenn Browser und Gateway dies unterstuetzen',
       aliases: CARD_ALIASES,
       action: 'select',
-      frontendReady: () => false,
-      helperText: (available) => {
+      frontendReady: () => hasStripePublishableKey,
+      helperText: (available, frontendReady) => {
         if (!available) return undefined
         if (!hasStripePublishableKey) {
           return 'Wallet wurde im Backend erkannt, aber der Stripe Public Key fehlt im Frontend.'
         }
-        return 'Wallet wurde erkannt, benoetigt aber noch den echten Express-Flow im Frontend.'
+        if (frontendReady) {
+          return 'Apple Pay und Google Pay werden ueber Stripe bereitgestellt, wenn Browser und Geraet sie unterstuetzen.'
+        }
+        return 'Wallet wurde erkannt, ist fuer diese Session aber noch nicht verfuegbar.'
       },
     },
     {
@@ -30552,205 +30775,6 @@ export function resolveCheckoutGateways(
       helperText: gateway.helperText?.(available, frontendReady),
     }
   })
-}
-````
-
-## File: src/shared/components/TopBar/TopBar.component.tsx
-````typescript
-'use client'
-import Image from 'next/image'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { cn } from '@/lib/utils'
-import { ContentShell } from '@/shared/components/ContentShell.component'
-import { MiniCartDropdown } from '@/features/cart/components/MiniCartDropdown'
-const leftMenu = [
-  { label: 'Home', href: '/' },
-  { label: 'Ueber Uns', href: '/ueber-uns' },
-  { label: 'Shop', href: '/shop' },
-  { label: 'News & Ratgeber', href: '/blog' },
-]
-const rightMenu = [
-  { label: 'FAQ', href: '/faq' },
-  { label: 'Kontakt', href: '/kontakt' },
-  { label: 'Mein Konto', href: '/mein-konto' },
-]
-const configuratorLink = { label: 'ZUM KONFIGURATOR', href: '/shop' }
-function getIsActive(asPath: string, href: string) {
-  if (!href) return false
-  if (href.startsWith('#')) return asPath.includes(href)
-  if (href === '/') return asPath === '/'
-  return asPath.startsWith(href)
-}
-export function TopBar() {
-  const pathname = usePathname()
-  const asPath = pathname ?? ''
-  return (
-    <div className="fixed left-0 right-0 top-0 z-50 w-full bg-transparent">
-      <ContentShell className="py-3 sm:py-4">
-        <div className="rounded-full border border-[#DBE9F9] bg-white/95 px-3 py-2.5 shadow-[0_16px_40px_rgba(15,43,82,0.12)] backdrop-blur sm:px-4 sm:py-3">
-          <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
-            <div className="hidden items-center justify-start gap-6 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB] lg:flex">
-              {leftMenu.map((item) => {
-                const isActive = getIsActive(asPath, item.href)
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'rounded-full px-3 py-2 text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
-                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                )
-              })}
-            </div>
-            <div className="flex items-center justify-center">
-              <Link
-                href="/"
-                aria-label="Planenadler Home"
-                className="flex items-center"
-              >
-                <Image
-                  src="/Planenadlerlogo.png"
-                  alt="Planenadler Logo"
-                  width={180}
-                  height={48}
-                  className="h-10 w-auto object-contain sm:h-12"
-                  priority
-                />
-              </Link>
-            </div>
-            <div className="hidden items-center justify-end gap-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB] lg:flex">
-              {rightMenu.map((item) => {
-                const isActive = getIsActive(asPath, item.href)
-                if (item.href === '/mein-konto') {
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      aria-label={item.label}
-                      className={cn(
-                        'inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#DBE9F9] text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
-                        isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
-                      )}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
-                        <circle
-                          cx="12"
-                          cy="8"
-                          r="3.2"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                        />
-                        <path
-                          d="M5 19c1.1-3 3.6-4.6 7-4.6s5.9 1.6 7 4.6"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                    </Link>
-                  )
-                }
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'rounded-full px-3 py-2 text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
-                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                )
-              })}
-              <MiniCartDropdown />
-              <Link
-                href={configuratorLink.href}
-                className="inline-flex items-center whitespace-nowrap rounded-full bg-[#1F5CAB] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white shadow-md transition hover:-translate-y-0.5 hover:bg-[#0F2B52] xl:px-4 xl:text-xs xl:tracking-[0.2em]"
-              >
-                {configuratorLink.label}
-              </Link>
-            </div>
-          </div>
-        </div>
-      </ContentShell>
-    </div>
-  )
-}
-````
-
-## File: src/app/(shop)/product/[slug]/components/ProductGallery.tsx
-````typescript
-'use client'
-import { useMemo, useState } from 'react'
-import Image from 'next/image'
-import { cn } from '@/lib/utils'
-import type { ProductImage } from './types'
-interface ProductGalleryProps {
-  mainImage: ProductImage
-  images: ProductImage[]
-  className?: string
-}
-export default function ProductGallery({ mainImage, images, className }: ProductGalleryProps) {
-  const items = useMemo(() => {
-    const all = [mainImage, ...images]
-    const seen = new Map<string, ProductImage>()
-    all.forEach((item) => {
-      if (item.src && !seen.has(item.src)) {
-        seen.set(item.src, item)
-      }
-    })
-    return Array.from(seen.values())
-  }, [images, mainImage])
-  const [activeSrc, setActiveSrc] = useState(items[0]?.src ?? mainImage.src)
-  const activeItem = items.find((item) => item.src === activeSrc) ?? items[0] ?? mainImage
-  return (
-    <div className={cn('space-y-4', className)}>
-      <div className="relative aspect-[5/4] w-full overflow-hidden rounded-2xl bg-[#F7FAFE]">
-        <Image
-          src={activeItem.src}
-          alt={activeItem.alt}
-          fill
-          priority
-          sizes="(max-width: 768px) 100vw, 45vw"
-          className="object-contain p-5"
-        />
-      </div>
-      <div className="grid grid-cols-5 gap-2 sm:grid-cols-6 lg:grid-cols-5">
-        {items.map((item, index) => {
-          const isActive = item.src === activeItem.src
-          return (
-            <button
-              key={`${item.src}-${index}`}
-              type="button"
-              onClick={() => setActiveSrc(item.src)}
-              className={cn(
-                'relative aspect-square overflow-hidden rounded-xl border bg-white transition',
-                isActive ? 'border-[#1F5CAB] shadow-[0_6px_16px_rgba(15,43,82,0.12)]' : 'border-[#E5ECF8] hover:border-[#BCD3EE]',
-              )}
-              aria-label={`Bild ${index + 1} anzeigen`}
-              aria-current={isActive ? 'true' : 'false'}
-            >
-              <Image
-                src={item.src}
-                alt={item.alt}
-                fill
-                sizes="80px"
-                className="object-contain p-1"
-              />
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
 }
 ````
 
@@ -34295,7 +34319,7 @@ export default function ProductConfigurator({
         createMutationId(),
         sketch?.name,
       )
-      const { response } = await postGraphQL<{ addToCart: { cartItem: { key: string } } }>(
+      await postGraphQL<{ addToCart: { cartItem: { key: string } } }>(
         ADD_TO_CART_MUTATION,
         {
           input: {
