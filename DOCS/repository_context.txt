@@ -202,6 +202,8 @@ src/
       blog-debug/
         route.ts
       checkout/
+        headless-paypal/
+          route.ts
         payment-options/
           route.ts
         provider-redirect/
@@ -6628,6 +6630,147 @@ export default function robots(): MetadataRoute.Robots {
     sitemap: `${SITE_URL}/sitemap.xml`,
     host: SITE_URL,
   }
+}
+````
+
+## File: src/app/sitemap.ts
+````typescript
+import type { MetadataRoute } from 'next'
+import { getBlogPosts } from '@/features/blog'
+import { paginate } from '@/features/blog/lib/paginate'
+import { SITE_URL, absoluteUrl } from '@/lib/seo'
+const BLOG_PER_PAGE = 9
+interface ProductSitemapNode {
+  slug?: string | null
+  modified?: string | null
+}
+async function fetchProductSlugs(): Promise<ProductSitemapNode[]> {
+  const graphqlUrl = process.env.NEXT_PUBLIC_GRAPHQL_URL
+  if (!graphqlUrl) return []
+  const query = `
+    query SitemapProducts {
+      products(first: 100) {
+        nodes {
+          slug
+          modified
+        }
+      }
+    }
+  `
+  try {
+    const response = await fetch(graphqlUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+      next: { revalidate: 3600 },
+    })
+    const json = (await response.json()) as {
+      data?: { products?: { nodes?: ProductSitemapNode[] } }
+    }
+    return json.data?.products?.nodes ?? []
+  } catch {
+    return []
+  }
+}
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const now = new Date()
+  const staticRoutes: MetadataRoute.Sitemap = [
+    {
+      url: SITE_URL,
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 1,
+    },
+    {
+      url: absoluteUrl('/ueber-uns'),
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    {
+      url: absoluteUrl('/shop'),
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
+    {
+      url: absoluteUrl('/blog'),
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    },
+    {
+      url: absoluteUrl('/faq'),
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
+      url: absoluteUrl('/kontakt'),
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
+      url: absoluteUrl('/impressum'),
+      lastModified: now,
+      changeFrequency: 'yearly',
+      priority: 0.3,
+    },
+    {
+      url: absoluteUrl('/datenschutz'),
+      lastModified: now,
+      changeFrequency: 'yearly',
+      priority: 0.3,
+    },
+    {
+      url: absoluteUrl('/agb'),
+      lastModified: now,
+      changeFrequency: 'yearly',
+      priority: 0.3,
+    },
+    {
+      url: absoluteUrl('/versand'),
+      lastModified: now,
+      changeFrequency: 'yearly',
+      priority: 0.4,
+    },
+    {
+      url: absoluteUrl('/widerruf'),
+      lastModified: now,
+      changeFrequency: 'yearly',
+      priority: 0.3,
+    },
+  ]
+  const [posts, products] = await Promise.all([getBlogPosts(), fetchProductSlugs()])
+  const { totalPages: blogTotalPages } = paginate(posts, 1, BLOG_PER_PAGE)
+  const blogPaginationRoutes: MetadataRoute.Sitemap =
+    blogTotalPages > 1
+      ? Array.from({ length: blogTotalPages - 1 }, (_, i) => {
+          const pageNum = i + 2
+          return {
+            url: absoluteUrl(`/blog/page/${pageNum}`),
+            lastModified: now,
+            changeFrequency: 'weekly' as const,
+            priority: 0.65,
+          }
+        })
+      : []
+  const blogRoutes: MetadataRoute.Sitemap = posts.map((post) => ({
+    url: absoluteUrl(`/blog/${post.slug}`),
+    lastModified: post.publishedAt ? new Date(post.publishedAt) : now,
+    changeFrequency: 'monthly',
+    priority: 0.7,
+  }))
+  const productRoutes: MetadataRoute.Sitemap = products
+    .filter((product): product is ProductSitemapNode & { slug: string } => Boolean(product.slug))
+    .map((product) => ({
+      url: absoluteUrl(`/product/${product.slug}`),
+      lastModified: product.modified ? new Date(product.modified) : now,
+      changeFrequency: 'weekly',
+      priority: 0.85,
+    }))
+  return [...staticRoutes, ...productRoutes, ...blogRoutes, ...blogPaginationRoutes]
 }
 ````
 
@@ -14121,6 +14264,57 @@ export interface ProductCardItem {
 }
 ````
 
+## File: src/features/home/sections/Hero.component.tsx
+````typescript
+import Image from 'next/image';
+import Button from '@/shared/ui/Button.component';
+import { PLACEHOLDER_IMAGE_DATA_URL } from '@/shared/lib/functions';
+/**
+ * Hero-Bild: Eigenes Bild unter public/images/hero.jpg ablegen, dann hier
+ * src auf "/images/hero.jpg" umstellen. Sonst wird der Placeholder genutzt.
+ */
+const HERO_IMAGE_SRC =
+  process.env.NEXT_PUBLIC_PLACEHOLDER_LARGE_IMAGE_URL ||
+  PLACEHOLDER_IMAGE_DATA_URL;
+/**
+ * Renders Hero section for Index page
+ * @function Hero
+ * @returns {JSX.Element} - Rendered component
+ */
+const Hero = () => (
+  <section className="relative w-full h-[50vh] min-h-[280px] max-h-[420px] overflow-hidden">
+    {/* Bild und dunkler Overlay – untere Ebene */}
+    <div className="absolute inset-0 z-0">
+      <Image
+        src={HERO_IMAGE_SRC}
+        alt="Planenadler – PVC-Planen und Abdeckungen"
+        fill
+        priority
+        sizes="(max-width: 768px) 100vw, 50vw"
+        className="object-cover object-center"
+        quality={90}
+      />
+      <div className="absolute inset-0 bg-black/30" aria-hidden />
+    </div>
+    {/* Titel und Button – darüber, damit sie lesbar sind */}
+    <div className="relative z-10 h-full container mx-auto flex items-center p-4 md:p-6">
+      <div className="max-w-xl">
+        <h1 className="text-3xl md:text-4xl lg:text-5xl font-light text-white mb-6 drop-shadow-md">
+          Stripete Zig Zag Pute Sett
+        </h1>
+        <Button
+          href="/shop"
+          variant="hero"
+        >
+          Se Utvalget
+        </Button>
+      </div>
+    </div>
+  </section>
+);
+export default Hero;
+````
+
 ## File: src/features/home/index.ts
 ````typescript
 export * from './sections/CategoriesStrip'
@@ -17221,6 +17415,62 @@ const Header = ({ title }: IHeaderProps) => {
   );
 };
 export default Header;
+````
+
+## File: src/shared/components/Header/Navbar.component.tsx
+````typescript
+import Link from 'next/link';
+import Cart from './Cart.component';
+import AlgoliaSearchBox from '../AlgoliaSearch/AlgoliaSearchBox.component';
+import MobileSearch from '../AlgoliaSearch/MobileSearch.component';
+/**
+ * Navigation for the application.
+ * Includes mobile menu.
+ */
+const Navbar = () => {
+  return (
+    <header className="border-b border-gray-200">
+      <nav id="header" className="top-0 z-50 w-full bg-white">
+        <div className="container mx-auto px-4 sm:px-6 py-4">
+          <div className="flex flex-col space-y-4 md:hidden">
+            <div className="text-center">
+              <Link href="/">
+                <span className="text-lg font-bold tracking-widest text-gray-900">
+                  NETTBUTIKK
+                </span>
+              </Link>
+            </div>
+            <div className="w-full">
+              <MobileSearch />
+            </div>
+          </div>
+          <div className="hidden md:flex items-center justify-between">
+            <div className="flex items-center space-x-8">
+              <Link href="/shop">
+                <span className="text-base uppercase tracking-wider group relative">
+                  <span className="relative inline-block">
+                    <span className="absolute -bottom-1 left-0 w-0 h-px bg-gray-900 group-hover:w-full transition-all duration-500"></span>
+                    Shop
+                  </span>
+                </span>
+              </Link>
+            </div>
+            <Link href="/" className="hidden lg:block">
+              <span className="text-xl font-bold tracking-widest text-gray-900 hover:text-gray-700 transition-colors">
+                NETTBUTIKK
+              </span>
+            </Link>
+            <div className="flex items-center space-x-3">
+              <AlgoliaSearchBox />
+              <Cart />
+            </div>
+          </div>
+        </div>
+      </nav>
+    </header>
+  );
+};
+export default Navbar;
 ````
 
 ## File: src/shared/components/AddToCartSuccessModal.tsx
@@ -20783,6 +21033,68 @@ reference](https://developers.google.com/analytics/devguides/collection/ga4/refe
     });
 ````
 
+## File: src/app/(shop)/anmelden/page.tsx
+````typescript
+import type { Metadata } from 'next'
+import { Suspense } from 'react'
+import Image from 'next/image'
+import { LoginFormAnmelden } from '@/features/auth/components/LoginFormAnmelden'
+import { NOINDEX_ROBOTS, absoluteUrl } from '@/lib/seo'
+export const metadata: Metadata = {
+  title: 'Anmelden | Planenadler',
+  description: 'Melden Sie sich in Ihrem Kundenkonto an.',
+  alternates: {
+    canonical: absoluteUrl('/anmelden'),
+  },
+  robots: NOINDEX_ROBOTS,
+}
+export default function AnmeldenPage() {
+  return (
+    <main className="min-h-screen bg-gradient-to-br from-[#e7f0fc] via-[#d7e7fb] to-[#c9ddf7] p-4 sm:p-8">
+      <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-7xl items-center sm:min-h-[calc(100vh-4rem)]">
+        <div className="grid w-full overflow-hidden rounded-[2rem] border border-[#d7e7fb] bg-[#f8fbff] shadow-[0_28px_80px_-35px_rgba(21,74,140,0.45)] lg:grid-cols-[minmax(380px,1fr)_minmax(460px,1.2fr)]">
+          <section className="flex items-center p-6 sm:p-10 lg:p-14">
+            <div className="w-full max-w-md">
+              <Image
+                src="/Planenadlerlogo.png"
+                alt="Planenadler Logo"
+                width={220}
+                height={56}
+                style={{ width: 'auto', height: 'auto' }}
+                className="mb-6 h-12 w-auto object-contain sm:h-14"
+                priority
+              />
+              <h1 className="text-4xl font-semibold leading-tight text-[#1F5CAB] sm:text-5xl">
+                Willkommen zurueck
+              </h1>
+              <p className="mt-3 text-sm leading-relaxed text-[#355f95]">
+                Melden Sie sich an, um Ihre Bestellungen, Adressen und gespeicherten Zahlungsmethoden zu verwalten.
+              </p>
+              <div className="mt-8">
+                <Suspense fallback={<div className="text-sm text-[#355f95]">Lade Anmeldung ...</div>}>
+                  <LoginFormAnmelden />
+                </Suspense>
+              </div>
+            </div>
+          </section>
+          <section className="relative min-h-[320px] lg:min-h-[760px]">
+            <Image
+              src="/images/Planenadler1.jpg"
+              alt="Planenadler – Produktion und Qualitaet bei PVC-Planen"
+              fill
+              priority
+              className="object-cover"
+              sizes="(max-width: 1024px) 100vw, 55vw"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#1F5CAB]/40 via-transparent to-[#1F5CAB]/15" />
+          </section>
+        </div>
+      </div>
+    </main>
+  )
+}
+````
+
 ## File: src/app/(shop)/checkout/payment/page.tsx
 ````typescript
 import { Suspense } from 'react'
@@ -20822,26 +21134,6 @@ export default function CheckoutPaymentPage() {
       <Stickynav />
     </main>
   )
-}
-````
-
-## File: src/app/(shop)/checkout/provider-callback/page.tsx
-````typescript
-import { redirect } from 'next/navigation'
-export default async function CheckoutProviderCallbackPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ provider?: string; status?: string }>
-}) {
-  const params = await searchParams
-  const provider = params.provider ?? ''
-  const status = params.status ?? ''
-  const validProvider = provider === 'paypal' || provider === 'klarna'
-  const validStatus = status === 'success' || status === 'cancel'
-  const search = new URLSearchParams()
-  if (validProvider) search.set('provider', provider)
-  if (validStatus) search.set('status', status)
-  redirect(`/checkout/payment${search.toString() ? `?${search.toString()}` : ''}`)
 }
 ````
 
@@ -21071,144 +21363,385 @@ export default function ThankYouPage() {
 }
 ````
 
-## File: src/app/sitemap.ts
+## File: src/app/api/checkout/headless-paypal/route.ts
 ````typescript
-import type { MetadataRoute } from 'next'
-import { getBlogPosts } from '@/features/blog'
-import { paginate } from '@/features/blog/lib/paginate'
-import { SITE_URL, absoluteUrl } from '@/lib/seo'
-const BLOG_PER_PAGE = 9
-interface ProductSitemapNode {
-  slug?: string | null
-  modified?: string | null
+import { NextRequest, NextResponse } from 'next/server'
+type CheckoutInputShape = {
+  billing?: Record<string, unknown>
+  shipping?: Record<string, unknown>
 }
-async function fetchProductSlugs(): Promise<ProductSitemapNode[]> {
-  const graphqlUrl = process.env.NEXT_PUBLIC_GRAPHQL_URL
-  if (!graphqlUrl) return []
-  const query = `
-    query SitemapProducts {
-      products(first: 100) {
-        nodes {
-          slug
-          modified
-        }
-      }
+type CheckoutItemShape = {
+  productId?: number
+  quantity?: number
+  extraData?: string
+}
+type StartBody = {
+  action?: 'start' | 'capture'
+  checkoutInput?: CheckoutInputShape
+  checkoutItems?: CheckoutItemShape[]
+  coupons?: string[]
+  returnUrl?: string
+  cancelUrl?: string
+  orderId?: string | number
+  paypalOrderId?: string
+}
+function resolveWordPressOrigin(): string {
+  const candidates = [
+    process.env.NEXT_PUBLIC_GRAPHQL_URL?.trim(),
+    process.env.CUSTOMIZER_API_URL?.trim(),
+    process.env.WC_HEADLESS_PAYPAL_API_URL?.trim(),
+    process.env.WC_PROVIDER_CHECKOUT_API_URL?.trim(),
+  ].filter((value): value is string => Boolean(value))
+  for (const candidate of candidates) {
+    if (/\/graphql\/?$/i.test(candidate)) {
+      return candidate.replace(/\/graphql\/?$/i, '')
     }
-  `
+    if (/\/wp-json\/.+$/i.test(candidate)) {
+      return candidate.replace(/\/wp-json\/.+$/i, '')
+    }
+  }
+  return ''
+}
+function resolveHeadlessApiBaseUrl(): string {
+  const explicit = process.env.WC_HEADLESS_PAYPAL_API_URL?.trim()
+  if (explicit) {
+    return explicit.replace(/\/+$/g, '')
+  }
+  const origin = resolveWordPressOrigin()
+  return origin ? `${origin}/wp-json/planenadler-headless/v1` : ''
+}
+function getHeadlessApiSecret(): string {
+  return (
+    process.env.PLANENADLER_HEADLESS_API_SECRET?.trim() ??
+    process.env.WC_PROVIDER_API_SECRET?.trim() ??
+    ''
+  )
+}
+function normalizeMetaData(extraData?: string): Record<string, unknown> {
+  if (!extraData) return {}
   try {
-    const response = await fetch(graphqlUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query }),
-      next: { revalidate: 3600 },
-    })
-    const json = (await response.json()) as {
-      data?: { products?: { nodes?: ProductSitemapNode[] } }
-    }
-    return json.data?.products?.nodes ?? []
+    const decoded = JSON.parse(extraData) as unknown
+    return decoded && typeof decoded === 'object' && !Array.isArray(decoded)
+      ? (decoded as Record<string, unknown>)
+      : {}
   } catch {
-    return []
+    return {}
   }
 }
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const now = new Date()
-  const staticRoutes: MetadataRoute.Sitemap = [
-    {
+async function parseJsonSafe(response: Response): Promise<Record<string, unknown>> {
+  return (await response.json().catch(() => ({}))) as Record<string, unknown>
+}
+async function postHeadlessEndpoint(
+  path: string,
+  payload: Record<string, unknown>
+): Promise<{ response: Response; data: Record<string, unknown> }> {
+  const baseUrl = resolveHeadlessApiBaseUrl()
+  if (!baseUrl) {
+    throw new Error('WC_HEADLESS_PAYPAL_API_URL konnte nicht aufgeloest werden.')
+  }
+  const secret = getHeadlessApiSecret()
+  if (!secret) {
+    throw new Error('PLANENADLER_HEADLESS_API_SECRET fehlt.')
+  }
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Planenadler-Headless-Key': secret,
+    },
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  })
+  return { response, data: await parseJsonSafe(response) }
+}
+export async function POST(request: NextRequest) {
+  let body: StartBody
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Ungueltiger JSON-Body' }, { status: 400 })
+  }
+  const action = body.action ?? 'start'
+  try {
+    if (action === 'start') {
+      const checkoutItems = Array.isArray(body.checkoutItems) ? body.checkoutItems : []
+      const items = checkoutItems
+        .filter((item): item is CheckoutItemShape => Boolean(item && item.productId && item.quantity))
+        .map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          metaData: normalizeMetaData(item.extraData),
+        }))
+      if (items.length === 0) {
+        return NextResponse.json({ error: 'Keine Checkout-Artikel vorhanden.' }, { status: 400 })
+      }
+      const createOrderPayload: Record<string, unknown> = {
+        items,
+        billing: body.checkoutInput?.billing ?? {},
+        shipping: body.checkoutInput?.shipping ?? {},
+        coupons: Array.isArray(body.coupons) ? body.coupons.filter((code): code is string => typeof code === 'string' && code.trim().length > 0) : [],
+        returnUrl: body.returnUrl ?? '',
+        cancelUrl: body.cancelUrl ?? '',
+      }
+      const { response: orderResponse, data: orderData } = await postHeadlessEndpoint(
+        '/create-headless-order',
+        createOrderPayload
+      )
+      if (!orderResponse.ok) {
+        return NextResponse.json(
+          { error: (orderData.message as string | undefined) ?? 'Woo-Bestellung konnte nicht angelegt werden.' },
+          { status: orderResponse.status }
+        )
+      }
+      const orderId = orderData.orderId
+      if (typeof orderId !== 'number' && typeof orderId !== 'string') {
+        return NextResponse.json({ error: 'Backend hat keine orderId geliefert.' }, { status: 502 })
+      }
+      const { response: paypalResponse, data: paypalData } = await postHeadlessEndpoint(
+        '/create-paypal-order',
+        { orderId }
+      )
+      if (!paypalResponse.ok) {
+        return NextResponse.json(
+          { error: (paypalData.message as string | undefined) ?? 'PayPal Order konnte nicht erstellt werden.' },
+          { status: paypalResponse.status }
+        )
+      }
+      const approveUrl = typeof paypalData.approveUrl === 'string' ? paypalData.approveUrl : ''
+      const paypalOrderId = typeof paypalData.paypalOrderId === 'string' ? paypalData.paypalOrderId : ''
+      if (!approveUrl || !paypalOrderId) {
+        return NextResponse.json({ error: 'PayPal Approve-URL oder Order-ID fehlt.' }, { status: 502 })
+      }
+      return NextResponse.json({
+        orderId: String(orderId),
+        orderKey: typeof orderData.orderKey === 'string' ? orderData.orderKey : null,
+        orderNumber: orderData.orderNumber ?? null,
+        paypalOrderId,
+        approveUrl,
+      })
+    }
+    if (action === 'capture') {
+      const orderId = typeof body.orderId === 'string' || typeof body.orderId === 'number' ? body.orderId : ''
+      const paypalOrderId = typeof body.paypalOrderId === 'string' ? body.paypalOrderId : ''
+      if (!orderId) {
+        return NextResponse.json({ error: 'orderId fehlt.' }, { status: 400 })
+      }
+      const { response, data } = await postHeadlessEndpoint('/capture-paypal-order', {
+        orderId,
+        paypalOrderId,
+      })
+      if (!response.ok) {
+        return NextResponse.json(
+          { error: (data.message as string | undefined) ?? 'PayPal Capture fehlgeschlagen.' },
+          { status: response.status }
+        )
+      }
+      return NextResponse.json({
+        orderId: data.orderId ?? orderId,
+        paypalOrderId: data.paypalOrderId ?? paypalOrderId,
+        captureId: data.captureId ?? null,
+        paypalStatus: data.paypalStatus ?? null,
+        orderStatus: data.orderStatus ?? null,
+      })
+    }
+    return NextResponse.json({ error: 'Unbekannte action.' }, { status: 400 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Headless PayPal Proxy-Fehler' },
+      { status: 502 }
+    )
+  }
+}
+````
+
+## File: src/app/blog/[slug]/page.tsx
+````typescript
+import type { Metadata } from 'next'
+import Image from 'next/image'
+import { notFound } from 'next/navigation'
+import { TopBar } from '@/shared/components/TopBar/TopBar.component'
+import Stickynav from '@/shared/components/Footer/Stickynav.component'
+import Footer from '@/shared/components/Footer/Footer.component'
+import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
+import { ContentShell } from '@/shared/components/ContentShell.component'
+import {
+  getBlogPosts,
+  getPostBySlug,
+  getUniqueCategoriesFromPosts,
+  BlogContent,
+  BlogSidebar,
+  RelatedPosts,
+} from '@/features/blog'
+import { SITE_URL, absoluteUrl } from '@/lib/seo'
+interface BlogSlugPageProps {
+  params: Promise<{ slug: string }>
+}
+function buildCanonical(slug: string): string {
+  return absoluteUrl(`/blog/${slug}`)
+}
+function categoryNameToSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+}
+function pickRelatedPosts(
+  posts: Awaited<ReturnType<typeof getBlogPosts>>,
+  currentSlug: string,
+  categorySlug?: string,
+  limit = 4
+) {
+  const rest = posts
+    .filter((candidate) => candidate.slug !== currentSlug)
+    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+  if (!categorySlug) return rest.slice(0, limit)
+  const inCategory = rest.filter((candidate) =>
+    candidate.categories?.some((category) => category.slug === categorySlug) ||
+    categoryNameToSlug(candidate.category ?? '') === categorySlug
+  )
+  return (inCategory.length > 0 ? inCategory : rest).slice(0, limit)
+}
+export async function generateMetadata({ params }: BlogSlugPageProps): Promise<Metadata> {
+  const { slug } = await params
+  const post = await getPostBySlug(slug)
+  if (!post) return { title: 'Artikel nicht gefunden | Planenadler' }
+  const title = `${post.title} | Planenadler`
+  const description = post.excerpt.slice(0, 160).trim()
+  const canonical = buildCanonical(slug)
+  const coverSrc = post.coverImage?.src
+  const imageUrl = coverSrc
+    ? coverSrc.startsWith('http')
+      ? coverSrc
+      : absoluteUrl(coverSrc)
+    : absoluteUrl('/Planenadlerlogo.png')
+  const imageAlt = post.coverImage?.alt?.trim() || post.title
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    robots: {
+      index: true,
+      follow: true,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      siteName: 'Planenadler',
+      locale: 'de_DE',
+      type: 'article',
+      publishedTime: post.publishedAt,
+      authors: post.author ? [post.author] : undefined,
+      images: [{ url: imageUrl, alt: imageAlt }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [imageUrl],
+    },
+  }
+}
+export default async function BlogSlugPage({ params }: BlogSlugPageProps) {
+  const { slug } = await params
+  const post = await getPostBySlug(slug)
+  if (!post) notFound()
+  const allPosts = await getBlogPosts()
+  const categorySlug =
+    post.categories?.[0]?.slug ??
+    (post.category ? categoryNameToSlug(post.category) : undefined)
+  const categories = getUniqueCategoriesFromPosts(allPosts)
+  const relatedPosts = pickRelatedPosts(allPosts, slug, categorySlug, 4)
+  const shareUrl = buildCanonical(slug)
+  const breadcrumbSchema = getBreadcrumbJsonLd([
+    { name: 'Startseite', path: '/' },
+    { name: 'News & Ratgeber', path: '/blog' },
+    { name: post.title, path: `/blog/${slug}` },
+  ])
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline: post.title,
+    description: post.excerpt,
+    image: post.coverImage?.src
+      ? post.coverImage.src.startsWith('http')
+        ? post.coverImage.src
+        : absoluteUrl(post.coverImage.src)
+      : undefined,
+    datePublished: post.publishedAt,
+    mainEntityOfPage: shareUrl,
+    author: post.author
+      ? { '@type': 'Person', name: post.author }
+      : { '@type': 'Organization', name: 'Planenadler' },
+    publisher: {
+      '@type': 'Organization',
+      name: 'Planenadler',
       url: SITE_URL,
-      lastModified: now,
-      changeFrequency: 'weekly',
-      priority: 1,
+      logo: {
+        '@type': 'ImageObject',
+        url: absoluteUrl('/Planenadlerlogo.png'),
+      },
     },
-    {
-      url: absoluteUrl('/ueber-uns'),
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.8,
-    },
-    {
-      url: absoluteUrl('/shop'),
-      lastModified: now,
-      changeFrequency: 'weekly',
-      priority: 0.9,
-    },
-    {
-      url: absoluteUrl('/blog'),
-      lastModified: now,
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    },
-    {
-      url: absoluteUrl('/faq'),
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.7,
-    },
-    {
-      url: absoluteUrl('/kontakt'),
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.7,
-    },
-    {
-      url: absoluteUrl('/impressum'),
-      lastModified: now,
-      changeFrequency: 'yearly',
-      priority: 0.3,
-    },
-    {
-      url: absoluteUrl('/datenschutz'),
-      lastModified: now,
-      changeFrequency: 'yearly',
-      priority: 0.3,
-    },
-    {
-      url: absoluteUrl('/agb'),
-      lastModified: now,
-      changeFrequency: 'yearly',
-      priority: 0.3,
-    },
-    {
-      url: absoluteUrl('/versand'),
-      lastModified: now,
-      changeFrequency: 'yearly',
-      priority: 0.4,
-    },
-    {
-      url: absoluteUrl('/widerruf'),
-      lastModified: now,
-      changeFrequency: 'yearly',
-      priority: 0.3,
-    },
-  ]
-  const [posts, products] = await Promise.all([getBlogPosts(), fetchProductSlugs()])
-  const { totalPages: blogTotalPages } = paginate(posts, 1, BLOG_PER_PAGE)
-  const blogPaginationRoutes: MetadataRoute.Sitemap =
-    blogTotalPages > 1
-      ? Array.from({ length: blogTotalPages - 1 }, (_, i) => {
-          const pageNum = i + 2
-          return {
-            url: absoluteUrl(`/blog/page/${pageNum}`),
-            lastModified: now,
-            changeFrequency: 'weekly' as const,
-            priority: 0.65,
-          }
-        })
-      : []
-  const blogRoutes: MetadataRoute.Sitemap = posts.map((post) => ({
-    url: absoluteUrl(`/blog/${post.slug}`),
-    lastModified: post.publishedAt ? new Date(post.publishedAt) : now,
-    changeFrequency: 'monthly',
-    priority: 0.7,
-  }))
-  const productRoutes: MetadataRoute.Sitemap = products
-    .filter((product): product is ProductSitemapNode & { slug: string } => Boolean(product.slug))
-    .map((product) => ({
-      url: absoluteUrl(`/product/${product.slug}`),
-      lastModified: product.modified ? new Date(product.modified) : now,
-      changeFrequency: 'weekly',
-      priority: 0.85,
-    }))
-  return [...staticRoutes, ...productRoutes, ...blogRoutes, ...blogPaginationRoutes]
+  }
+  return (
+    <main className="min-h-screen bg-white pb-16 sm:pt-20">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <TopBar />
+      <section className="w-full bg-gradient-to-b from-[#DBE9F9]/30 via-white to-[#F7FAFF] py-8 lg:py-12">
+        <ContentShell>
+          <div className="relative overflow-hidden rounded-[36px] border border-[#DBE9F9] bg-[#0E376E] shadow-[0_30px_80px_rgba(31,92,171,0.18)]">
+            <div className="relative min-h-[320px] sm:min-h-[380px] lg:min-h-[460px]">
+              <Image
+                src={post.coverImage.src}
+                alt={post.coverImage.alt}
+                fill
+                className="object-cover blur-[2px] scale-[1.02]"
+                priority
+                sizes="100vw"
+              />
+              <div className="absolute inset-0 bg-black/35" />
+              <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8 lg:p-10">
+                <div className="max-w-4xl">
+                  <h1 className="text-3xl font-bold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
+                    {post.title}
+                  </h1>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ContentShell>
+      </section>
+      <section className="pb-8 pt-10 lg:pb-12 lg:pt-14">
+        <ContentShell>
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-10">
+            <div className="lg:col-span-8">
+              <article className="rounded-[32px] border border-[#DBE9F9] bg-white p-6 shadow-[0_18px_40px_rgba(31,92,171,0.08)] sm:p-8 lg:p-10">
+                <BlogContent html={post.content ?? ''} />
+              </article>
+            </div>
+            <div className="lg:col-span-4">
+              <BlogSidebar
+                categories={categories}
+                currentCategorySlug={categorySlug}
+                tags={post.tags}
+              />
+            </div>
+          </div>
+          <RelatedPosts posts={relatedPosts} title="Weitere Blogartikel" />
+        </ContentShell>
+      </section>
+      <Footer />
+      <Stickynav />
+    </main>
+  )
 }
 ````
 
@@ -23911,57 +24444,6 @@ export function sortProducts(products: ProductCardItem[]): ProductCardItem[] {
 }
 ````
 
-## File: src/features/home/sections/Hero.component.tsx
-````typescript
-import Image from 'next/image';
-import Button from '@/shared/ui/Button.component';
-import { PLACEHOLDER_IMAGE_DATA_URL } from '@/shared/lib/functions';
-/**
- * Hero-Bild: Eigenes Bild unter public/images/hero.jpg ablegen, dann hier
- * src auf "/images/hero.jpg" umstellen. Sonst wird der Placeholder genutzt.
- */
-const HERO_IMAGE_SRC =
-  process.env.NEXT_PUBLIC_PLACEHOLDER_LARGE_IMAGE_URL ||
-  PLACEHOLDER_IMAGE_DATA_URL;
-/**
- * Renders Hero section for Index page
- * @function Hero
- * @returns {JSX.Element} - Rendered component
- */
-const Hero = () => (
-  <section className="relative w-full h-[50vh] min-h-[280px] max-h-[420px] overflow-hidden">
-    {/* Bild und dunkler Overlay – untere Ebene */}
-    <div className="absolute inset-0 z-0">
-      <Image
-        src={HERO_IMAGE_SRC}
-        alt="Planenadler – PVC-Planen und Abdeckungen"
-        fill
-        priority
-        sizes="(max-width: 768px) 100vw, 50vw"
-        className="object-cover object-center"
-        quality={90}
-      />
-      <div className="absolute inset-0 bg-black/30" aria-hidden />
-    </div>
-    {/* Titel und Button – darüber, damit sie lesbar sind */}
-    <div className="relative z-10 h-full container mx-auto flex items-center p-4 md:p-6">
-      <div className="max-w-xl">
-        <h1 className="text-3xl md:text-4xl lg:text-5xl font-light text-white mb-6 drop-shadow-md">
-          Stripete Zig Zag Pute Sett
-        </h1>
-        <Button
-          href="/shop"
-          variant="hero"
-        >
-          Se Utvalget
-        </Button>
-      </div>
-    </div>
-  </section>
-);
-export default Hero;
-````
-
 ## File: src/features/product/components/ProductCard.component.tsx
 ````typescript
 import Link from 'next/link';
@@ -24731,60 +25213,466 @@ const MobileSearch = () => {
 export default MobileSearch;
 ````
 
-## File: src/shared/components/Header/Navbar.component.tsx
+## File: src/shared/components/Footer/Footer.component.tsx
 ````typescript
+import Link from 'next/link'
+import Image from 'next/image'
+import { ContentShell } from '@/shared/components/ContentShell.component'
+const FOOTER_DESCRIPTION =
+  'Maßgeschneiderte PVC-Planen für Anhänger, Terrassen, Pools und mehr – Made in Germany, in höchster Qualität und nach Ihren Wünschen.'
+const FOOTER_PHONE = '0203 7385985'
+const FOOTER_PHONE_MOBILE = '0172 7436428'
+const FOOTER_EMAIL = 'post@planenadler.de'
+const FOOTER_ADDRESS = 'Düsseldorfer Str. 387, 47055 Duisburg'
+const FOOTER_MAPS_HREF =
+  'https://www.google.com/maps/search/?api=1&query=D%C3%BCsseldorfer+Str.+387,+47055+Duisburg'
+const FOOTER_WHATSAPP_HREF = 'https://wa.me/491727436428'
+const FOOTER_FACEBOOK_HREF = 'https://www.facebook.com/Planenadler.de/?locale=de_DE'
+const footerLinks = [
+  {
+    title: 'Produkt',
+    links: [
+      { label: 'Home', href: '/' },
+      { label: 'Ueber uns', href: '/ueber-uns' },
+      { label: 'Shop', href: '/shop' },
+      { label: 'News & Ratgeber', href: '/blog' },
+      { label: 'FAQ', href: '/faq' },
+      { label: 'Kontakt', href: '/kontakt' },
+    ],
+  },
+  {
+    title: 'Rechtliches',
+    links: [
+      { label: 'Impressum', href: '/impressum' },
+      { label: 'Datenschutz', href: '/datenschutz' },
+      { label: 'AGB', href: '/agb' },
+      { label: 'Widerrufsbelehrung', href: '/widerruf' },
+      { label: 'Versandbedingungen', href: '/versand' },
+    ],
+  },
+]
+/**
+ * Renders Footer of the application.
+ * @function Footer
+ * @returns {JSX.Element} - Rendered component
+ */
+function Footer() {
+  return (
+    <footer className="w-full border-t border-white/60 bg-[#F7FAFF]">
+      <ContentShell className="py-12 sm:py-14">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-12">
+          <div className="lg:col-span-4">
+            <Link href="/" aria-label="Planenadler Home" className="inline-block">
+              <Image
+                src="/Planenadlerlogo.png"
+                alt="Planenadler Logo"
+                width={160}
+                height={43}
+                style={{ width: 'auto', height: 'auto' }}
+                className="h-10 w-auto object-contain sm:h-11"
+              />
+            </Link>
+            <p className="mt-3 text-sm text-[#1F5CAB]/70">{FOOTER_DESCRIPTION}</p>
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <a
+                href={FOOTER_WHATSAPP_HREF}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="WhatsApp: 0172 7436428"
+                className="inline-flex items-center gap-2 rounded-full border border-[#DBE9F9] px-4 py-2 text-xs font-semibold text-[#1F5CAB] transition hover:bg-[#1F5CAB] hover:text-white"
+              >
+                <svg
+                  className="h-5 w-5 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden
+                >
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                </svg>
+                WhatsApp
+              </a>
+              <a
+                href={FOOTER_FACEBOOK_HREF}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Facebook Planenadler"
+                className="inline-flex items-center gap-2 rounded-full border border-[#DBE9F9] px-4 py-2 text-xs font-semibold text-[#1F5CAB] transition hover:bg-[#1F5CAB] hover:text-white"
+              >
+                <svg
+                  className="h-5 w-5 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden
+                >
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                </svg>
+                Facebook
+              </a>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:col-span-8">
+            {footerLinks.map((group) => (
+              <div key={group.title}>
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#3982DC]">
+                  {group.title}
+                </div>
+                <ul className="mt-4 space-y-3 text-sm text-[#1F5CAB]/80">
+                  {group.links.map((link) => (
+                    <li key={link.label}>
+                      <Link
+                        href={link.href}
+                        className="transition hover:text-[#1F5CAB]"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#3982DC]">
+                Kontakt
+              </div>
+              <ul className="mt-4 space-y-3 text-sm text-[#1F5CAB]/80">
+                <li>
+                  <Link href="/kontakt" className="transition hover:text-[#1F5CAB]">
+                    Kontaktformular
+                  </Link>
+                </li>
+                <li>
+                  <span className="font-medium text-[#1F5CAB]">Telefon</span>
+                  <br />
+                  <a
+                    href="tel:+492037385985"
+                    className="transition hover:text-[#1F5CAB]"
+                  >
+                    {FOOTER_PHONE}
+                  </a>
+                  {' · '}
+                  <a
+                    href="tel:+491727436428"
+                    className="transition hover:text-[#1F5CAB]"
+                  >
+                    {FOOTER_PHONE_MOBILE}
+                  </a>
+                </li>
+                <li>
+                  <span className="font-medium text-[#1F5CAB]">E-Mail</span>
+                  <br />
+                  <a
+                    href={`mailto:${FOOTER_EMAIL}`}
+                    className="transition hover:text-[#1F5CAB]"
+                  >
+                    {FOOTER_EMAIL}
+                  </a>
+                </li>
+                <li>
+                  <span className="font-medium text-[#1F5CAB]">Adresse</span>
+                  <br />
+                  <a
+                    href={FOOTER_MAPS_HREF}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="transition hover:text-[#1F5CAB]"
+                  >
+                    {FOOTER_ADDRESS}
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-[#DBE9F9] pt-6 text-xs text-[#1F5CAB]/70 sm:flex-row">
+          <div suppressHydrationWarning>&copy; {new Date().getFullYear()} Planenadler</div>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link href="/datenschutz" className="transition hover:text-[#1F5CAB]">
+              Datenschutz
+            </Link>
+            <Link href="/impressum" className="transition hover:text-[#1F5CAB]">
+              Impressum
+            </Link>
+            <Link href="/agb" className="transition hover:text-[#1F5CAB]">
+              AGB
+            </Link>
+            <Link href="/widerruf" className="transition hover:text-[#1F5CAB]">
+              Widerrufsbelehrung
+            </Link>
+            <Link href="/versand" className="transition hover:text-[#1F5CAB]">
+              Versandbedingungen
+            </Link>
+          </div>
+        </div>
+      </ContentShell>
+    </footer>
+  )
+}
+export default Footer
+````
+
+## File: src/shared/components/Footer/Hamburger.component.tsx
+````typescript
+'use client';
+import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import Cart from './Cart.component';
-import AlgoliaSearchBox from '../AlgoliaSearch/AlgoliaSearchBox.component';
-import MobileSearch from '../AlgoliaSearch/MobileSearch.component';
+import Image from 'next/image';
+import { useRouter } from 'next/compat/router';
+import { AnimatePresence, LazyMotion, domAnimation, m } from 'motion/react';
+import { cn } from '@/lib/utils';
+const leftMenu = [
+  { label: 'Home', href: '/' },
+  { label: 'Ueber uns', href: '/ueber-uns' },
+  { label: 'Shop', href: '/shop' },
+  { label: 'News & Ratgeber', href: '/blog' },
+];
+const rightMenu = [
+  { label: 'FAQ', href: '/faq' },
+  { label: 'Kontakt', href: '/kontakt' },
+  { label: 'Mein Konto', href: '/mein-konto' },
+];
+const cartLink = { label: 'Warenkorb', href: '/cart' };
+const configuratorLink = { label: 'ZUM KONFIGURATOR', href: '/shop' };
+function getIsActive(asPath: string, href: string) {
+  if (!href) return false;
+  if (href.startsWith('#')) return asPath.includes(href);
+  if (href === '/') return asPath === '/';
+  return asPath.startsWith(href);
+}
+interface HamburgerProps {
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+}
+const Hamburger = ({ isOpen, onOpenChange }: HamburgerProps) => {
+  const router = useRouter();
+  const asPath =
+    router?.asPath ??
+    (typeof window !== 'undefined' ? window.location.pathname : '/');
+  const allLinks = useMemo(
+    () => [...leftMenu, ...rightMenu, cartLink, configuratorLink],
+    [],
+  );
+  useEffect(() => {
+    document.body.style.overflow = isOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+  useEffect(() => {
+    const onEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onOpenChange(false);
+    };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [onOpenChange]);
+  return (
+    <div className="z-[600] md:hidden">
+      <button
+        className="inline-flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:bg-white/10"
+        data-cy="hamburger"
+        data-testid="hamburger"
+        onClick={() => onOpenChange(true)}
+        aria-expanded={isOpen}
+        aria-controls="mobile-menu-sheet"
+        aria-label="Menü öffnen"
+        type="button"
+      >
+        <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden>
+          <path
+            d="M4 6h16M4 12h16M4 18h16"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+      <LazyMotion features={domAnimation}>
+        <AnimatePresence>
+          {isOpen ? (
+            <>
+              <m.button
+                type="button"
+                aria-label="Menü schließen"
+                className="fixed inset-0 z-[900] bg-black/35 backdrop-blur-[1px]"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => onOpenChange(false)}
+              />
+              <m.div
+                id="mobile-menu-sheet"
+                className="fixed inset-x-0 bottom-0 z-[950] max-h-[66vh] overflow-y-auto border border-b-0 border-[#DBE9F9] bg-white px-5 pb-5 pt-4 shadow-[0_-26px_60px_rgba(15,43,82,0.28)]"
+                style={{ borderTopLeftRadius: '10px', borderTopRightRadius: '10px' }}
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', stiffness: 380, damping: 36 }}
+              >
+                <div className="mb-3 flex justify-center">
+                  <Link
+                    href="/"
+                    onClick={() => onOpenChange(false)}
+                    aria-label="Planenadler Home"
+                    className="inline-flex items-center rounded-full bg-white px-4 py-2 shadow-md ring-1 ring-[#DBE9F9]"
+                  >
+                    <Image
+                      src="/Planenadlerlogo.png"
+                      alt="Planenadler Logo"
+                      width={160}
+                      height={42}
+                      style={{ width: 'auto', height: 'auto' }}
+                      className="h-10 w-auto object-contain"
+                      priority
+                    />
+                  </Link>
+                </div>
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="text-sm font-bold uppercase tracking-[0.18em] text-[#1F5CAB]">
+                    Menü
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onOpenChange(false)}
+                    aria-label="Menü schließen"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#DBE9F9] text-[#1F5CAB] transition hover:bg-[#DBE9F9]"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 12 12" aria-hidden>
+                      <path
+                        d="M1 1l10 10M11 1L1 11"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                <div className="flex flex-col gap-2 pb-2">
+                  {allLinks.map((item) => {
+                    const isActive = getIsActive(asPath, item.href);
+                    return (
+                      <Link
+                        key={`${item.href}-${item.label}`}
+                        href={item.href}
+                        onClick={() => onOpenChange(false)}
+                        className={cn(
+                          'rounded-xl px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB]/80 transition hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
+                          isActive && 'bg-[#DBE9F9] text-[#1F5CAB]',
+                          item.href === configuratorLink.href &&
+                            'bg-[#1F5CAB] text-white hover:bg-[#0F2B52] hover:text-white',
+                        )}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </m.div>
+            </>
+          ) : null}
+        </AnimatePresence>
+      </LazyMotion>
+    </div>
+  );
+};
+export default Hamburger;
+````
+
+## File: src/shared/components/Footer/Stickynav.component.tsx
+````typescript
+'use client';
+import { useState } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
+import Cart from '@/shared/components/Header/Cart.component';
+import Hamburger from './Hamburger.component';
 /**
  * Navigation for the application.
  * Includes mobile menu.
  */
-const Navbar = () => {
+const Stickynav = () => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   return (
-    <header className="border-b border-gray-200">
-      <nav id="header" className="top-0 z-50 w-full bg-white">
-        <div className="container mx-auto px-4 sm:px-6 py-4">
-          <div className="flex flex-col space-y-4 md:hidden">
-            <div className="text-center">
-              <Link href="/">
-                <span className="text-lg font-bold tracking-widest text-gray-900">
-                  NETTBUTIKK
-                </span>
-              </Link>
-            </div>
-            <div className="w-full">
-              <MobileSearch />
-            </div>
-          </div>
-          <div className="hidden md:flex items-center justify-between">
-            <div className="flex items-center space-x-8">
-              <Link href="/shop">
-                <span className="text-base uppercase tracking-wider group relative">
-                  <span className="relative inline-block">
-                    <span className="absolute -bottom-1 left-0 w-0 h-px bg-gray-900 group-hover:w-full transition-all duration-500"></span>
-                    Shop
-                  </span>
-                </span>
-              </Link>
-            </div>
-            <Link href="/" className="hidden lg:block">
-              <span className="text-xl font-bold tracking-widest text-gray-900 hover:text-gray-700 transition-colors">
-                NETTBUTIKK
+    <nav
+      id="footer"
+      className="fixed inset-x-0 bottom-0 z-[500] w-full overflow-visible bg-transparent lg:hidden"
+    >
+      <div
+        className="relative mt-0 flex w-full items-center justify-between overflow-hidden bg-blue-800 px-6 py-3"
+        style={{ borderTopLeftRadius: '10px', borderTopRightRadius: '10px' }}
+      >
+        <Hamburger isOpen={isMenuOpen} onOpenChange={setIsMenuOpen} />
+        {!isMenuOpen ? (
+          <Link
+            href="/"
+            aria-label="Planenadler Home"
+            className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
+          >
+            <Image
+              src="/Planenadlerlogoweiß.png"
+              alt="Planenadler Logo"
+              width={220}
+              height={58}
+              style={{ width: 'auto', height: 'auto' }}
+              className="h-12 w-auto object-contain sm:h-14"
+              priority
+            />
+          </Link>
+        ) : null}
+      <div
+        className="order-3 hidden w-full md:flex md:items-center md:w-auto md:order-1"
+        id="menu"
+      >
+        <ul className="items-center justify-between pt-4 text-base text-gray-700 md:flex md:pt-0">
+          <li>
+            <Link href="/shop">
+              <span className="inline-block py-2 pr-4 text-xl font-bold no-underline hover:underline">
+                Shop
               </span>
             </Link>
-            <div className="flex items-center space-x-3">
-              <AlgoliaSearchBox />
-              <Cart />
-            </div>
-          </div>
-        </div>
-      </nav>
-    </header>
+          </li>
+          <li>
+            <Link href="/blog">
+              <span className="inline-block py-2 pr-4 text-xl font-bold no-underline hover:underline">
+                Blog
+              </span>
+            </Link>
+          </li>
+        </ul>
+      </div>
+      <div
+        className="order-2 flex items-center gap-2 transition-opacity md:order-3"
+        id="nav-content"
+      >
+        <Link
+          href="/mein-konto"
+          aria-label="Mein Konto"
+          className="inline-flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:bg-white/10"
+        >
+          <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden>
+            <circle
+              cx="12"
+              cy="8"
+              r="3.2"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+            />
+            <path
+              d="M5 19c1.1-3 3.6-4.6 7-4.6s5.9 1.6 7 4.6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </Link>
+        <Cart stickyNav />
+      </div>
+    </div>
+    </nav>
   );
 };
-export default Navbar;
+export default Stickynav;
 ````
 
 ## File: src/shared/lib/GQL_QUERIES.ts
@@ -25790,74 +26678,43 @@ export default defineConfig([
 }
 ````
 
-## File: src/app/(shop)/anmelden/page.tsx
-````typescript
-import type { Metadata } from 'next'
-import { Suspense } from 'react'
-import Image from 'next/image'
-import { LoginFormAnmelden } from '@/features/auth/components/LoginFormAnmelden'
-import { NOINDEX_ROBOTS, absoluteUrl } from '@/lib/seo'
-export const metadata: Metadata = {
-  title: 'Anmelden | Planenadler',
-  description: 'Melden Sie sich in Ihrem Kundenkonto an.',
-  alternates: {
-    canonical: absoluteUrl('/anmelden'),
-  },
-  robots: NOINDEX_ROBOTS,
-}
-export default function AnmeldenPage() {
-  return (
-    <main className="min-h-screen bg-gradient-to-br from-[#e7f0fc] via-[#d7e7fb] to-[#c9ddf7] p-4 sm:p-8">
-      <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-7xl items-center sm:min-h-[calc(100vh-4rem)]">
-        <div className="grid w-full overflow-hidden rounded-[2rem] border border-[#d7e7fb] bg-[#f8fbff] shadow-[0_28px_80px_-35px_rgba(21,74,140,0.45)] lg:grid-cols-[minmax(380px,1fr)_minmax(460px,1.2fr)]">
-          <section className="flex items-center p-6 sm:p-10 lg:p-14">
-            <div className="w-full max-w-md">
-              <Image
-                src="/Planenadlerlogo.png"
-                alt="Planenadler Logo"
-                width={220}
-                height={56}
-                style={{ width: 'auto', height: 'auto' }}
-                className="mb-6 h-12 w-auto object-contain sm:h-14"
-                priority
-              />
-              <h1 className="text-4xl font-semibold leading-tight text-[#1F5CAB] sm:text-5xl">
-                Willkommen zurueck
-              </h1>
-              <p className="mt-3 text-sm leading-relaxed text-[#355f95]">
-                Melden Sie sich an, um Ihre Bestellungen, Adressen und gespeicherten Zahlungsmethoden zu verwalten.
-              </p>
-              <div className="mt-8">
-                <Suspense fallback={<div className="text-sm text-[#355f95]">Lade Anmeldung ...</div>}>
-                  <LoginFormAnmelden />
-                </Suspense>
-              </div>
-            </div>
-          </section>
-          <section className="relative min-h-[320px] lg:min-h-[760px]">
-            <Image
-              src="/images/Planenadler1.jpg"
-              alt="Planenadler – Produktion und Qualitaet bei PVC-Planen"
-              fill
-              priority
-              className="object-cover"
-              sizes="(max-width: 1024px) 100vw, 55vw"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#1F5CAB]/40 via-transparent to-[#1F5CAB]/15" />
-          </section>
-        </div>
-      </div>
-    </main>
-  )
-}
-````
-
 ## File: src/app/(shop)/checkout/confirmation/page.tsx
 ````typescript
 import { redirect } from 'next/navigation'
 /** @deprecated Nutze /thank-you – bleibt für alte Links erhalten. */
 export default function CheckoutConfirmationPage() {
   redirect('/thank-you')
+}
+````
+
+## File: src/app/(shop)/checkout/provider-callback/page.tsx
+````typescript
+import { redirect } from 'next/navigation'
+export default async function CheckoutProviderCallbackPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const provider = typeof params.provider === 'string' ? params.provider : ''
+  const status = typeof params.status === 'string' ? params.status : ''
+  const validProvider = provider === 'paypal' || provider === 'klarna'
+  const validStatus = status === 'success' || status === 'cancel'
+  const search = new URLSearchParams()
+  for (const [key, rawValue] of Object.entries(params)) {
+    if (Array.isArray(rawValue)) {
+      for (const value of rawValue) {
+        if (value) search.append(key, value)
+      }
+      continue
+    }
+    if (typeof rawValue === 'string' && rawValue) {
+      search.set(key, rawValue)
+    }
+  }
+  if (validProvider) search.set('provider', provider)
+  if (validStatus) search.set('status', status)
+  redirect(`/checkout/payment${search.toString() ? `?${search.toString()}` : ''}`)
 }
 ````
 
@@ -25901,6 +26758,165 @@ export function ProductViewTracker({ productId, slug, name, priceValue }: Produc
     pushedRef.current = true
   }, [name, priceValue, productId, slug])
   return null
+}
+````
+
+## File: src/app/(shop)/product/[slug]/page.tsx
+````typescript
+import type { Metadata } from 'next'
+import ProductFeatures from './components/ProductFeatures'
+import ProductGallery from './components/ProductGallery'
+import ProductConfigurator from './components/ProductConfigurator'
+import { ProductViewTracker } from './components/ProductViewTracker'
+import ProductTabs from './components/ProductTabs'
+import ProductRecommendations from './components/ProductRecommendations'
+import { getCachedProductPageData } from './product-page-cache'
+import { ProductBlogFaqBoundary, ProductHeroReviewsBoundary } from './ProductPageStreaming'
+import { TopBar } from '@/shared/components/TopBar/TopBar.component'
+import Stickynav from '@/shared/components/Footer/Stickynav.component'
+import Footer from '@/shared/components/Footer/Footer.component'
+import { SITE_NAME, absoluteUrl } from '@/lib/seo'
+import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
+import { parseCartPriceString } from '@/shared/lib/functions'
+/**
+ * ISR (Sekunden). Muss ein **konstanter** Wert sein (Next.js Segment Config ist statisch zu analysieren).
+ * Feintuning des Daten-Caches: weiterhin `PRODUCT_PAGE_REVALIDATE_SECONDS` in product-data / product-page-cache.
+ */
+export const revalidate = 60
+interface ProductPageProps {
+  params: { slug?: string } | Promise<{ slug?: string }>
+}
+async function resolveSlug(params: ProductPageProps['params']): Promise<string> {
+  const resolved = await params
+  return typeof resolved?.slug === 'string' && resolved.slug.length > 0
+    ? resolved.slug
+    : 'lkw-plane-individuell'
+}
+export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
+  const slug = await resolveSlug(params)
+  const product = await getCachedProductPageData(slug)
+  const title = `${product.title} | ${SITE_NAME}`
+  const description = (product.subtitle || `${product.title} online konfigurieren und anfragen.`).slice(0, 160)
+  const canonical = absoluteUrl(`/product/${slug}`)
+  const imageUrl = product.image?.src
+    ? absoluteUrl(product.image.src)
+    : absoluteUrl('/Planenadlerlogo.png')
+  return {
+    title,
+    description,
+    alternates: {
+      canonical,
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      type: 'website',
+      images: [
+        {
+          url: imageUrl,
+          alt: product.image?.alt ?? product.title,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [imageUrl],
+    },
+  }
+}
+export default async function ProductPage({ params }: ProductPageProps) {
+  const slug = await resolveSlug(params)
+  const product = await getCachedProductPageData(slug)
+  const breadcrumbSchema = getBreadcrumbJsonLd([
+    { name: 'Startseite', path: '/' },
+    { name: 'Shop', path: '/shop' },
+    { name: product.title, path: `/product/${slug}` },
+  ])
+  const numericPrice = parseCartPriceString(product.price)
+  const productSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.title,
+    description: product.subtitle,
+    image: [product.image.src, ...product.gallery.map((image) => image.src)].map((src) => absoluteUrl(src)),
+    sku: String(product.databaseId || slug),
+    brand: {
+      '@type': 'Brand',
+      name: SITE_NAME,
+    },
+    category: 'PVC-Plane',
+    url: absoluteUrl(`/product/${slug}`),
+    offers: Number.isFinite(numericPrice)
+      ? {
+          '@type': 'Offer',
+          priceCurrency: 'EUR',
+          price: numericPrice.toFixed(2),
+          availability: 'https://schema.org/InStock',
+          url: absoluteUrl(`/product/${slug}`),
+        }
+      : undefined,
+  }
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
+      />
+      <main className="bg-white pb-16 sm:pt-20">
+        <ProductViewTracker
+          productId={product.databaseId}
+          slug={slug}
+          name={product.title}
+          priceValue={Number.isFinite(numericPrice) ? numericPrice : null}
+        />
+        <TopBar />
+        <ProductHeroReviewsBoundary product={product} />
+        <ProductFeatures items={product.features} />
+        <section id="konfigurator" className="py-12 md:py-16" aria-labelledby="configurator-title">
+          <div className="mx-auto grid max-w-7xl gap-8 px-4 lg:grid-cols-[1.1fr_1fr] lg:items-start">
+            <div className="lg:self-stretch">
+              <div className="lg:sticky lg:top-24 lg:flex lg:max-h-[calc(100vh-8rem)] lg:flex-col">
+                <h2 id="configurator-title" className="mb-4 text-2xl font-bold text-[#0F2B52] lg:flex-none">
+                  Individuelle Konfiguration
+                </h2>
+                <ProductGallery
+                  mainImage={product.image}
+                  images={product.gallery}
+                  className="lg:min-h-0 lg:flex-1"
+                />
+              </div>
+            </div>
+            <ProductConfigurator
+              productId={product.databaseId}
+              productSlug={slug}
+              productName={product.title}
+              price={product.price}
+              hints={product.configuratorHints}
+              configuratorOptions={product.configuratorOptions}
+              priceEndpoint={product.priceEndpoint}
+            />
+          </div>
+        </section>
+        <ProductTabs tabs={product.tabs} />
+        <ProductRecommendations items={product.recommendations} />
+        <ProductBlogFaqBoundary />
+        <Footer />
+        <span className="sr-only">Produkt-Slug: {slug}</span>
+      </main>
+      <Stickynav />
+    </>
+  )
 }
 ````
 
@@ -26013,197 +27029,6 @@ export async function POST(request: NextRequest) {
       { status: 502 },
     )
   }
-}
-````
-
-## File: src/app/blog/[slug]/page.tsx
-````typescript
-import type { Metadata } from 'next'
-import Image from 'next/image'
-import { notFound } from 'next/navigation'
-import { TopBar } from '@/shared/components/TopBar/TopBar.component'
-import Stickynav from '@/shared/components/Footer/Stickynav.component'
-import Footer from '@/shared/components/Footer/Footer.component'
-import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
-import { ContentShell } from '@/shared/components/ContentShell.component'
-import {
-  getBlogPosts,
-  getPostBySlug,
-  getUniqueCategoriesFromPosts,
-  BlogContent,
-  BlogSidebar,
-  RelatedPosts,
-} from '@/features/blog'
-import { SITE_URL, absoluteUrl } from '@/lib/seo'
-interface BlogSlugPageProps {
-  params: Promise<{ slug: string }>
-}
-function buildCanonical(slug: string): string {
-  return absoluteUrl(`/blog/${slug}`)
-}
-function categoryNameToSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-}
-function pickRelatedPosts(
-  posts: Awaited<ReturnType<typeof getBlogPosts>>,
-  currentSlug: string,
-  categorySlug?: string,
-  limit = 4
-) {
-  const rest = posts
-    .filter((candidate) => candidate.slug !== currentSlug)
-    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
-  if (!categorySlug) return rest.slice(0, limit)
-  const inCategory = rest.filter((candidate) =>
-    candidate.categories?.some((category) => category.slug === categorySlug) ||
-    categoryNameToSlug(candidate.category ?? '') === categorySlug
-  )
-  return (inCategory.length > 0 ? inCategory : rest).slice(0, limit)
-}
-export async function generateMetadata({ params }: BlogSlugPageProps): Promise<Metadata> {
-  const { slug } = await params
-  const post = await getPostBySlug(slug)
-  if (!post) return { title: 'Artikel nicht gefunden | Planenadler' }
-  const title = `${post.title} | Planenadler`
-  const description = post.excerpt.slice(0, 160).trim()
-  const canonical = buildCanonical(slug)
-  const coverSrc = post.coverImage?.src
-  const imageUrl = coverSrc
-    ? coverSrc.startsWith('http')
-      ? coverSrc
-      : absoluteUrl(coverSrc)
-    : absoluteUrl('/Planenadlerlogo.png')
-  const imageAlt = post.coverImage?.alt?.trim() || post.title
-  return {
-    title,
-    description,
-    alternates: { canonical },
-    robots: {
-      index: true,
-      follow: true,
-    },
-    openGraph: {
-      title,
-      description,
-      url: canonical,
-      siteName: 'Planenadler',
-      locale: 'de_DE',
-      type: 'article',
-      publishedTime: post.publishedAt,
-      authors: post.author ? [post.author] : undefined,
-      images: [{ url: imageUrl, alt: imageAlt }],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description,
-      images: [imageUrl],
-    },
-  }
-}
-export default async function BlogSlugPage({ params }: BlogSlugPageProps) {
-  const { slug } = await params
-  const post = await getPostBySlug(slug)
-  if (!post) notFound()
-  const allPosts = await getBlogPosts()
-  const categorySlug =
-    post.categories?.[0]?.slug ??
-    (post.category ? categoryNameToSlug(post.category) : undefined)
-  const categories = getUniqueCategoriesFromPosts(allPosts)
-  const relatedPosts = pickRelatedPosts(allPosts, slug, categorySlug, 4)
-  const shareUrl = buildCanonical(slug)
-  const breadcrumbSchema = getBreadcrumbJsonLd([
-    { name: 'Startseite', path: '/' },
-    { name: 'News & Ratgeber', path: '/blog' },
-    { name: post.title, path: `/blog/${slug}` },
-  ])
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'BlogPosting',
-    headline: post.title,
-    description: post.excerpt,
-    image: post.coverImage?.src
-      ? post.coverImage.src.startsWith('http')
-        ? post.coverImage.src
-        : absoluteUrl(post.coverImage.src)
-      : undefined,
-    datePublished: post.publishedAt,
-    mainEntityOfPage: shareUrl,
-    author: post.author
-      ? { '@type': 'Person', name: post.author }
-      : { '@type': 'Organization', name: 'Planenadler' },
-    publisher: {
-      '@type': 'Organization',
-      name: 'Planenadler',
-      url: SITE_URL,
-      logo: {
-        '@type': 'ImageObject',
-        url: absoluteUrl('/Planenadlerlogo.png'),
-      },
-    },
-  }
-  return (
-    <main className="min-h-screen bg-white pb-16 sm:pt-20">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
-      />
-      <TopBar />
-      <section className="w-full bg-gradient-to-b from-[#DBE9F9]/30 via-white to-[#F7FAFF] py-8 lg:py-12">
-        <ContentShell>
-          <div className="relative overflow-hidden rounded-[36px] border border-[#DBE9F9] bg-[#0E376E] shadow-[0_30px_80px_rgba(31,92,171,0.18)]">
-            <div className="relative min-h-[320px] sm:min-h-[380px] lg:min-h-[460px]">
-              <Image
-                src={post.coverImage.src}
-                alt={post.coverImage.alt}
-                fill
-                className="object-cover blur-[2px] scale-[1.02]"
-                priority
-                sizes="100vw"
-              />
-              <div className="absolute inset-0 bg-black/35" />
-              <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8 lg:p-10">
-                <div className="max-w-4xl">
-                  <h1 className="text-3xl font-bold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
-                    {post.title}
-                  </h1>
-                </div>
-              </div>
-            </div>
-          </div>
-        </ContentShell>
-      </section>
-      <section className="pb-8 pt-10 lg:pb-12 lg:pt-14">
-        <ContentShell>
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-10">
-            <div className="lg:col-span-8">
-              <article className="rounded-[32px] border border-[#DBE9F9] bg-white p-6 shadow-[0_18px_40px_rgba(31,92,171,0.08)] sm:p-8 lg:p-10">
-                <BlogContent html={post.content ?? ''} />
-              </article>
-            </div>
-            <div className="lg:col-span-4">
-              <BlogSidebar
-                categories={categories}
-                currentCategorySlug={categorySlug}
-                tags={post.tags}
-              />
-            </div>
-          </div>
-          <RelatedPosts posts={relatedPosts} title="Weitere Blogartikel" />
-        </ContentShell>
-      </section>
-      <Footer />
-      <Stickynav />
-    </main>
-  )
 }
 ````
 
@@ -27545,466 +28370,136 @@ export default function Document() {
 }
 ````
 
-## File: src/shared/components/Footer/Footer.component.tsx
+## File: src/shared/components/TopBar/TopBar.component.tsx
 ````typescript
-import Link from 'next/link'
+'use client'
 import Image from 'next/image'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { cn } from '@/lib/utils'
 import { ContentShell } from '@/shared/components/ContentShell.component'
-const FOOTER_DESCRIPTION =
-  'Maßgeschneiderte PVC-Planen für Anhänger, Terrassen, Pools und mehr – Made in Germany, in höchster Qualität und nach Ihren Wünschen.'
-const FOOTER_PHONE = '0203 7385985'
-const FOOTER_PHONE_MOBILE = '0172 7436428'
-const FOOTER_EMAIL = 'post@planenadler.de'
-const FOOTER_ADDRESS = 'Düsseldorfer Str. 387, 47055 Duisburg'
-const FOOTER_MAPS_HREF =
-  'https://www.google.com/maps/search/?api=1&query=D%C3%BCsseldorfer+Str.+387,+47055+Duisburg'
-const FOOTER_WHATSAPP_HREF = 'https://wa.me/491727436428'
-const FOOTER_FACEBOOK_HREF = 'https://www.facebook.com/Planenadler.de/?locale=de_DE'
-const footerLinks = [
-  {
-    title: 'Produkt',
-    links: [
-      { label: 'Home', href: '/' },
-      { label: 'Ueber uns', href: '/ueber-uns' },
-      { label: 'Shop', href: '/shop' },
-      { label: 'News & Ratgeber', href: '/blog' },
-      { label: 'FAQ', href: '/faq' },
-      { label: 'Kontakt', href: '/kontakt' },
-    ],
-  },
-  {
-    title: 'Rechtliches',
-    links: [
-      { label: 'Impressum', href: '/impressum' },
-      { label: 'Datenschutz', href: '/datenschutz' },
-      { label: 'AGB', href: '/agb' },
-      { label: 'Widerrufsbelehrung', href: '/widerruf' },
-      { label: 'Versandbedingungen', href: '/versand' },
-    ],
-  },
-]
-/**
- * Renders Footer of the application.
- * @function Footer
- * @returns {JSX.Element} - Rendered component
- */
-function Footer() {
-  return (
-    <footer className="w-full border-t border-white/60 bg-[#F7FAFF]">
-      <ContentShell className="py-12 sm:py-14">
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-12">
-          <div className="lg:col-span-4">
-            <Link href="/" aria-label="Planenadler Home" className="inline-block">
-              <Image
-                src="/Planenadlerlogo.png"
-                alt="Planenadler Logo"
-                width={160}
-                height={43}
-                style={{ width: 'auto', height: 'auto' }}
-                className="h-10 w-auto object-contain sm:h-11"
-              />
-            </Link>
-            <p className="mt-3 text-sm text-[#1F5CAB]/70">{FOOTER_DESCRIPTION}</p>
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              <a
-                href={FOOTER_WHATSAPP_HREF}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="WhatsApp: 0172 7436428"
-                className="inline-flex items-center gap-2 rounded-full border border-[#DBE9F9] px-4 py-2 text-xs font-semibold text-[#1F5CAB] transition hover:bg-[#1F5CAB] hover:text-white"
-              >
-                <svg
-                  className="h-5 w-5 shrink-0"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  aria-hidden
-                >
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                </svg>
-                WhatsApp
-              </a>
-              <a
-                href={FOOTER_FACEBOOK_HREF}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Facebook Planenadler"
-                className="inline-flex items-center gap-2 rounded-full border border-[#DBE9F9] px-4 py-2 text-xs font-semibold text-[#1F5CAB] transition hover:bg-[#1F5CAB] hover:text-white"
-              >
-                <svg
-                  className="h-5 w-5 shrink-0"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  aria-hidden
-                >
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                </svg>
-                Facebook
-              </a>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:col-span-8">
-            {footerLinks.map((group) => (
-              <div key={group.title}>
-                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#3982DC]">
-                  {group.title}
-                </div>
-                <ul className="mt-4 space-y-3 text-sm text-[#1F5CAB]/80">
-                  {group.links.map((link) => (
-                    <li key={link.label}>
-                      <Link
-                        href={link.href}
-                        className="transition hover:text-[#1F5CAB]"
-                      >
-                        {link.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#3982DC]">
-                Kontakt
-              </div>
-              <ul className="mt-4 space-y-3 text-sm text-[#1F5CAB]/80">
-                <li>
-                  <Link href="/kontakt" className="transition hover:text-[#1F5CAB]">
-                    Kontaktformular
-                  </Link>
-                </li>
-                <li>
-                  <span className="font-medium text-[#1F5CAB]">Telefon</span>
-                  <br />
-                  <a
-                    href="tel:+492037385985"
-                    className="transition hover:text-[#1F5CAB]"
-                  >
-                    {FOOTER_PHONE}
-                  </a>
-                  {' · '}
-                  <a
-                    href="tel:+491727436428"
-                    className="transition hover:text-[#1F5CAB]"
-                  >
-                    {FOOTER_PHONE_MOBILE}
-                  </a>
-                </li>
-                <li>
-                  <span className="font-medium text-[#1F5CAB]">E-Mail</span>
-                  <br />
-                  <a
-                    href={`mailto:${FOOTER_EMAIL}`}
-                    className="transition hover:text-[#1F5CAB]"
-                  >
-                    {FOOTER_EMAIL}
-                  </a>
-                </li>
-                <li>
-                  <span className="font-medium text-[#1F5CAB]">Adresse</span>
-                  <br />
-                  <a
-                    href={FOOTER_MAPS_HREF}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="transition hover:text-[#1F5CAB]"
-                  >
-                    {FOOTER_ADDRESS}
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-[#DBE9F9] pt-6 text-xs text-[#1F5CAB]/70 sm:flex-row">
-          <div suppressHydrationWarning>&copy; {new Date().getFullYear()} Planenadler</div>
-          <div className="flex flex-wrap items-center gap-4">
-            <Link href="/datenschutz" className="transition hover:text-[#1F5CAB]">
-              Datenschutz
-            </Link>
-            <Link href="/impressum" className="transition hover:text-[#1F5CAB]">
-              Impressum
-            </Link>
-            <Link href="/agb" className="transition hover:text-[#1F5CAB]">
-              AGB
-            </Link>
-            <Link href="/widerruf" className="transition hover:text-[#1F5CAB]">
-              Widerrufsbelehrung
-            </Link>
-            <Link href="/versand" className="transition hover:text-[#1F5CAB]">
-              Versandbedingungen
-            </Link>
-          </div>
-        </div>
-      </ContentShell>
-    </footer>
-  )
-}
-export default Footer
-````
-
-## File: src/shared/components/Footer/Hamburger.component.tsx
-````typescript
-'use client';
-import { useEffect, useMemo } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
-import { useRouter } from 'next/compat/router';
-import { AnimatePresence, LazyMotion, domAnimation, m } from 'motion/react';
-import { cn } from '@/lib/utils';
+import { MiniCartDropdown } from '@/features/cart/components/MiniCartDropdown'
 const leftMenu = [
   { label: 'Home', href: '/' },
-  { label: 'Ueber uns', href: '/ueber-uns' },
+  { label: 'Ueber Uns', href: '/ueber-uns' },
   { label: 'Shop', href: '/shop' },
   { label: 'News & Ratgeber', href: '/blog' },
-];
+]
 const rightMenu = [
   { label: 'FAQ', href: '/faq' },
   { label: 'Kontakt', href: '/kontakt' },
   { label: 'Mein Konto', href: '/mein-konto' },
-];
-const cartLink = { label: 'Warenkorb', href: '/cart' };
-const configuratorLink = { label: 'ZUM KONFIGURATOR', href: '/shop' };
+]
+const configuratorLink = { label: 'ZUM KONFIGURATOR', href: '/shop' }
 function getIsActive(asPath: string, href: string) {
-  if (!href) return false;
-  if (href.startsWith('#')) return asPath.includes(href);
-  if (href === '/') return asPath === '/';
-  return asPath.startsWith(href);
+  if (!href) return false
+  if (href.startsWith('#')) return asPath.includes(href)
+  if (href === '/') return asPath === '/'
+  return asPath.startsWith(href)
 }
-interface HamburgerProps {
-  isOpen: boolean;
-  onOpenChange: (isOpen: boolean) => void;
-}
-const Hamburger = ({ isOpen, onOpenChange }: HamburgerProps) => {
-  const router = useRouter();
-  const asPath =
-    router?.asPath ??
-    (typeof window !== 'undefined' ? window.location.pathname : '/');
-  const allLinks = useMemo(
-    () => [...leftMenu, ...rightMenu, cartLink, configuratorLink],
-    [],
-  );
-  useEffect(() => {
-    document.body.style.overflow = isOpen ? 'hidden' : '';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [isOpen]);
-  useEffect(() => {
-    const onEsc = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onOpenChange(false);
-    };
-    window.addEventListener('keydown', onEsc);
-    return () => window.removeEventListener('keydown', onEsc);
-  }, [onOpenChange]);
+export function TopBar() {
+  const pathname = usePathname()
+  const asPath = pathname ?? ''
   return (
-    <div className="z-[600] md:hidden">
-      <button
-        className="inline-flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:bg-white/10"
-        data-cy="hamburger"
-        data-testid="hamburger"
-        onClick={() => onOpenChange(true)}
-        aria-expanded={isOpen}
-        aria-controls="mobile-menu-sheet"
-        aria-label="Menü öffnen"
-        type="button"
-      >
-        <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden>
-          <path
-            d="M4 6h16M4 12h16M4 18h16"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-          />
-        </svg>
-      </button>
-      <LazyMotion features={domAnimation}>
-        <AnimatePresence>
-          {isOpen ? (
-            <>
-              <m.button
-                type="button"
-                aria-label="Menü schließen"
-                className="fixed inset-0 z-[900] bg-black/35 backdrop-blur-[1px]"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                onClick={() => onOpenChange(false)}
-              />
-              <m.div
-                id="mobile-menu-sheet"
-                className="fixed inset-x-0 bottom-0 z-[950] max-h-[66vh] overflow-y-auto border border-b-0 border-[#DBE9F9] bg-white px-5 pb-5 pt-4 shadow-[0_-26px_60px_rgba(15,43,82,0.28)]"
-                style={{ borderTopLeftRadius: '10px', borderTopRightRadius: '10px' }}
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
-                transition={{ type: 'spring', stiffness: 380, damping: 36 }}
-              >
-                <div className="mb-3 flex justify-center">
+    <div className="fixed left-0 right-0 top-0 z-50 w-full bg-transparent">
+      <ContentShell className="py-3 sm:py-4">
+        <div className="rounded-full border border-[#DBE9F9] bg-white/95 px-3 py-2.5 shadow-[0_16px_40px_rgba(15,43,82,0.12)] backdrop-blur sm:px-4 sm:py-3">
+          <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
+            <div className="hidden items-center justify-start gap-6 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB] lg:flex">
+              {leftMenu.map((item) => {
+                const isActive = getIsActive(asPath, item.href)
+                return (
                   <Link
-                    href="/"
-                    onClick={() => onOpenChange(false)}
-                    aria-label="Planenadler Home"
-                    className="inline-flex items-center rounded-full bg-white px-4 py-2 shadow-md ring-1 ring-[#DBE9F9]"
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'rounded-full px-3 py-2 text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
+                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
+                    )}
                   >
-                    <Image
-                      src="/Planenadlerlogo.png"
-                      alt="Planenadler Logo"
-                      width={160}
-                      height={42}
-                      style={{ width: 'auto', height: 'auto' }}
-                      className="h-10 w-auto object-contain"
-                      priority
-                    />
+                    {item.label}
                   </Link>
-                </div>
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="text-sm font-bold uppercase tracking-[0.18em] text-[#1F5CAB]">
-                    Menü
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onOpenChange(false)}
-                    aria-label="Menü schließen"
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#DBE9F9] text-[#1F5CAB] transition hover:bg-[#DBE9F9]"
+                )
+              })}
+            </div>
+            <div className="flex items-center justify-center">
+              <Link
+                href="/"
+                aria-label="Planenadler Home"
+                className="flex items-center"
+              >
+                <Image
+                  src="/Planenadlerlogo.png"
+                  alt="Planenadler Logo"
+                  width={180}
+                  height={48}
+                  style={{ width: 'auto', height: 'auto' }}
+                  className="h-10 w-auto object-contain sm:h-12"
+                  priority
+                />
+              </Link>
+            </div>
+            <div className="hidden items-center justify-end gap-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB] lg:flex">
+              {rightMenu.map((item) => {
+                const isActive = getIsActive(asPath, item.href)
+                if (item.href === '/mein-konto') {
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      aria-label={item.label}
+                      className={cn(
+                        'inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#DBE9F9] text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
+                        isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
+                      )}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
+                        <circle
+                          cx="12"
+                          cy="8"
+                          r="3.2"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                        />
+                        <path
+                          d="M5 19c1.1-3 3.6-4.6 7-4.6s5.9 1.6 7 4.6"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </Link>
+                  )
+                }
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'rounded-full px-3 py-2 text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
+                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
+                    )}
                   >
-                    <svg width="14" height="14" viewBox="0 0 12 12" aria-hidden>
-                      <path
-                        d="M1 1l10 10M11 1L1 11"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  </button>
-                </div>
-                <div className="flex flex-col gap-2 pb-2">
-                  {allLinks.map((item) => {
-                    const isActive = getIsActive(asPath, item.href);
-                    return (
-                      <Link
-                        key={`${item.href}-${item.label}`}
-                        href={item.href}
-                        onClick={() => onOpenChange(false)}
-                        className={cn(
-                          'rounded-xl px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB]/80 transition hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
-                          isActive && 'bg-[#DBE9F9] text-[#1F5CAB]',
-                          item.href === configuratorLink.href &&
-                            'bg-[#1F5CAB] text-white hover:bg-[#0F2B52] hover:text-white',
-                        )}
-                      >
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </m.div>
-            </>
-          ) : null}
-        </AnimatePresence>
-      </LazyMotion>
+                    {item.label}
+                  </Link>
+                )
+              })}
+              <MiniCartDropdown />
+              <Link
+                href={configuratorLink.href}
+                className="inline-flex items-center whitespace-nowrap rounded-full bg-[#1F5CAB] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white shadow-md transition hover:-translate-y-0.5 hover:bg-[#0F2B52] xl:px-4 xl:text-xs xl:tracking-[0.2em]"
+              >
+                {configuratorLink.label}
+              </Link>
+            </div>
+          </div>
+        </div>
+      </ContentShell>
     </div>
-  );
-};
-export default Hamburger;
-````
-
-## File: src/shared/components/Footer/Stickynav.component.tsx
-````typescript
-'use client';
-import { useState } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import Cart from '@/shared/components/Header/Cart.component';
-import Hamburger from './Hamburger.component';
-/**
- * Navigation for the application.
- * Includes mobile menu.
- */
-const Stickynav = () => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  return (
-    <nav
-      id="footer"
-      className="fixed inset-x-0 bottom-0 z-[500] w-full overflow-visible bg-transparent lg:hidden"
-    >
-      <div
-        className="relative mt-0 flex w-full items-center justify-between overflow-hidden bg-blue-800 px-6 py-3"
-        style={{ borderTopLeftRadius: '10px', borderTopRightRadius: '10px' }}
-      >
-        <Hamburger isOpen={isMenuOpen} onOpenChange={setIsMenuOpen} />
-        {!isMenuOpen ? (
-          <Link
-            href="/"
-            aria-label="Planenadler Home"
-            className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
-          >
-            <Image
-              src="/Planenadlerlogoweiß.png"
-              alt="Planenadler Logo"
-              width={220}
-              height={58}
-              style={{ width: 'auto', height: 'auto' }}
-              className="h-12 w-auto object-contain sm:h-14"
-              priority
-            />
-          </Link>
-        ) : null}
-      <div
-        className="order-3 hidden w-full md:flex md:items-center md:w-auto md:order-1"
-        id="menu"
-      >
-        <ul className="items-center justify-between pt-4 text-base text-gray-700 md:flex md:pt-0">
-          <li>
-            <Link href="/shop">
-              <span className="inline-block py-2 pr-4 text-xl font-bold no-underline hover:underline">
-                Shop
-              </span>
-            </Link>
-          </li>
-          <li>
-            <Link href="/blog">
-              <span className="inline-block py-2 pr-4 text-xl font-bold no-underline hover:underline">
-                Blog
-              </span>
-            </Link>
-          </li>
-        </ul>
-      </div>
-      <div
-        className="order-2 flex items-center gap-2 transition-opacity md:order-3"
-        id="nav-content"
-      >
-        <Link
-          href="/mein-konto"
-          aria-label="Mein Konto"
-          className="inline-flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:bg-white/10"
-        >
-          <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden>
-            <circle
-              cx="12"
-              cy="8"
-              r="3.2"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-            />
-            <path
-              d="M5 19c1.1-3 3.6-4.6 7-4.6s5.9 1.6 7 4.6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-            />
-          </svg>
-        </Link>
-        <Cart stickyNav />
-      </div>
-    </div>
-    </nav>
-  );
-};
-export default Stickynav;
+  )
+}
 ````
 
 ## File: src/shared/lib/GQL_MUTATIONS.ts
@@ -28354,165 +28849,6 @@ export interface Cart {
   totalProductsPrice: string;
   totals: CartTotals;
   appliedCoupons: CartAppliedCoupon[];
-}
-````
-
-## File: src/app/(shop)/product/[slug]/page.tsx
-````typescript
-import type { Metadata } from 'next'
-import ProductFeatures from './components/ProductFeatures'
-import ProductGallery from './components/ProductGallery'
-import ProductConfigurator from './components/ProductConfigurator'
-import { ProductViewTracker } from './components/ProductViewTracker'
-import ProductTabs from './components/ProductTabs'
-import ProductRecommendations from './components/ProductRecommendations'
-import { getCachedProductPageData } from './product-page-cache'
-import { ProductBlogFaqBoundary, ProductHeroReviewsBoundary } from './ProductPageStreaming'
-import { TopBar } from '@/shared/components/TopBar/TopBar.component'
-import Stickynav from '@/shared/components/Footer/Stickynav.component'
-import Footer from '@/shared/components/Footer/Footer.component'
-import { SITE_NAME, absoluteUrl } from '@/lib/seo'
-import { getBreadcrumbJsonLd } from '@/lib/seo-schema'
-import { parseCartPriceString } from '@/shared/lib/functions'
-/**
- * ISR (Sekunden). Muss ein **konstanter** Wert sein (Next.js Segment Config ist statisch zu analysieren).
- * Feintuning des Daten-Caches: weiterhin `PRODUCT_PAGE_REVALIDATE_SECONDS` in product-data / product-page-cache.
- */
-export const revalidate = 60
-interface ProductPageProps {
-  params: { slug?: string } | Promise<{ slug?: string }>
-}
-async function resolveSlug(params: ProductPageProps['params']): Promise<string> {
-  const resolved = await params
-  return typeof resolved?.slug === 'string' && resolved.slug.length > 0
-    ? resolved.slug
-    : 'lkw-plane-individuell'
-}
-export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
-  const slug = await resolveSlug(params)
-  const product = await getCachedProductPageData(slug)
-  const title = `${product.title} | ${SITE_NAME}`
-  const description = (product.subtitle || `${product.title} online konfigurieren und anfragen.`).slice(0, 160)
-  const canonical = absoluteUrl(`/product/${slug}`)
-  const imageUrl = product.image?.src
-    ? absoluteUrl(product.image.src)
-    : absoluteUrl('/Planenadlerlogo.png')
-  return {
-    title,
-    description,
-    alternates: {
-      canonical,
-    },
-    robots: {
-      index: true,
-      follow: true,
-    },
-    openGraph: {
-      title,
-      description,
-      url: canonical,
-      type: 'website',
-      images: [
-        {
-          url: imageUrl,
-          alt: product.image?.alt ?? product.title,
-        },
-      ],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description,
-      images: [imageUrl],
-    },
-  }
-}
-export default async function ProductPage({ params }: ProductPageProps) {
-  const slug = await resolveSlug(params)
-  const product = await getCachedProductPageData(slug)
-  const breadcrumbSchema = getBreadcrumbJsonLd([
-    { name: 'Startseite', path: '/' },
-    { name: 'Shop', path: '/shop' },
-    { name: product.title, path: `/product/${slug}` },
-  ])
-  const numericPrice = parseCartPriceString(product.price)
-  const productSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: product.title,
-    description: product.subtitle,
-    image: [product.image.src, ...product.gallery.map((image) => image.src)].map((src) => absoluteUrl(src)),
-    sku: String(product.databaseId || slug),
-    brand: {
-      '@type': 'Brand',
-      name: SITE_NAME,
-    },
-    category: 'PVC-Plane',
-    url: absoluteUrl(`/product/${slug}`),
-    offers: Number.isFinite(numericPrice)
-      ? {
-          '@type': 'Offer',
-          priceCurrency: 'EUR',
-          price: numericPrice.toFixed(2),
-          availability: 'https://schema.org/InStock',
-          url: absoluteUrl(`/product/${slug}`),
-        }
-      : undefined,
-  }
-  return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
-      />
-      <main className="bg-white pb-16 sm:pt-20">
-        <ProductViewTracker
-          productId={product.databaseId}
-          slug={slug}
-          name={product.title}
-          priceValue={Number.isFinite(numericPrice) ? numericPrice : null}
-        />
-        <TopBar />
-        <ProductHeroReviewsBoundary product={product} />
-        <ProductFeatures items={product.features} />
-        <section id="konfigurator" className="py-12 md:py-16" aria-labelledby="configurator-title">
-          <div className="mx-auto grid max-w-7xl gap-8 px-4 lg:grid-cols-[1.1fr_1fr] lg:items-start">
-            <div className="lg:self-stretch">
-              <div className="lg:sticky lg:top-24 lg:flex lg:max-h-[calc(100vh-8rem)] lg:flex-col">
-                <h2 id="configurator-title" className="mb-4 text-2xl font-bold text-[#0F2B52] lg:flex-none">
-                  Individuelle Konfiguration
-                </h2>
-                <ProductGallery
-                  mainImage={product.image}
-                  images={product.gallery}
-                  className="lg:min-h-0 lg:flex-1"
-                />
-              </div>
-            </div>
-            <ProductConfigurator
-              productId={product.databaseId}
-              productSlug={slug}
-              productName={product.title}
-              price={product.price}
-              hints={product.configuratorHints}
-              configuratorOptions={product.configuratorOptions}
-              priceEndpoint={product.priceEndpoint}
-            />
-          </div>
-        </section>
-        <ProductTabs tabs={product.tabs} />
-        <ProductRecommendations items={product.recommendations} />
-        <ProductBlogFaqBoundary />
-        <Footer />
-        <span className="sr-only">Produkt-Slug: {slug}</span>
-      </main>
-      <Stickynav />
-    </>
-  )
 }
 ````
 
@@ -28987,106 +29323,6 @@ export function buildOrderReceiptSnapshot(
     paymentMethodLabel,
   }
 }
-````
-
-## File: src/features/checkout/store/checkout.store.ts
-````typescript
-'use client'
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import type {
-  CheckoutStepId,
-  ShippingMethodId,
-  PaymentMethodId,
-  CheckoutFormShipping,
-} from '../types/checkout.types'
-import type { OrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
-export type { OrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
-export interface LastCompletedOrderSnapshot {
-  orderNumber?: number | string | null
-  databaseId?: string | null
-  date?: string | null
-  status?: string | null
-  orderKey?: string | null
-  receipt?: OrderReceiptSnapshot | null
-  completedAt: number
-}
-export interface PendingExternalPaymentSnapshot {
-  provider: PaymentMethodId
-  startedAt: number
-  orderId?: string | null
-  orderKey?: string | null
-  status?: string | null
-}
-const PENDING_EXTERNAL_PAYMENT_MAX_AGE_MS = 6 * 60 * 60 * 1000
-export function hasActivePendingExternalPayment(
-  pendingExternalPayment: PendingExternalPaymentSnapshot | null | undefined
-): boolean {
-  if (!pendingExternalPayment) return false
-  return Date.now() - pendingExternalPayment.startedAt < PENDING_EXTERNAL_PAYMENT_MAX_AGE_MS
-}
-interface CheckoutState {
-  currentStep: CheckoutStepId
-  selectedShipping: ShippingMethodId
-  selectedPayment: PaymentMethodId
-  orderCompleted: boolean
-  lastCompletedOrder: LastCompletedOrderSnapshot | null
-  pendingExternalPayment: PendingExternalPaymentSnapshot | null
-  shippingData: CheckoutFormShipping | null
-  setCurrentStep: (step: CheckoutStepId) => void
-  setSelectedShipping: (id: ShippingMethodId) => void
-  setSelectedPayment: (id: PaymentMethodId) => void
-  setOrderCompleted: (value: boolean) => void
-  setLastCompletedOrder: (value: LastCompletedOrderSnapshot | null) => void
-  setPendingExternalPayment: (value: PendingExternalPaymentSnapshot | null) => void
-  clearPendingExternalPayment: () => void
-  setShippingData: (data: CheckoutFormShipping | null) => void
-  reset: () => void
-}
-const DEFAULT_SHIPPING: ShippingMethodId = 'free_shipping'
-const DEFAULT_PAYMENT: PaymentMethodId = 'bacs'
-export const useCheckoutStore = create<CheckoutState>()(
-  persist(
-    (set) => ({
-      currentStep: 'shipping',
-      selectedShipping: DEFAULT_SHIPPING,
-      selectedPayment: DEFAULT_PAYMENT,
-      orderCompleted: false,
-      lastCompletedOrder: null,
-      pendingExternalPayment: null,
-      shippingData: null,
-      setCurrentStep: (currentStep) => set({ currentStep }),
-      setSelectedShipping: (selectedShipping) => set({ selectedShipping }),
-      setSelectedPayment: (selectedPayment) => set({ selectedPayment }),
-      setOrderCompleted: (orderCompleted) => set({ orderCompleted }),
-      setLastCompletedOrder: (lastCompletedOrder) => set({ lastCompletedOrder }),
-      setPendingExternalPayment: (pendingExternalPayment) => set({ pendingExternalPayment }),
-      clearPendingExternalPayment: () => set({ pendingExternalPayment: null }),
-      setShippingData: (shippingData) => set({ shippingData }),
-      reset: () =>
-        set({
-          currentStep: 'shipping',
-          selectedShipping: DEFAULT_SHIPPING,
-          selectedPayment: DEFAULT_PAYMENT,
-          orderCompleted: false,
-          lastCompletedOrder: null,
-          pendingExternalPayment: null,
-          shippingData: null,
-        }),
-    }),
-    {
-      name: 'checkout-store',
-      partialize: (state) => ({
-        shippingData: state.shippingData,
-        selectedShipping: state.selectedShipping,
-        selectedPayment: state.selectedPayment,
-        orderCompleted: state.orderCompleted,
-        lastCompletedOrder: state.lastCompletedOrder,
-        pendingExternalPayment: state.pendingExternalPayment,
-      }),
-    }
-  )
-)
 ````
 
 ## File: src/lib/tracking/purchase.ts
@@ -29589,138 +29825,6 @@ export function getTarpaulinOpeningValidationIssues(
 }
 ````
 
-## File: src/shared/components/TopBar/TopBar.component.tsx
-````typescript
-'use client'
-import Image from 'next/image'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { cn } from '@/lib/utils'
-import { ContentShell } from '@/shared/components/ContentShell.component'
-import { MiniCartDropdown } from '@/features/cart/components/MiniCartDropdown'
-const leftMenu = [
-  { label: 'Home', href: '/' },
-  { label: 'Ueber Uns', href: '/ueber-uns' },
-  { label: 'Shop', href: '/shop' },
-  { label: 'News & Ratgeber', href: '/blog' },
-]
-const rightMenu = [
-  { label: 'FAQ', href: '/faq' },
-  { label: 'Kontakt', href: '/kontakt' },
-  { label: 'Mein Konto', href: '/mein-konto' },
-]
-const configuratorLink = { label: 'ZUM KONFIGURATOR', href: '/shop' }
-function getIsActive(asPath: string, href: string) {
-  if (!href) return false
-  if (href.startsWith('#')) return asPath.includes(href)
-  if (href === '/') return asPath === '/'
-  return asPath.startsWith(href)
-}
-export function TopBar() {
-  const pathname = usePathname()
-  const asPath = pathname ?? ''
-  return (
-    <div className="fixed left-0 right-0 top-0 z-50 w-full bg-transparent">
-      <ContentShell className="py-3 sm:py-4">
-        <div className="rounded-full border border-[#DBE9F9] bg-white/95 px-3 py-2.5 shadow-[0_16px_40px_rgba(15,43,82,0.12)] backdrop-blur sm:px-4 sm:py-3">
-          <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto_1fr]">
-            <div className="hidden items-center justify-start gap-6 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB] lg:flex">
-              {leftMenu.map((item) => {
-                const isActive = getIsActive(asPath, item.href)
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'rounded-full px-3 py-2 text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
-                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                )
-              })}
-            </div>
-            <div className="flex items-center justify-center">
-              <Link
-                href="/"
-                aria-label="Planenadler Home"
-                className="flex items-center"
-              >
-                <Image
-                  src="/Planenadlerlogo.png"
-                  alt="Planenadler Logo"
-                  width={180}
-                  height={48}
-                  style={{ width: 'auto', height: 'auto' }}
-                  className="h-10 w-auto object-contain sm:h-12"
-                  priority
-                />
-              </Link>
-            </div>
-            <div className="hidden items-center justify-end gap-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#1F5CAB] lg:flex">
-              {rightMenu.map((item) => {
-                const isActive = getIsActive(asPath, item.href)
-                if (item.href === '/mein-konto') {
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      aria-label={item.label}
-                      className={cn(
-                        'inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#DBE9F9] text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
-                        isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
-                      )}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
-                        <circle
-                          cx="12"
-                          cy="8"
-                          r="3.2"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                        />
-                        <path
-                          d="M5 19c1.1-3 3.6-4.6 7-4.6s5.9 1.6 7 4.6"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                    </Link>
-                  )
-                }
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'rounded-full px-3 py-2 text-[#1F5CAB]/70 transition hover:-translate-y-0.5 hover:bg-[#DBE9F9] hover:text-[#1F5CAB]',
-                      isActive && 'bg-[#DBE9F9] text-[#1F5CAB]'
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                )
-              })}
-              <MiniCartDropdown />
-              <Link
-                href={configuratorLink.href}
-                className="inline-flex items-center whitespace-nowrap rounded-full bg-[#1F5CAB] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white shadow-md transition hover:-translate-y-0.5 hover:bg-[#0F2B52] xl:px-4 xl:text-xs xl:tracking-[0.2em]"
-              >
-                {configuratorLink.label}
-              </Link>
-            </div>
-          </div>
-        </div>
-      </ContentShell>
-    </div>
-  )
-}
-````
-
 ## File: src/app/api/checkout/provider-redirect/route.ts
 ````typescript
 import { NextRequest, NextResponse } from 'next/server'
@@ -30161,6 +30265,107 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+````
+
+## File: src/features/checkout/store/checkout.store.ts
+````typescript
+'use client'
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import type {
+  CheckoutStepId,
+  ShippingMethodId,
+  PaymentMethodId,
+  CheckoutFormShipping,
+} from '../types/checkout.types'
+import type { OrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
+export type { OrderReceiptSnapshot } from '../lib/build-order-receipt-snapshot'
+export interface LastCompletedOrderSnapshot {
+  orderNumber?: number | string | null
+  databaseId?: string | null
+  date?: string | null
+  status?: string | null
+  orderKey?: string | null
+  receipt?: OrderReceiptSnapshot | null
+  completedAt: number
+}
+export interface PendingExternalPaymentSnapshot {
+  provider: PaymentMethodId
+  startedAt: number
+  orderId?: string | null
+  orderKey?: string | null
+  paypalOrderId?: string | null
+  status?: string | null
+}
+const PENDING_EXTERNAL_PAYMENT_MAX_AGE_MS = 6 * 60 * 60 * 1000
+export function hasActivePendingExternalPayment(
+  pendingExternalPayment: PendingExternalPaymentSnapshot | null | undefined
+): boolean {
+  if (!pendingExternalPayment) return false
+  return Date.now() - pendingExternalPayment.startedAt < PENDING_EXTERNAL_PAYMENT_MAX_AGE_MS
+}
+interface CheckoutState {
+  currentStep: CheckoutStepId
+  selectedShipping: ShippingMethodId
+  selectedPayment: PaymentMethodId
+  orderCompleted: boolean
+  lastCompletedOrder: LastCompletedOrderSnapshot | null
+  pendingExternalPayment: PendingExternalPaymentSnapshot | null
+  shippingData: CheckoutFormShipping | null
+  setCurrentStep: (step: CheckoutStepId) => void
+  setSelectedShipping: (id: ShippingMethodId) => void
+  setSelectedPayment: (id: PaymentMethodId) => void
+  setOrderCompleted: (value: boolean) => void
+  setLastCompletedOrder: (value: LastCompletedOrderSnapshot | null) => void
+  setPendingExternalPayment: (value: PendingExternalPaymentSnapshot | null) => void
+  clearPendingExternalPayment: () => void
+  setShippingData: (data: CheckoutFormShipping | null) => void
+  reset: () => void
+}
+const DEFAULT_SHIPPING: ShippingMethodId = 'free_shipping'
+const DEFAULT_PAYMENT: PaymentMethodId = 'bacs'
+export const useCheckoutStore = create<CheckoutState>()(
+  persist(
+    (set) => ({
+      currentStep: 'shipping',
+      selectedShipping: DEFAULT_SHIPPING,
+      selectedPayment: DEFAULT_PAYMENT,
+      orderCompleted: false,
+      lastCompletedOrder: null,
+      pendingExternalPayment: null,
+      shippingData: null,
+      setCurrentStep: (currentStep) => set({ currentStep }),
+      setSelectedShipping: (selectedShipping) => set({ selectedShipping }),
+      setSelectedPayment: (selectedPayment) => set({ selectedPayment }),
+      setOrderCompleted: (orderCompleted) => set({ orderCompleted }),
+      setLastCompletedOrder: (lastCompletedOrder) => set({ lastCompletedOrder }),
+      setPendingExternalPayment: (pendingExternalPayment) => set({ pendingExternalPayment }),
+      clearPendingExternalPayment: () => set({ pendingExternalPayment: null }),
+      setShippingData: (shippingData) => set({ shippingData }),
+      reset: () =>
+        set({
+          currentStep: 'shipping',
+          selectedShipping: DEFAULT_SHIPPING,
+          selectedPayment: DEFAULT_PAYMENT,
+          orderCompleted: false,
+          lastCompletedOrder: null,
+          pendingExternalPayment: null,
+          shippingData: null,
+        }),
+    }),
+    {
+      name: 'checkout-store',
+      partialize: (state) => ({
+        shippingData: state.shippingData,
+        selectedShipping: state.selectedShipping,
+        selectedPayment: state.selectedPayment,
+        orderCompleted: state.orderCompleted,
+        lastCompletedOrder: state.lastCompletedOrder,
+        pendingExternalPayment: state.pendingExternalPayment,
+      }),
+    }
+  )
+)
 ````
 
 ## File: src/lib/customizer-pricing.ts
@@ -33065,6 +33270,8 @@ export function PaymentPageContent() {
   const [providerLoading, setProviderLoading] = useState<PaymentMethodId | null>(null)
   const [restoreInFlight, setRestoreInFlight] = useState(false)
   const [restoreAttempted, setRestoreAttempted] = useState(false)
+  const [paypalCaptureInFlight, setPaypalCaptureInFlight] = useState(false)
+  const [paypalCaptureAttempted, setPaypalCaptureAttempted] = useState(false)
   useEffect(() => {
     const timer = setTimeout(() => {
       const state = useCheckoutStore.getState()
@@ -33099,6 +33306,96 @@ export function PaymentPageContent() {
       setCouponFeedback('Die Rueckkehr vom Zahlungsanbieter war erfolgreich. Wir pruefen jetzt den Zahlungsstatus deiner Bestellung.')
     }
   }, [searchParams])
+  useEffect(() => {
+    if (!searchParams || !shippingData) return
+    const provider = searchParams.get('provider')
+    const status = searchParams.get('status')
+    if (provider !== 'paypal' || status !== 'success') return
+    if (paypalCaptureInFlight || paypalCaptureAttempted) return
+    const pendingState = useCheckoutStore.getState().pendingExternalPayment
+    const orderId = searchParams.get('orderId') ?? pendingState?.orderId ?? ''
+    const paypalOrderId =
+      searchParams.get('token') ??
+      searchParams.get('paypalOrderId') ??
+      pendingState?.paypalOrderId ??
+      ''
+    if (!orderId || !paypalOrderId) {
+      setPaypalCaptureAttempted(true)
+      setSubmitError('PayPal hat keine ausreichenden Zahlungsdaten fuer den Abschluss zurueckgegeben.')
+      return
+    }
+    setPaypalCaptureInFlight(true)
+    setPaypalCaptureAttempted(true)
+    setSubmitError(null)
+    ;(async () => {
+      try {
+        const response = await fetch('/api/checkout/headless-paypal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'capture',
+            orderId,
+            paypalOrderId,
+          }),
+        })
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string
+          orderId?: string | number
+          orderStatus?: string | null
+          paypalStatus?: string | null
+          captureId?: string | null
+        }
+        if (!response.ok) {
+          throw new Error(payload.error ?? 'PayPal Capture fehlgeschlagen.')
+        }
+        if (!isPaidOrderStatus(payload.orderStatus)) {
+          throw new Error(
+            payload.paypalStatus
+              ? `PayPal wurde nicht als bezahlt bestaetigt. Status: ${payload.paypalStatus}`
+              : 'PayPal wurde nicht als bezahlt bestaetigt.'
+          )
+        }
+        const paymentLabel =
+          paymentOptions?.gateways?.find((g) => g.id === PAYMENT_METHOD_IDS.PAYPAL)?.label?.trim() || 'PayPal'
+        const cartSnapshot = useCartStore.getState().cart
+        const receipt =
+          cartSnapshot && cartSnapshot.products.length > 0
+            ? buildOrderReceiptSnapshot(cartSnapshot, shippingData, paymentLabel)
+            : null
+        setLastCompletedOrder({
+          orderNumber: payload.orderId ?? orderId,
+          databaseId: payload.orderId ? String(payload.orderId) : String(orderId),
+          date: new Date().toISOString(),
+          status: payload.orderStatus ?? 'processing',
+          orderKey: pendingState?.orderKey ?? null,
+          receipt,
+          completedAt: Date.now(),
+        })
+        setOrderCompleted(true)
+        clearPendingExternalPayment()
+        clearWooCommerceSession()
+        router.push(THANK_YOU_PATH)
+      } catch (error) {
+        const message = error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : 'Die PayPal-Zahlung konnte nicht abgeschlossen werden.'
+        setSubmitError(message)
+      } finally {
+        setPaypalCaptureInFlight(false)
+      }
+    })()
+  }, [
+    clearPendingExternalPayment,
+    clearWooCommerceSession,
+    paymentOptions,
+    paypalCaptureAttempted,
+    paypalCaptureInFlight,
+    router,
+    searchParams,
+    setLastCompletedOrder,
+    setOrderCompleted,
+    shippingData,
+  ])
   const [checkoutMutation, { loading: checkoutLoading }] = useMutation<CheckoutMutationResponse>(CHECKOUT_MUTATION)
   const [applyCouponMutation, { loading: couponApplying }] = useMutation(APPLY_COUPON)
   const [removeCouponsMutation, { loading: couponRemoving }] = useMutation(REMOVE_COUPONS)
@@ -33197,6 +33494,54 @@ export function PaymentPageContent() {
     setProviderLoading(paymentMethod)
     setSelectedPayment(paymentMethod)
     try {
+      if (paymentMethod === 'paypal') {
+        const orderProps = toCheckoutDataProps(shippingData, PAYMENT_METHOD_IDS.PAYPAL)
+        const checkoutInput = createCheckoutData(orderProps)
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+        const returnUrl = `${baseUrl}${CHECKOUT_PROVIDER_CALLBACK_PATH}?provider=paypal&status=success`
+        const cancelUrl = `${baseUrl}${CHECKOUT_PROVIDER_CALLBACK_PATH}?provider=paypal&status=cancel`
+        const checkoutItems =
+          useCartStore
+            .getState()
+            .cart?.products.map((product) => product.restoreInput)
+            .filter((item) => item.productId > 0 && item.quantity > 0) ?? []
+        const couponCodes = (data?.cart?.appliedCoupons ?? [])
+          .map((coupon: IAppliedCoupon) => coupon.code)
+          .filter((code: unknown): code is string => typeof code === 'string' && code.trim().length > 0)
+        const response = await fetch('/api/checkout/headless-paypal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'start',
+            checkoutInput,
+            checkoutItems,
+            coupons: couponCodes,
+            returnUrl,
+            cancelUrl,
+          }),
+        })
+        const payload = (await response.json().catch(() => ({}))) as {
+          approveUrl?: string
+          error?: string
+          orderId?: string
+          orderKey?: string | null
+          paypalOrderId?: string
+        }
+        if (!response.ok || !payload.approveUrl) {
+          setSubmitError(payload.error ?? 'PayPal konnte nicht gestartet werden.')
+          return
+        }
+        setPendingExternalPayment({
+          provider: paymentMethod,
+          startedAt: Date.now(),
+          orderId: payload.orderId ?? null,
+          orderKey: payload.orderKey ?? null,
+          paypalOrderId: payload.paypalOrderId ?? null,
+          status: 'pending',
+        })
+        window.location.assign(payload.approveUrl)
+        return
+      }
       const { redirectUrl: directRedirectUrl, checkout: directCheckout } =
         await tryProviderCheckoutMutation(paymentMethod, shippingData)
       if (directRedirectUrl) {
@@ -33238,11 +33583,11 @@ export function PaymentPageContent() {
       const checkoutInput = createCheckoutData(orderProps)
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
       const returnUrl =
-        paymentMethod === 'paypal' || paymentMethod === 'klarna'
+        paymentMethod === 'klarna'
           ? `${baseUrl}${CHECKOUT_PROVIDER_CALLBACK_PATH}?provider=${paymentMethod}&status=success`
           : undefined
       const cancelUrl =
-        paymentMethod === 'paypal' || paymentMethod === 'klarna'
+        paymentMethod === 'klarna'
           ? `${baseUrl}${CHECKOUT_PROVIDER_CALLBACK_PATH}?provider=${paymentMethod}&status=cancel`
           : undefined
       const checkoutItems =
