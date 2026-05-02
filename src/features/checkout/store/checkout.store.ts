@@ -27,6 +27,7 @@ export interface PendingExternalPaymentSnapshot {
   startedAt: number
   orderId?: string | null
   orderKey?: string | null
+  paypalOrderId?: string | null
   status?: string | null
 }
 

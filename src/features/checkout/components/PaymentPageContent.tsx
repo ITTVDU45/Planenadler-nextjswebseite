@@ -132,6 +132,8 @@ export function PaymentPageContent() {
   const [providerLoading, setProviderLoading] = useState<PaymentMethodId | null>(null)
   const [restoreInFlight, setRestoreInFlight] = useState(false)
   const [restoreAttempted, setRestoreAttempted] = useState(false)
+  const [paypalCaptureInFlight, setPaypalCaptureInFlight] = useState(false)
+  const [paypalCaptureAttempted, setPaypalCaptureAttempted] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -173,6 +175,107 @@ export function PaymentPageContent() {
       setCouponFeedback('Die Rueckkehr vom Zahlungsanbieter war erfolgreich. Wir pruefen jetzt den Zahlungsstatus deiner Bestellung.')
     }
   }, [searchParams])
+
+  useEffect(() => {
+    if (!searchParams || !shippingData) return
+    const provider = searchParams.get('provider')
+    const status = searchParams.get('status')
+
+    if (provider !== 'paypal' || status !== 'success') return
+    if (paypalCaptureInFlight || paypalCaptureAttempted) return
+
+    const pendingState = useCheckoutStore.getState().pendingExternalPayment
+    const orderId = searchParams.get('orderId') ?? pendingState?.orderId ?? ''
+    const paypalOrderId =
+      searchParams.get('token') ??
+      searchParams.get('paypalOrderId') ??
+      pendingState?.paypalOrderId ??
+      ''
+
+    if (!orderId || !paypalOrderId) {
+      setPaypalCaptureAttempted(true)
+      setSubmitError('PayPal hat keine ausreichenden Zahlungsdaten fuer den Abschluss zurueckgegeben.')
+      return
+    }
+
+    setPaypalCaptureInFlight(true)
+    setPaypalCaptureAttempted(true)
+    setSubmitError(null)
+
+    ;(async () => {
+      try {
+        const response = await fetch('/api/checkout/headless-paypal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'capture',
+            orderId,
+            paypalOrderId,
+          }),
+        })
+
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string
+          orderId?: string | number
+          orderStatus?: string | null
+          paypalStatus?: string | null
+          captureId?: string | null
+        }
+
+        if (!response.ok) {
+          throw new Error(payload.error ?? 'PayPal Capture fehlgeschlagen.')
+        }
+
+        if (!isPaidOrderStatus(payload.orderStatus)) {
+          throw new Error(
+            payload.paypalStatus
+              ? `PayPal wurde nicht als bezahlt bestaetigt. Status: ${payload.paypalStatus}`
+              : 'PayPal wurde nicht als bezahlt bestaetigt.'
+          )
+        }
+
+        const paymentLabel =
+          paymentOptions?.gateways?.find((g) => g.id === PAYMENT_METHOD_IDS.PAYPAL)?.label?.trim() || 'PayPal'
+        const cartSnapshot = useCartStore.getState().cart
+        const receipt =
+          cartSnapshot && cartSnapshot.products.length > 0
+            ? buildOrderReceiptSnapshot(cartSnapshot, shippingData, paymentLabel)
+            : null
+
+        setLastCompletedOrder({
+          orderNumber: payload.orderId ?? orderId,
+          databaseId: payload.orderId ? String(payload.orderId) : String(orderId),
+          date: new Date().toISOString(),
+          status: payload.orderStatus ?? 'processing',
+          orderKey: pendingState?.orderKey ?? null,
+          receipt,
+          completedAt: Date.now(),
+        })
+        setOrderCompleted(true)
+        clearPendingExternalPayment()
+        clearWooCommerceSession()
+        router.push(THANK_YOU_PATH)
+      } catch (error) {
+        const message = error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : 'Die PayPal-Zahlung konnte nicht abgeschlossen werden.'
+        setSubmitError(message)
+      } finally {
+        setPaypalCaptureInFlight(false)
+      }
+    })()
+  }, [
+    clearPendingExternalPayment,
+    clearWooCommerceSession,
+    paymentOptions,
+    paypalCaptureAttempted,
+    paypalCaptureInFlight,
+    router,
+    searchParams,
+    setLastCompletedOrder,
+    setOrderCompleted,
+    shippingData,
+  ])
 
   const [checkoutMutation, { loading: checkoutLoading }] = useMutation<CheckoutMutationResponse>(CHECKOUT_MUTATION)
   const [applyCouponMutation, { loading: couponApplying }] = useMutation(APPLY_COUPON)
@@ -288,6 +391,59 @@ export function PaymentPageContent() {
     setSelectedPayment(paymentMethod)
 
     try {
+      if (paymentMethod === 'paypal') {
+        const orderProps = toCheckoutDataProps(shippingData, PAYMENT_METHOD_IDS.PAYPAL)
+        const checkoutInput = createCheckoutData(orderProps)
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+        const returnUrl = `${baseUrl}${CHECKOUT_PROVIDER_CALLBACK_PATH}?provider=paypal&status=success`
+        const cancelUrl = `${baseUrl}${CHECKOUT_PROVIDER_CALLBACK_PATH}?provider=paypal&status=cancel`
+        const checkoutItems =
+          useCartStore
+            .getState()
+            .cart?.products.map((product) => product.restoreInput)
+            .filter((item) => item.productId > 0 && item.quantity > 0) ?? []
+        const couponCodes = (data?.cart?.appliedCoupons ?? [])
+          .map((coupon: IAppliedCoupon) => coupon.code)
+          .filter((code: unknown): code is string => typeof code === 'string' && code.trim().length > 0)
+
+        const response = await fetch('/api/checkout/headless-paypal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'start',
+            checkoutInput,
+            checkoutItems,
+            coupons: couponCodes,
+            returnUrl,
+            cancelUrl,
+          }),
+        })
+
+        const payload = (await response.json().catch(() => ({}))) as {
+          approveUrl?: string
+          error?: string
+          orderId?: string
+          orderKey?: string | null
+          paypalOrderId?: string
+        }
+
+        if (!response.ok || !payload.approveUrl) {
+          setSubmitError(payload.error ?? 'PayPal konnte nicht gestartet werden.')
+          return
+        }
+
+        setPendingExternalPayment({
+          provider: paymentMethod,
+          startedAt: Date.now(),
+          orderId: payload.orderId ?? null,
+          orderKey: payload.orderKey ?? null,
+          paypalOrderId: payload.paypalOrderId ?? null,
+          status: 'pending',
+        })
+        window.location.assign(payload.approveUrl)
+        return
+      }
+
       const { redirectUrl: directRedirectUrl, checkout: directCheckout } =
         await tryProviderCheckoutMutation(paymentMethod, shippingData)
       if (directRedirectUrl) {
@@ -330,11 +486,11 @@ export function PaymentPageContent() {
       const checkoutInput = createCheckoutData(orderProps)
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
       const returnUrl =
-        paymentMethod === 'paypal' || paymentMethod === 'klarna'
+        paymentMethod === 'klarna'
           ? `${baseUrl}${CHECKOUT_PROVIDER_CALLBACK_PATH}?provider=${paymentMethod}&status=success`
           : undefined
       const cancelUrl =
-        paymentMethod === 'paypal' || paymentMethod === 'klarna'
+        paymentMethod === 'klarna'
           ? `${baseUrl}${CHECKOUT_PROVIDER_CALLBACK_PATH}?provider=${paymentMethod}&status=cancel`
           : undefined
       const checkoutItems =
