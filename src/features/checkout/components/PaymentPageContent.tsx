@@ -384,66 +384,50 @@ export function PaymentPageContent() {
     setSubmitError(lastErrorMessage)
   }
 
-  const handleProviderRedirect = async (paymentMethod: 'card' | 'paypal' | 'klarna') => {
+  const handlePayPalSuccess = useCallback(
+    (wooOrderId: string, captureId: string, orderStatus: string, orderKey?: string | null) => {
+      if (!shippingData) return
+
+      const paymentLabel =
+        paymentOptions?.gateways?.find((g) => g.id === PAYMENT_METHOD_IDS.PAYPAL)?.label?.trim() || 'PayPal'
+      const cartSnapshot = useCartStore.getState().cart
+      const receipt =
+        cartSnapshot && cartSnapshot.products.length > 0
+          ? buildOrderReceiptSnapshot(cartSnapshot, shippingData, paymentLabel)
+          : null
+
+      setLastCompletedOrder({
+        orderNumber: wooOrderId,
+        databaseId: wooOrderId,
+        date: new Date().toISOString(),
+        status: orderStatus,
+        orderKey: orderKey ?? null,
+        receipt,
+        completedAt: Date.now(),
+      })
+      setOrderCompleted(true)
+      clearPendingExternalPayment()
+      clearWooCommerceSession()
+      router.push(THANK_YOU_PATH)
+    },
+    [
+      shippingData,
+      paymentOptions,
+      setLastCompletedOrder,
+      setOrderCompleted,
+      clearPendingExternalPayment,
+      clearWooCommerceSession,
+      router,
+    ],
+  )
+
+  const handleProviderRedirect = async (paymentMethod: 'card' | 'klarna') => {
     if (!shippingData) return
     setSubmitError(null)
     setProviderLoading(paymentMethod)
     setSelectedPayment(paymentMethod)
 
     try {
-      if (paymentMethod === 'paypal') {
-        const orderProps = toCheckoutDataProps(shippingData, PAYMENT_METHOD_IDS.PAYPAL)
-        const checkoutInput = createCheckoutData(orderProps)
-        const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-        const returnUrl = `${baseUrl}${CHECKOUT_PROVIDER_CALLBACK_PATH}?provider=paypal&status=success`
-        const cancelUrl = `${baseUrl}${CHECKOUT_PROVIDER_CALLBACK_PATH}?provider=paypal&status=cancel`
-        const checkoutItems =
-          useCartStore
-            .getState()
-            .cart?.products.map((product) => product.restoreInput)
-            .filter((item) => item.productId > 0 && item.quantity > 0) ?? []
-        const couponCodes = (data?.cart?.appliedCoupons ?? [])
-          .map((coupon: IAppliedCoupon) => coupon.code)
-          .filter((code: unknown): code is string => typeof code === 'string' && code.trim().length > 0)
-
-        const response = await fetch('/api/checkout/headless-paypal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'start',
-            checkoutInput,
-            checkoutItems,
-            coupons: couponCodes,
-            returnUrl,
-            cancelUrl,
-          }),
-        })
-
-        const payload = (await response.json().catch(() => ({}))) as {
-          approveUrl?: string
-          error?: string
-          orderId?: string
-          orderKey?: string | null
-          paypalOrderId?: string
-        }
-
-        if (!response.ok || !payload.approveUrl) {
-          setSubmitError(payload.error ?? 'PayPal konnte nicht gestartet werden.')
-          return
-        }
-
-        setPendingExternalPayment({
-          provider: paymentMethod,
-          startedAt: Date.now(),
-          orderId: payload.orderId ?? null,
-          orderKey: payload.orderKey ?? null,
-          paypalOrderId: payload.paypalOrderId ?? null,
-          status: 'pending',
-        })
-        window.location.assign(payload.approveUrl)
-        return
-      }
-
       const { redirectUrl: directRedirectUrl, checkout: directCheckout } =
         await tryProviderCheckoutMutation(paymentMethod, shippingData)
       if (directRedirectUrl) {
@@ -542,10 +526,6 @@ export function PaymentPageContent() {
     }
     if (gatewayId === PAYMENT_METHOD_IDS.WALLET) {
       void handleProviderRedirect('card')
-      return
-    }
-    if (gatewayId === PAYMENT_METHOD_IDS.PAYPAL) {
-      void handleProviderRedirect('paypal')
       return
     }
     if (gatewayId === PAYMENT_METHOD_IDS.KLARNA) {
@@ -693,6 +673,16 @@ export function PaymentPageContent() {
   const couponMutationLoading = couponApplying || couponRemoving
   const hasPendingExternalPayment = hasActivePendingExternalPayment(pendingExternalPayment)
 
+  const paypalCartItems =
+    useCartStore
+      .getState()
+      .cart?.products.map((p) => p.restoreInput)
+      .filter((item) => item.productId > 0 && item.quantity > 0) ?? []
+
+  const paypalCouponCodes = appliedCoupons
+    .map((c) => c.code)
+    .filter((code): code is string => typeof code === 'string' && code.trim().length > 0)
+
   return (
     <ContentShell className="py-8 lg:py-12">
       <CheckoutSteps currentStep="payment" showChangeShipping />
@@ -817,12 +807,13 @@ export function PaymentPageContent() {
               helperText={selectedGateway?.helperText}
             />
           ) : null}
-          {selectedPayment === PAYMENT_METHOD_IDS.PAYPAL ? (
+          {selectedPayment === PAYMENT_METHOD_IDS.PAYPAL && shippingData ? (
             <PayPalPanel
-              onContinue={() => {
-                void handleProviderRedirect('paypal')
-              }}
-              isSubmitting={providerLoading === PAYMENT_METHOD_IDS.PAYPAL}
+              shippingData={shippingData}
+              cartItems={paypalCartItems}
+              coupons={paypalCouponCodes}
+              onSuccess={handlePayPalSuccess}
+              onError={(msg) => setSubmitError(msg)}
             />
           ) : null}
           {selectedPayment === PAYMENT_METHOD_IDS.KLARNA ? (

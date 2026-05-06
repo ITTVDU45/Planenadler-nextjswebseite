@@ -1,25 +1,36 @@
 'use client'
 
-interface PayPalPanelProps {
-  onContinue: () => void
-  isSubmitting: boolean
+import { PayPalDirectButton } from './PayPalDirectButton'
+import type { CheckoutFormShipping } from '../types/checkout.types'
+
+interface CartItem {
+  productId: number
+  quantity: number
+  extraData?: string
 }
 
-export function PayPalPanel({ onContinue, isSubmitting }: PayPalPanelProps) {
+interface PayPalPanelProps {
+  shippingData: CheckoutFormShipping
+  cartItems: CartItem[]
+  coupons: string[]
+  onSuccess: (wooOrderId: string, captureId: string, orderStatus: string, orderKey?: string | null) => void
+  onError: (message: string) => void
+}
+
+export function PayPalPanel({ shippingData, cartItems, coupons, onSuccess, onError }: PayPalPanelProps) {
   return (
     <div className="mt-4 rounded-xl border border-[#DBE9F9] bg-white p-6">
       <h3 className="mb-3 text-base font-semibold text-[#1F5CAB]">PayPal</h3>
       <p className="mb-4 text-sm text-[#1F5CAB]/90">
-        Du wirst zu PayPal weitergeleitet, um die Zahlung abzuschließen.
+        Bezahle sicher und schnell direkt mit deinem PayPal-Konto.
       </p>
-      <button
-        type="button"
-        onClick={onContinue}
-        disabled={isSubmitting}
-        className="w-full rounded-full border-2 border-[#DBE9F9] bg-[#F7FAFF] px-6 py-3 text-sm font-semibold text-[#1F5CAB] transition hover:border-[#B9D4F3] hover:bg-white disabled:cursor-not-allowed disabled:opacity-70 lg:w-auto lg:min-w-[200px]"
-      >
-        {isSubmitting ? 'Weiterleitung…' : 'Mit PayPal fortfahren'}
-      </button>
+      <PayPalDirectButton
+        shippingData={shippingData}
+        cartItems={cartItems}
+        coupons={coupons}
+        onSuccess={onSuccess}
+        onError={onError}
+      />
     </div>
   )
 }
