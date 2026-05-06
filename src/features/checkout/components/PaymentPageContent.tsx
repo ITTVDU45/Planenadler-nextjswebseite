@@ -668,7 +668,10 @@ export function PaymentPageContent() {
     )
   }
 
-  const selectedGateway = paymentOptions?.gateways.find((gateway) => gateway.id === selectedPayment)
+  const ACTIVE_PAYMENT_IDS: PaymentMethodId[] = [PAYMENT_METHOD_IDS.PAYPAL, PAYMENT_METHOD_IDS.BANK]
+  const filteredGateways = (paymentOptions?.gateways ?? []).filter((g) => ACTIVE_PAYMENT_IDS.includes(g.id))
+
+  const selectedGateway = filteredGateways.find((gateway) => gateway.id === selectedPayment)
   const appliedCoupons: IAppliedCoupon[] = data?.cart?.appliedCoupons ?? []
   const couponMutationLoading = couponApplying || couponRemoving
   const hasPendingExternalPayment = hasActivePendingExternalPayment(pendingExternalPayment)
@@ -705,7 +708,7 @@ export function PaymentPageContent() {
           <ExpressCheckout
             title="Express Checkout"
             subtitle="Starten Sie direkt mit Ihrer bevorzugten Zahlungsart."
-            gateways={paymentOptions?.gateways ?? []}
+            gateways={filteredGateways}
             loading={paymentOptionsLoading}
             error={paymentOptionsError}
             context="payment"
@@ -715,7 +718,7 @@ export function PaymentPageContent() {
           />
 
           <PaymentMethods
-            options={paymentOptions?.gateways}
+            options={filteredGateways}
             loading={paymentOptionsLoading}
           />
 

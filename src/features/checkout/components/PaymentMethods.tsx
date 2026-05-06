@@ -15,17 +15,6 @@ import { parseCartPriceString } from '@/shared/lib/functions'
 
 const ALL_PAYMENT_OPTIONS: CheckoutGatewayOption[] = [
   {
-    id: PAYMENT_METHOD_IDS.CARD,
-    label: 'Karte',
-    description: 'VISA, Mastercard, AMEX',
-    available: true,
-    frontendReady: true,
-    expressEligible: false,
-    action: 'select',
-    wcPaymentMethodAliases: [],
-    helperText: 'Kartenzahlung wird sicher ueber Stripe weitergeleitet.',
-  },
-  {
     id: PAYMENT_METHOD_IDS.PAYPAL,
     label: 'PayPal',
     available: true,
@@ -35,34 +24,13 @@ const ALL_PAYMENT_OPTIONS: CheckoutGatewayOption[] = [
     wcPaymentMethodAliases: [],
   },
   {
-    id: PAYMENT_METHOD_IDS.KLARNA,
-    label: 'Klarna',
-    available: true,
-    frontendReady: true,
-    expressEligible: true,
-    action: 'redirect',
-    wcPaymentMethodAliases: [],
-  },
-  {
     id: PAYMENT_METHOD_IDS.BANK,
-    label: 'Direkte Bankueberweisung',
+    label: 'Direkte Banküberweisung',
     available: true,
     frontendReady: true,
     expressEligible: false,
     action: 'select',
     wcPaymentMethodAliases: [],
-  },
-  {
-    id: PAYMENT_METHOD_IDS.WALLET,
-    label: 'Apple Pay / Google Pay',
-    description: 'Nur mit echtem Wallet-Flow im Frontend',
-    available: true,
-    frontendReady: true,
-    expressEligible: false,
-    action: 'select',
-    wcPaymentMethodAliases: [],
-    helperText:
-      'Apple Pay und Google Pay werden ueber Stripe bereitgestellt, wenn Browser und Geraet sie unterstuetzen.',
   },
 ]
 
