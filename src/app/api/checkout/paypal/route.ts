@@ -15,6 +15,18 @@ function getHeadlessBaseUrl(): string {
   return wpBase ? `${wpBase}/wp-json/planenadler-headless/v1` : ''
 }
 
+function normalizeMetaData(extraData?: string): Record<string, unknown> {
+  if (!extraData) return {}
+  try {
+    const decoded = JSON.parse(extraData) as unknown
+    return decoded && typeof decoded === 'object' && !Array.isArray(decoded)
+      ? (decoded as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
 async function getPayPalAccessToken(): Promise<string> {
   const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID?.trim() ?? ''
   const clientSecret = process.env.PAYPAL_CLIENT_SECRET?.trim() ?? ''
@@ -204,8 +216,23 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Keine Artikel im Warenkorb.' }, { status: 400 })
       }
 
+      const normalizedItems = items
+        .map((item) => {
+          const it = item as { productId?: number; quantity?: number; extraData?: string }
+          return {
+            productId: it.productId,
+            quantity: it.quantity,
+            metaData: normalizeMetaData(it.extraData),
+          }
+        })
+        .filter((it) => it.productId && it.quantity && it.quantity > 0)
+
+      if (!normalizedItems.length) {
+        return NextResponse.json({ error: 'Keine gültigen Artikel im Warenkorb.' }, { status: 400 })
+      }
+
       const { orderId: wooOrderId, orderKey } = await createWooOrder({
-        items,
+        items: normalizedItems,
         billing: billing ?? {},
         shipping: shipping ?? {},
         coupons: coupons ?? [],
