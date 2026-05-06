@@ -15,13 +15,6 @@ function getHeadlessBaseUrl(): string {
   return wpBase ? `${wpBase}/wp-json/planenadler-headless/v1` : ''
 }
 
-// Fields shown visibly in WooCommerce admin — everything else is stored as private (_prefix)
-const PUBLIC_META_KEYS = new Set([
-  'planenadler_configuration_id',
-  'planenadler_configuration_summary',
-  'custom_option',
-])
-
 function normalizeMetaData(extraData?: string): Record<string, unknown> {
   if (!extraData) return {}
   try {
@@ -30,12 +23,11 @@ function normalizeMetaData(extraData?: string): Record<string, unknown> {
     const fields = raw as Record<string, unknown>
     const result: Record<string, unknown> = {}
 
-    // Store all raw technical fields as private (hidden from WooCommerce admin display)
-    for (const [key, value] of Object.entries(fields)) {
-      result[PUBLIC_META_KEYS.has(key) ? key : `_${key}`] = value
-    }
+    // Keep configuration ID for plugin reference
+    const configId = fields['planenadler_configuration_id']
+    if (configId) result['planenadler_configuration_id'] = configId
 
-    // Parse the German-labeled summary and add each entry as a visible display field
+    // Parse the German-labeled summary and add each entry as a display field
     const summaryStr = fields['planenadler_configuration_summary'] as string | undefined
     if (summaryStr) {
       try {
@@ -48,7 +40,10 @@ function normalizeMetaData(extraData?: string): Record<string, unknown> {
           }
         }
       } catch {
-        // summary not parseable — raw fields still stored as private above
+        // summary not parseable — fall back to raw fields
+        for (const [key, value] of Object.entries(fields)) {
+          result[key] = value
+        }
       }
     }
 
